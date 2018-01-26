@@ -21,7 +21,8 @@ typedef struct USBObjectStrcut{
 	uint16_t pid;	// 产品id
 	char *serialNum;	// 序列号
 	//TODO 增加usb描述对象指针
-	libusb_device_handle *devHandle;
+	libusb_context *libusbContext;	// LibUSB上下文
+	libusb_device_handle *devHandle;	// 设备操作句柄
 } USBObject;
 
 #endif /* SRC_DEBUGGER_USB_H_ */
