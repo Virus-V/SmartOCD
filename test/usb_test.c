@@ -12,12 +12,10 @@
 #include "smart_ocd.h"
 #include "debugger/usb.h"
 #include "misc/log.h"
-char indata[64], outdata[] = {0x0,0x04};
+char indata[64], outdata[] = {0x01, 0x01, 0x01};
 
 int usb_main(){
 	USBObject *doggle;
-	unsigned int readep, outep;
-
 
 	log_set_level(LOG_TRACE);
 	doggle = NewUSBObject("test doggle(CMSIS-DAP)");
@@ -35,15 +33,14 @@ int usb_main(){
 		exit(1);
 	}
 
-	if(USBClaimInterface(doggle, &readep, &outep, 3, 0, 0, 3) != TRUE){
+	if(USBClaimInterface(doggle, 3, 0, 0, 3) != TRUE){
 		log_fatal("Claim interface failed.");
 		exit(1);
 	}
-	log_debug("read ep:%d, write ep:%d.", readep, outep);
-	log_debug("write to doggle %d byte.", USBInterruptTransfer(doggle, outep, outdata, 2, 0));
-	log_debug("read from doggle %d byte.", USBInterruptTransfer(doggle, readep, indata, 64, 0));
+	log_debug("write to doggle %d byte.", doggle->write(doggle, outdata, sizeof(outdata), 0));
+	log_debug("read from doggle %d byte.", doggle->read(doggle, indata, 64, 0));
 	log_debug("receive data:%x %x %x %x %x %x", indata[0], indata[1], indata[2],indata[3], indata[4], indata[5]);
-	log_debug("serial num:%s", indata+2);
+	//log_debug("serial num:%s", indata+2);
 	USBClose(doggle);
 	FreeUSBObject(doggle);
 	exit(0);

@@ -22,6 +22,11 @@
 
 // 设备列表
 static libusb_device **devs;
+static int bulkWrite(USBObject *usbObj, char *data, int dataLength, int timeout);
+static int bulkRead(USBObject *usbObj, char *data, int dataLength, int timeout);
+static int interruptWrite(USBObject *usbObj, char *data, int dataLength, int timeout);
+static int interruptRead(USBObject *usbObj, char *data, int dataLength, int timeout);
+static int unsupportRW(USBObject *usbObj, char *data, int dataLength, int timeout);
 /*
  * 新建Debugger USB对象
  * desc: 设备的描述
@@ -34,6 +39,8 @@ USBObject * NewUSBObject(char const *desc){
 		return NULL;
 	}
 	object->deviceDesc = desc ? strdup(desc) : NULL;
+	// 禁止写入操作
+	object->read = object->write = unsupportRW;
 	return object;
 }
 
@@ -151,19 +158,15 @@ void USBClose(USBObject *usbObj) {
 	// 清除配置
 	usbObj->clamedIFNum = 0;
 	usbObj->currConfVal = 0;
+	// 禁止写入
+	usbObj->read = usbObj->write = unsupportRW;
 }
 
 /**
  * USB控制传输
  */
-int USBControlTransfer(USBObject *usbObj,
-		uint8_t requestType,
-		uint8_t request,
-		uint16_t wValue,
-		uint16_t wIndex,
-		char *data,
-		uint16_t dataLength,
-		unsigned int timeout)
+int USBControlTransfer(USBObject *usbObj, uint8_t requestType, uint8_t request, uint16_t wValue,
+	uint16_t wIndex, char *data, uint16_t dataLength, unsigned int timeout)
 {
 	int retCode;
 	assert(usbObj != NULL && usbObj->devHandle != NULL);
@@ -174,6 +177,14 @@ int USBControlTransfer(USBObject *usbObj,
 		return 0;
 	}
 	return retCode;
+}
+
+static int bulkWrite(USBObject *usbObj, char *data, int dataLength, int timeout){
+	return USBBulkTransfer(usbObj, usbObj->writeEP, data, dataLength, timeout);
+}
+
+static int bulkRead(USBObject *usbObj, char *data, int dataLength, int timeout){
+	return USBBulkTransfer(usbObj, usbObj->readEP, data, dataLength, timeout);
 }
 
 /**
@@ -191,6 +202,14 @@ int USBBulkTransfer(USBObject *usbObj, int endpoint, char *data, int dataLength,
 	return transferred;
 }
 
+static int interruptWrite(USBObject *usbObj, char *data, int dataLength, int timeout){
+	return USBInterruptTransfer(usbObj, usbObj->writeEP, data, dataLength, timeout);
+}
+
+static int interruptRead(USBObject *usbObj, char *data, int dataLength, int timeout){
+	return USBInterruptTransfer(usbObj, usbObj->readEP, data, dataLength, timeout);
+}
+
 /**
  * 中断传输
  */
@@ -204,6 +223,11 @@ int USBInterruptTransfer(USBObject *usbObj, int endpoint, char *data, int dataLe
 		log_warn("libusb_interrupt_transfer():%s", libusb_error_name(retCode));
 	}
 	return transferred;
+}
+
+static int unsupportRW(USBObject *usbObj, char *data, int dataLength, int timeout){
+	log_warn("An endpoint with an unsupported type has been operated or the endpoint has been shut down.");
+	return -1;
 }
 
 /**
@@ -257,10 +281,7 @@ BOOL USBSetConfiguration(USBObject *usbObj, int configurationIndex) {
 /**
  * 声明interface
  */
-BOOL USBClaimInterface(USBObject *usbObj,
-		unsigned int *ReadEndPoint_out,
-		unsigned int *WriteEndPoint_out,
-		int IFClass, int IFSubclass, int IFProtocol, int transType)
+BOOL USBClaimInterface(USBObject *usbObj, int IFClass, int IFSubclass, int IFProtocol, int transType)
 {
 	struct libusb_device *dev = NULL;
 	struct libusb_config_descriptor *config;
@@ -281,8 +302,6 @@ BOOL USBClaimInterface(USBObject *usbObj,
 		}
 		usbObj->clamedIFNum = 0;
 	}
-	// 清零输出参数
-	*ReadEndPoint_out = *WriteEndPoint_out = 0;
 
 	dev = libusb_get_device(usbObj->devHandle);
 	retCode = libusb_get_config_descriptor_by_value(dev, usbObj->currConfVal, &config);
@@ -320,14 +339,29 @@ BOOL USBClaimInterface(USBObject *usbObj,
 			epNum = epDesc->bEndpointAddress;
 
 			if (epNum & 0x80){
-				*ReadEndPoint_out = epNum;
+				usbObj->readEP = epNum;
 				log_debug("usb end point 'in' 0x%02x", epNum);
 			}else{
-				*WriteEndPoint_out = epNum;
+				usbObj->writeEP = epNum;
 				log_debug("usb end point 'out' 0x%02x", epNum);
 			}
+			// XXX 这里没有考虑端点0
+			if (usbObj->readEP && usbObj->writeEP) {
+				// 写入回调
+				switch(transType){
+				case 3:	//中断传输
+					usbObj->write = interruptWrite;
+					usbObj->read = interruptRead;
+					break;
 
-			if (*ReadEndPoint_out && *WriteEndPoint_out) {
+				case 2:	// 批量传输
+					usbObj->write = bulkWrite;
+					usbObj->read = bulkRead;
+					break;
+				default:
+					usbObj->write = usbObj->read = unsupportRW;
+					log_info("Unsupported endpoint type.");
+				}
 				usbObj->clamedIFNum = interfaceDesc->bInterfaceNumber;
 				log_debug("Claiming interface %d", (int)interfaceDesc->bInterfaceNumber);
 				libusb_claim_interface(usbObj->devHandle, (int)interfaceDesc->bInterfaceNumber);

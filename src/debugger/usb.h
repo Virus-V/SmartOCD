@@ -15,7 +15,8 @@
 /*
  * usb设备对象
  */
-typedef struct USBObjectStrcut{
+typedef struct USBObjectStrcut USBObject;
+struct USBObjectStrcut{
 	char *deviceDesc;	// 设备描述字符
 	uint16_t vid;	// 设备制造商id
 	uint16_t pid;	// 产品id
@@ -25,7 +26,10 @@ typedef struct USBObjectStrcut{
 	char *serialNum;	// 序列号
 	libusb_context *libusbContext;	// LibUSB上下文
 	libusb_device_handle *devHandle;	// 设备操作句柄
-} USBObject;
+	int (*read)(USBObject *usbObj, char *data, int dataLength, int timeout),	// 读取数据
+		(*write)(USBObject *usbObj, char *data, int dataLength, int timeout);	// 写入数据
+
+};
 
 USBObject * NewUSBObject(char const *desc);
 void FreeUSBObject(USBObject *object);
@@ -36,7 +40,6 @@ int USBControlTransfer(USBObject *usbObj, uint8_t requestType, uint8_t request,
 int USBBulkTransfer(USBObject *usbObj, int endpoint, char *data, int dataLength, int timeout);
 int USBInterruptTransfer(USBObject *usbObj, int endpoint, char *data, int dataLength, int timeout);
 BOOL USBSetConfiguration(USBObject *usbObj, int configurationIndex);
-BOOL USBClaimInterface(USBObject *usbObj, unsigned int *ReadEndPoint_out, unsigned int *WriteEndPoint_out,
-	int IFClass, int IFSubclass, int IFProtocol, int transType);
+BOOL USBClaimInterface(USBObject *usbObj, int IFClass, int IFSubclass, int IFProtocol, int transType);
 BOOL USBGetPidVid(libusb_device *dev, uint16_t *pid_out, uint16_t *vid_out);
 #endif /* SRC_DEBUGGER_USB_H_ */

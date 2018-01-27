@@ -30,7 +30,6 @@ DEBUG = -ggdb
 
 CFLAGS = $(DEBUG)
 CFLAGS += -O$(OPT)
-# 条件编译，选择dsp库和器件类型
 CFLAGS += $(addprefix -D,$(DEFINES)) $(addprefix -I,$(ALL_INC_PATHS))
 # Linker Flags
 LDFLAGS += $(addprefix -L,$(ALL_LIB_PATH))
