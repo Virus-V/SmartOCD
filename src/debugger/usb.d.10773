@@ -1,0 +1,4 @@
+usb.o: /home/virusv/SmartOCD/src/debugger/usb.c \
+ /home/virusv/SmartOCD/src/smart_ocd.h \
+ /home/virusv/SmartOCD/src/debugger/usb.h \
+ /home/virusv/SmartOCD/src/misc/log.h
