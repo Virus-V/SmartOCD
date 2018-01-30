@@ -17,7 +17,6 @@
  */
 typedef struct USBObjectStrcut USBObject;
 struct USBObjectStrcut{
-	char *deviceDesc;	// 设备描述字符
 	uint16_t vid;	// 设备制造商id
 	uint16_t pid;	// 产品id
 	int currConfVal;	// 当前活动配置的bConfigurationValue
@@ -31,7 +30,7 @@ struct USBObjectStrcut{
 
 };
 
-USBObject * NewUSBObject(char const *desc);
+USBObject * NewUSBObject();
 void FreeUSBObject(USBObject *object);
 BOOL USBOpen(USBObject *usbObj, const uint16_t vid, const uint16_t pid, const char *serial);
 void USBClose(USBObject *usbObj);

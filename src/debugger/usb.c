@@ -31,16 +31,16 @@ static int unsupportRW(USBObject *usbObj, char *data, int dataLength, int timeou
  * 新建Debugger USB对象
  * desc: 设备的描述
  */
-USBObject * NewUSBObject(char const *desc){
+USBObject * NewUSBObject(){
 	USBObject *object = calloc(1, sizeof(USBObject));
 	if(object == NULL){
 		// 内存分配失败
 		log_error("Failed to make USB Object");
 		return NULL;
 	}
-	object->deviceDesc = desc ? strdup(desc) : NULL;
 	// 禁止写入操作
 	object->read = object->write = unsupportRW;
+	object->clamedIFNum = object->currConfVal = -1;
 	return object;
 }
 
@@ -49,8 +49,7 @@ USBObject * NewUSBObject(char const *desc){
  * object: 要销毁的USB对象
  */
 void FreeUSBObject(USBObject *object){
-	// 关闭连接
-	if(object->deviceDesc != NULL) free(object->deviceDesc);
+	assert(object != NULL);
 	free(object);
 }
 
@@ -61,7 +60,7 @@ static BOOL usbStrDescriptorMatch(libusb_device_handle *devHandle, uint8_t descI
 	int retcode;
 	BOOL matched;
 	// 描述字符串缓冲区
-	char descString[256+1];	// XXX：较大的数组在栈中分配！
+	char descString[256+1];	// XXX 较大的数组在栈中分配！
 
 	if (descIndex == 0) return FALSE;
 
@@ -128,6 +127,11 @@ BOOL USBOpen(USBObject *usbObj, const uint16_t vid, const uint16_t pid, const ch
 		if(LIBUSB_ERROR_NOT_SUPPORTED == retCode){
 			log_warn("The current operating system does not support automatic detach kernel drive.");
 		}
+		// 获得当前默认的configuration
+		retCode = libusb_get_configuration(devHandle, &usbObj->currConfVal);
+		if (retCode < 0){
+			log_warn("libusb_get_configuration():%s", libusb_error_name(retCode));
+		}
 		// 找到设备，初始化USB对象
 		usbObj->devHandle = devHandle;
 		usbObj->pid = devDesc_tmp.idProduct;
@@ -156,8 +160,8 @@ void USBClose(USBObject *usbObj) {
 	libusb_exit(usbObj->libusbContext);
 	usbObj->libusbContext = NULL;
 	// 清除配置
-	usbObj->clamedIFNum = 0;
-	usbObj->currConfVal = 0;
+	usbObj->clamedIFNum = -1;
+	usbObj->currConfVal = -1;
 	// 禁止写入
 	usbObj->read = usbObj->write = unsupportRW;
 }
@@ -245,19 +249,21 @@ BOOL USBSetConfiguration(USBObject *usbObj, int configurationIndex) {
 	dev = libusb_get_device(usbObj->devHandle);
 
 	// 获取当前配置
+	// output location for the bConfigurationValue of the active configuration (only valid for return code 0)
 	retCode = libusb_get_configuration(usbObj->devHandle, &usbObj->currConfVal);
 	if (retCode < 0){
 		log_warn("libusb_get_configuration():%s", libusb_error_name(retCode));
 		return FALSE;
 	}
 	// 判断是否已经claim interface，如果claim interface要先release
-	if(usbObj->clamedIFNum != 0){
+	if(usbObj->clamedIFNum != -1){
+		log_info("Release declared interface %d.", usbObj->clamedIFNum);
 		retCode = libusb_release_interface(usbObj->devHandle, usbObj->clamedIFNum);
 		if(retCode < 0){
 			log_warn("libusb_release_interface():%s", libusb_error_name(retCode));
 			return FALSE;
 		}
-		usbObj->clamedIFNum = 0;
+		usbObj->clamedIFNum = -1;
 	}
 
 	retCode = libusb_get_config_descriptor(dev, configurationIndex, &config);
@@ -272,6 +278,8 @@ BOOL USBSetConfiguration(USBObject *usbObj, int configurationIndex) {
 			return FALSE;
 		}
 		usbObj->currConfVal = config->bConfigurationValue;
+	}else{
+		log_info("Currently it is configuration indexed by:%d, bConfigurationValue is %x.", configurationIndex, usbObj->currConfVal);
 	}
 	// 释放
 	libusb_free_config_descriptor(config);
@@ -292,15 +300,6 @@ BOOL USBClaimInterface(USBObject *usbObj, int IFClass, int IFSubclass, int IFPro
 	if(usbObj->currConfVal == 0){
 		log_error("The active configuration doesn't set.");
 		return FALSE;
-	}
-	// 如果以前声明过interface，释放原来的interface，不管它是不是与下面要声明的interface相同
-	if(usbObj->clamedIFNum != 0){
-		retCode = libusb_release_interface(usbObj->devHandle, usbObj->clamedIFNum);
-		if(retCode < 0){
-			log_warn("libusb_release_interface():%s", libusb_error_name(retCode));
-			return FALSE;
-		}
-		usbObj->clamedIFNum = 0;
 	}
 
 	dev = libusb_get_device(usbObj->devHandle);
@@ -325,6 +324,20 @@ BOOL USBClaimInterface(USBObject *usbObj, int IFClass, int IFSubclass, int IFPro
 			(IFProtocol > 0 && interfaceDesc->bInterfaceProtocol != IFProtocol))
 		{
 			continue;
+		}
+		if(usbObj->clamedIFNum == interfaceDesc->bInterfaceNumber){
+			log_info("Currently it is interface %d.", usbObj->clamedIFNum);
+			return TRUE;
+		}
+		// 判断是否已经声明了interface，如果声明了与当前不同的interface，则释放原来的
+		if(usbObj->clamedIFNum != -1){
+			log_info("Release declared interface %d.", usbObj->clamedIFNum);
+			retCode = libusb_release_interface(usbObj->devHandle, usbObj->clamedIFNum);
+			if(retCode < 0){
+				log_warn("libusb_release_interface():%s", libusb_error_name(retCode));
+				return FALSE;
+			}
+			usbObj->clamedIFNum = -1;
 		}
 
 		for (int k = 0; k < (int)interfaceDesc->bNumEndpoints; k++) {
@@ -392,5 +405,3 @@ BOOL USBGetPidVid(libusb_device *dev, uint16_t *pid_out, uint16_t *vid_out) {
 	}
 	return TRUE;
 }
-
-
