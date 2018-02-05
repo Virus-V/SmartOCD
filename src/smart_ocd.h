@@ -14,4 +14,6 @@ typedef enum {
 	TRUE
 } BOOL;
 
+// 用户输入lua命令历史记录文件
+#define COMMAND_HISTORY "smartocd_history.txt"
 #endif /* SRC_SMART_OCD_H_ */

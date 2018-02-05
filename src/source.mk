@@ -5,3 +5,5 @@ endif
 
 include $(ROOT_DIR)/src/debugger/debugger.mk
 include $(ROOT_DIR)/src/misc/misc.mk
+# 编译主函数
+ALL_SRC_FILES += $(wildcard $(ROOT_DIR)/src/*.c)

@@ -5,6 +5,9 @@
 
 ROOT_DIR := $(shell pwd)
 TARGET := smartocd
+# 版本号
+VERSION := 1.0.0
+COMPILE_TIME := $(shell date +%FT%T%z)
 #==========可变参数区===========
 # 所有源码文件
 ALL_SRC_FILES = 
@@ -13,11 +16,11 @@ ALL_LIB_PATHS =
 # 所有头文件目录
 ALL_INC_PATHS = $(ROOT_DIR)/src
 # 所有库文件
-ALL_LIBS = usb-1.0
+ALL_LIBS = usb-1.0 lua m dl
 # 所有对象文件
 ALL_OBJ_FILES = $(subst .c,.o,$(ALL_SRC_FILES))
 #宏定义
-DEFINES = 
+DEFINES = VERSION=\"$(VERSION)\" COMPILE_TIME=\"$(COMPILE_TIME)\" 
 #==========可变参数区===========
 
 include $(ROOT_DIR)/src/source.mk
