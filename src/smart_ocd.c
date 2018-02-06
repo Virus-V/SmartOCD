@@ -78,7 +78,13 @@ static void printVersion() {
 
 // 打印帮助信息
 static void printHelp(char *progName) {
-	printf("\n");
+	printf("Usage: smartocd [options]\n\nOptions:\n"
+			"\t-d level, --debuglevel level : Debug information output level; 0-5, -1 not output.\n"
+			"\t-f script, --file script : Pre-executed script, this parameter can be more than one.\n"
+			"\t-e, --exit : End of the script does not enter the interactive mode.\n"
+			"\t-l, --logfile : Log file.\n"
+			"\t-h, --help : Show this help message.\n\n"
+			"For more information, visit: https://github.com/Virus-V/SmartOCD/\n");
 }
 
 // TODO 当用户按tab键时自动补全
@@ -95,8 +101,6 @@ static char *hints(const char *buf, int *color, int *bold) {
         *color = 36;
         *bold = 1;
         return " <name> <url>";
-    }else if(){
-
     }
     return NULL;
 }
@@ -381,6 +385,9 @@ static int init (lua_State *L) {
 	} else {
 		log_set_level(logLevel);
 	}
+	// 打印logo和版本
+	printVersion();
+
 	if(exitFlag) goto EXIT;
 	// line noise初始化
 	linenoiseSetMultiLine(1);	// 多行编辑
@@ -398,7 +405,7 @@ EXIT:
 /**
  * SmartOCD Entry Point
  */
-int smartOCDMain (int argc, char **argv) {
+int main (int argc, char **argv) {
 	int status, result;
 	// 创建lua状态机
 	lua_State *L = luaL_newstate();
@@ -406,8 +413,6 @@ int smartOCDMain (int argc, char **argv) {
 		log_fatal("cannot create state: not enough memory.");
 		return 1;
 	}
-	// 打印logo和版本
-	printVersion();
 	// 打开标准库
 	luaL_openlibs(L);
 	// 以保护模式运行初始化函数
