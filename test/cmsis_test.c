@@ -12,6 +12,7 @@
 #include "smart_ocd.h"
 #include "misc/log.h"
 #include "debugger/cmsis-dap.h"
+#include "arch/CoreSight/DAP.h"
 
 extern int print_bulk(char *data, int length, int rowLen);
 
@@ -42,7 +43,7 @@ int main(){
 	//adapterObj->Operate(adapterObj, AINS_SET_CLOCK, 1000000u);
 	adapterObj->Operate(adapterObj, AINS_TRANSFER_CONFIG, 5, 10, 10);
 	// 读取id code 寄存器
-	adapterObj->Operate(adapterObj, AINS_GET_IDCODE, &idcode);
+	adapterObj->Operate(adapterObj, AINS_READ_DP_REG, DP_CTRL_STAT, &idcode);
 	log_info("SWD-DP with ID :0x%08x", idcode);
 
 	adapterObj->Deinit(adapterObj);

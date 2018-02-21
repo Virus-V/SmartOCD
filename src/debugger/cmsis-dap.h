@@ -155,7 +155,9 @@ enum cmsis_dapInstr {
 	AINS_TRANSFER_CONFIG = AINS_COMM_LAST,	// 接着公共指令排列
 	AINS_SET_CLOCK,		// 设置仿真器的时钟
 	AINS_READ_DP_REG,	// 读取DP寄存器
+	AINS_WRITE_DP_REG,	// 写入DP寄存器
 	AINS_READ_AP_REG,	// 读取AP寄存器
+	AINS_WRITE_AP_REG,	// 写入AP寄存器
 };
 
 struct cmsis_dap {

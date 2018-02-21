@@ -342,25 +342,47 @@ static BOOL SWJ_Clock(AdapterObject *adapterObj, uint32_t clockHz){
 }
 
 /**
- * 获得DAP的IDCode
- * 32位的ID code
+ * 读取AP、DP寄存器
  */
-static BOOL SWDGetIDCode(AdapterObject *adapterObj, uint32_t *idCode_out){
-	uint8_t DAPTransferPack[] = {ID_DAP_Transfer, 0x00, 0x01, DAP_TRANSFER_RnW | DP_IDCODE}, *response;
+static BOOL DAPRegister(AdapterObject *adapterObj, uint8_t request, uint32_t *reg_inout){
+	uint8_t DAPTransferPack[] = {ID_DAP_Transfer, 0x00, 0x01, 0xFF, 0, 0, 0, 0}, *response;
 	USBObject *usbObj = GET_USBOBJ(adapterObj);
 	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	if((response = calloc(cmsis_dapObj->ReceivePacketSize, sizeof(uint8_t))) == NULL){
 		log_error("Failed to calloc receive buffer space.");
 		return FALSE;
 	}
-	usbObj->Write(usbObj, DAPTransferPack, sizeof(DAPTransferPack), 0);
-	usbObj->Read(usbObj, response, cmsis_dapObj->ReceivePacketSize, 0);
-	if(response[1] == 1 && response[2] == 1){
-		*idCode_out = *CAST(uint32_t *, response+3);
-		return TRUE;
-	}else{
-		log_warn("Transmission %d bytes, the last response: %x.", response[1], response[2]);
-		return FALSE;
+	// 赋值请求
+	DAPTransferPack[3] = request;
+	if((request & DAP_TRANSFER_RnW) == DAP_TRANSFER_RnW){	// 读取寄存器
+		usbObj->Write(usbObj, DAPTransferPack, 4, 0);
+		usbObj->Read(usbObj, response, cmsis_dapObj->ReceivePacketSize, 0);
+		// 检查返回值
+		if(response[1] == 1 && response[2] == 1){
+			*reg_inout = *CAST(uint32_t *, response+3);
+			free(response);
+			return TRUE;
+		}else{
+			log_warn("Transmission %d bytes, the last response: %x.", response[1], response[2]);
+			free(response);
+			return FALSE;
+		}
+	}else{	// 写寄存器
+		DAPTransferPack[4] = BYTE_IDX(*reg_inout, 0);
+		DAPTransferPack[5] = BYTE_IDX(*reg_inout, 1);
+		DAPTransferPack[6] = BYTE_IDX(*reg_inout, 2);
+		DAPTransferPack[7] = BYTE_IDX(*reg_inout, 3);
+		usbObj->Write(usbObj, DAPTransferPack, 8, 0);
+		usbObj->Read(usbObj, response, cmsis_dapObj->ReceivePacketSize, 0);
+		// 检查返回值
+		if(response[1] == 1 && response[2] == 1){
+			free(response);
+			return TRUE;
+		}else{
+			log_warn("Transmission %d bytes, the last response: %x.", response[1], response[2]);
+			free(response);
+			return FALSE;
+		}
 	}
 }
 
@@ -378,7 +400,7 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 		log_trace("Execution command: Get ID Code.");
 		do{
 			uint32_t *idCode_out = va_arg(parames, uint32_t *);
-			SWDGetIDCode(adapterObj, idCode_out);
+			result = DAPRegister(adapterObj, DAP_TRANSFER_RnW | DP_IDCODE, idCode_out);
 		}while(0);
 		break;
 
@@ -399,6 +421,51 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 			uint16_t matchRetry = (uint16_t)va_arg(parames, int);	// 在匹配模式下不匹配时重试次数
 			log_debug("idle:%d, wait:%d, match:%d.", idleCycle, waitRetry, matchRetry);
 			result = TransferConfig(adapterObj, idleCycle, waitRetry, matchRetry);
+		}while(0);
+		break;
+
+	case AINS_READ_DP_REG:
+		log_trace("Execution command: Read DP Register.");
+		do{
+			// 获得地址
+			uint8_t address = (uint8_t)va_arg(parames, int);
+			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
+			uint32_t *reg_out = va_arg(parames, uint32_t *);	// 数据输出地址
+			result = DAPRegister(adapterObj, DAP_TRANSFER_RnW | address, reg_out);
+		}while(0);
+
+		break;
+
+	case AINS_READ_AP_REG:
+		log_trace("Execution command: Read AP Register.");
+		do{
+			// 获得地址
+			uint8_t address = (uint8_t)va_arg(parames, int);
+			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
+			uint32_t *reg_out = va_arg(parames, uint32_t *);	// 数据输出地址
+			result = DAPRegister(adapterObj, DAP_TRANSFER_RnW | DAP_TRANSFER_APnDP | address, reg_out);
+		}while(0);
+		break;
+
+	case AINS_WRITE_DP_REG:
+		log_trace("Execution command: Write DP Register.");
+		do{
+			// 获得地址
+			uint8_t address = (uint8_t)va_arg(parames, int);
+			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
+			uint32_t *reg_out = va_arg(parames, uint32_t *);	// 数据地址
+			result = DAPRegister(adapterObj, address, reg_out);
+		}while(0);
+		break;
+
+	case AINS_WRITE_AP_REG:
+		log_trace("Execution command: Write AP Register.");
+		do{
+			// 获得地址
+			uint8_t address = (uint8_t)va_arg(parames, int);
+			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
+			uint32_t *reg_out = va_arg(parames, uint32_t *);	// 数据地址
+			result = DAPRegister(adapterObj, DAP_TRANSFER_APnDP | address, reg_out);
 		}while(0);
 		break;
 
