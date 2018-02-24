@@ -20,13 +20,26 @@ enum transportType {
 	SWIM
 };
 
+// 支持的仿真器类型
+enum supportedAdapter{
+	LEGACY,
+	CMSIS_DAP,	// ARM 公司提供的一个仿真器
+	USB_BLASTER,
+	STLINK,
+	OPENJTAG,
+};
+
 // 仿真器的公共操作命令
+// FIXME 提取出来公共操作，每个仿真器都必须实现这些
 enum commonInstr {
 	AINS_GET_IDCODE,		// 获得IDCode
+	AINS_JTAG_SEQUENCE,		// 发送一个jtag时序，该函数只返回TRUE
+	AINS_SWD_SEQUENCE,		// 发送一个SWD时序，该函数只返回TRUE
 	AINS_COMM_LAST	// 分隔符，代表最后一个
 };
 
 enum connType {
+	UNKNOW,	// 未知
 	USB,	// 使用USB方式连接
 	ETHERNAET,	// 以太网，Wifi
 	SERIAL_PORT	// 串行口
@@ -50,6 +63,7 @@ typedef struct AdapterObject AdapterObject;
 struct AdapterObject{
 	struct adapterConnector ConnObject;	// 仿真器连接对象
 	char *DeviceDesc;	// 设备描述字符
+	enum supportedAdapter AdapterClass;	// 仿真器类型
 	enum transportType currTrans;	// 当前使用的仿真协议
 	const enum transportType *supportedTrans;	// 支持的仿真协议列表（不能出现UNKNOW）
 	BOOL (*Init)(AdapterObject *adapterObj);	// 执行初始化动作
