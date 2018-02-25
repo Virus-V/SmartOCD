@@ -168,38 +168,65 @@
 
 // DP IDR Register 解析
 typedef union {
-	uint32_t reg_data;
+	uint32_t regData;
 	struct {
-		uint32_t designer : 12;	// Designer ID. An 11-bit JEDEC code
+		uint32_t Designer : 12;	// Designer ID. An 11-bit JEDEC code
 		/**
 		 * Version of the Debug Port architecture implemented. Permitted values are:
 		 * 0x0 Reserved. Implementations of DPv0 do not implement DPIDR.
 		 * 0x1 DPv1 is implemented.
 		 * 0x2 DPv2 is implemented.
 		 */
-		uint32_t version : 4;
+		uint32_t Version : 4;
 		/**
 		 * Minimal Debug Port (MINDP) functions implemented:
 		 * 0 : Transaction counter, Pushed-verify, and Pushed-find operations are implemented.
 		 * 1 : Transaction counter, Pushed-verify, and Pushed-find operations are not implemented.
 		 */
-		uint32_t min : 1;
+		uint32_t Min : 1;
 		uint32_t : 3;	// RES0
-		uint32_t partNo : 8;	// Part Number，调试端口部件号
-		uint32_t revision : 4;	// 版本
-	} reg_info;
+		uint32_t PartNo : 8;	// Part Number，调试端口部件号
+		uint32_t Revision : 4;	// 版本
+	} regInfo;
 } DP_IDRParse;
 // AP IDR Register 解析
 typedef union {
-	uint32_t reg_data;
+	uint32_t regData;
 	struct {
-		uint32_t type : 4;	// Identifies the type of bus, or other connection, that connects to the AP（保留原文）
-		uint32_t variant : 4;	// Identifies different AP implementations of the same Type.
+		uint32_t Type : 4;	// Identifies the type of bus, or other connection, that connects to the AP（保留原文）
+		uint32_t Variant : 4;	// Identifies different AP implementations of the same Type.
 		uint32_t : 5;	// RES0 SBZ
-		uint32_t class : 4;	// Defines the class of AP.- 0b0000:No defined class. - 0b1000:Memory Access Port.
-		uint32_t jep106Code : 11;	// For an AP designed by ARM this field has the value 0x23B
-		uint32_t revision : 4;	// 版本
-	} reg_info;
+		uint32_t Class : 4;	// Defines the class of AP.- 0b0000:No defined class. - 0b1000:Memory Access Port.
+		uint32_t JEP106Code : 11;	// For an AP designed by ARM this field has the value 0x23B
+		uint32_t Revision : 4;	// 版本
+	} regInfo;
 } AP_IDRParse;
+
+typedef union {
+	uint32_t regData;
+	struct {
+		uint32_t Size : 3;	// [RW] Size of access. This field indicates the size of access to perform.
+		uint32_t : 1;	// RES0
+		uint32_t AddrInc : 2;	// [RW] Address auto-increment and packing mode. This field controls whether the access address increments
+								// automatically on read and write data accesses through the DRW register.
+		uint32_t DeviceEn : 1;	// [RO or RAO] Device enabled. This bit is set to 1 when transactions can be issued through the MEM-AP.
+		uint32_t TrInProg : 1;	// [RO] Transfer in progress. This bit is set to 1 while a transfer is in progress on the connection to the
+								// memory system, and is set to 0 while the connection is idle.
+								// After an ABORT operation, debug software can read this bit to check whether the aborted
+								// transaction completed.
+		uint32_t Mode : 4;		// [RW or RO] Mode of operation. The possible values of this bit are:
+								// 0000 Basic mode.
+								// 0001 Barrier support enabled.
+		uint32_t Type : 4;		// See the entry for {Prot, Type}.
+		uint32_t : 7;	// RES0
+		uint32_t SPIDEN : 1;	// Secure Privileged Debug Enabled. If this bit is implemented, the possible values are:
+								// 0 Secure accesses disabled.
+								// 1 Secure accesses enabled.
+								// This bit is optional, and read-only. If not implemented, the bit is RES 0.
+		uint32_t Prot : 7;		// Bus access protection control. A debugger can use these fields to specify flags for a debug access.
+		uint32_t DbgSwEnable : 1;	// Debug software access enable.
+									// DbgSwEnable must be ignored and treated as one if DeviceEn is set to 0.
+	} regInfo;
+} MEM_AP_CSWParse;
 
 #endif /* SRC_ARCH_CORESIGHT_DAP_H_ */

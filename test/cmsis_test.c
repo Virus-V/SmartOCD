@@ -76,22 +76,22 @@ int main(){
 			// 修改select选中ap
 			adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, select);
 			// 读取AP的IDR
-			adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_IDR, &parse.reg_data);
-			if(parse.reg_data != 0){
-				printf("probe Address: 0x%08X => 0x%08X\n", select, parse.reg_data);
+			adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_IDR, &parse.regData);
+			if(parse.regData != 0){
+				printf("probe Address: 0x%08X => 0x%08X\n", select, parse.regData);
 				printf("Revision:0x%x\nJep106:0x%x\nClass:0x%x\nVariant:0x%x\nType:0x%x.\n",
-						parse.reg_info.revision,
-						parse.reg_info.jep106Code,
-						parse.reg_info.class,
-						parse.reg_info.variant,
-						parse.reg_info.type);
+						parse.regInfo.Revision,
+						parse.regInfo.JEP106Code,
+						parse.regInfo.Class,
+						parse.regInfo.Variant,
+						parse.regInfo.Type);
 			}
 		}
 		t_end = time(NULL);
 		printf("time: %.0f s\n", difftime(t_end,t_start));
 		// 读取ROM Table
 		adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, 0xf0);
-		adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_ROM, &romtable);
+		adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_ROM_LSB, &romtable);
 		printf("Rom table Base:%X.\n", romtable);
 		// 读取CFG
 		//adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, 0xf0);
