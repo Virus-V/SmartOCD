@@ -13,7 +13,7 @@
 #include "smart_ocd.h"
 #include "misc/log.h"
 #include "debugger/cmsis-dap.h"
-#include "arch/CoreSight/DAP.h"
+#include "arch/ARM/ADI/DAP.h"
 
 extern int print_bulk(char *data, int length, int rowLen);
 
@@ -24,7 +24,7 @@ int main(){
 	AdapterObject *adapterObj;
 	struct cmsis_dap *cmsis_dapObj;
 	uint32_t idcode, tmp;
-	log_set_level(LOG_DEBUG);
+	log_set_level(LOG_INFO);
 	cmsis_dapObj = NewCMSIS_DAP();
 	if(cmsis_dapObj == NULL){
 		log_fatal("failed to new.");
@@ -40,8 +40,8 @@ int main(){
 	adapterObj->Init(adapterObj);
 	// 切换到SWD模式
 	adapterObj->SelectTrans(adapterObj, SWD);
-	// 设置SWJ频率，10MHz
-	adapterObj->Operate(adapterObj, CMDAP_SET_CLOCK, 10000000u);
+	// 设置SWJ频率，最大30MHz
+	adapterObj->Operate(adapterObj, CMDAP_SET_CLOCK, 30000000u);
 	adapterObj->Operate(adapterObj, CMDAP_TRANSFER_CONFIG, 5, 10, 10);
 	// 读取id code 寄存器
 	adapterObj->Operate(adapterObj, CMDAP_READ_DP_REG, 0, DP_IDCODE, &idcode);
@@ -68,6 +68,7 @@ int main(){
 		uint16_t apsel = 0;
 		uint32_t select = 0xf0;
 		uint32_t romtable = 0;
+		uint32_t tmp = 0;
 		AP_IDRParse parse;
 		t_start = time(NULL) ;
 		for(;apsel < 256; apsel ++){
@@ -93,14 +94,15 @@ int main(){
 		adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, 0xf0);
 		adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_ROM_LSB, &romtable);
 		printf("Rom table Base:%X.\n", romtable);
+		// 读取romtable
+		adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, 0x0);	// 选择AP bank0
+		adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_TAR_LSB, 0x08000004u);
+		adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_CSW, 0x23000050 | CSW_SIZE32);
 		// 读取CFG
 		//adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, 0xf0);
-		adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_CFG, &romtable);
-		printf("CFG :%X.\n", romtable);
+		adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &tmp);
+		printf("rom table value :0x%08X.\n", tmp);
 	}while(0);
-
-
-
 	adapterObj->Deinit(adapterObj);
 	FreeCMSIS_DAP(cmsis_dapObj);
 	exit(0);

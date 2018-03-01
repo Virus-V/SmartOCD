@@ -96,21 +96,28 @@
 #define AP_IDR			0xFC        // Identification Register
 
 // AP Control and Status Word definitions
-#define CSW_SIZE       0x00000007  // Access Size: Selection Mask
-#define CSW_SIZE8      0x00000000  // Access Size: 8-bit
-#define CSW_SIZE16     0x00000001  // Access Size: 16-bit
-#define CSW_SIZE32     0x00000002  // Access Size: 32-bit
-#define CSW_ADDRINC    0x00000030  // Auto Address Increment Mask
-#define CSW_NADDRINC   0x00000000  // No Address Increment
-#define CSW_SADDRINC   0x00000010  // Single Address Increment
-#define CSW_PADDRINC   0x00000020  // Packed Address Increment
-#define CSW_DBGSTAT    0x00000040  // Debug Status
-#define CSW_TINPROG    0x00000080  // Transfer in progress
-#define CSW_HPROT      0x02000000  // User/Privilege Control
-#define CSW_MSTRTYPE   0x20000000  // Master Type Mask
-#define CSW_MSTRCORE   0x00000000  // Master Type: Core
-#define CSW_MSTRDBG    0x20000000  // Master Type: Debug
-#define CSW_RESERVED   0x01000000  // Reserved Value
+#define CSW_SIZE_MSK		0x00000007  // Access Size: Selection Mask
+#define CSW_SIZE8			0x00000000  // Access Size: 8-bit
+#define CSW_SIZE16			0x00000001  // Access Size: 16-bit
+#define CSW_SIZE32			0x00000002  // Access Size: 32-bit
+#define CSW_SIZE64			0x00000003	// Access Size: 64-bit
+#define CSW_SIZE128			0x00000004	// Access Size: 128-bit
+#define CSW_SIZE256			0x00000005	// Access Size: 256-bit
+
+#define CSW_ADDRINC_MSK		0x00000030  // Auto Address Increment Mask
+#define CSW_NADDRINC		0x00000000  // No Address Increment
+#define CSW_SADDRINC		0x00000010  // Single Address Increment
+#define CSW_PADDRINC		0x00000020  // Packed Address Increment
+
+#define CSW_DBGSTAT			0x00000040  // Debug Status
+#define CSW_TINPROG			0x00000080  // Transfer in progress
+#define CSW_HPROT			0x02000000  // User/Privilege Control
+
+#define CSW_MSTRTYPE_MSK	0x20000000  // Master Type Mask
+#define CSW_MSTRCORE		0x00000000  // Master Type: Core
+#define CSW_MSTRDBG			0x20000000  // Master Type: Debug
+
+#define CSW_RESERVED		0x01000000  // Reserved Value
 
 // Core Debug Register Address Offsets
 #define DBG_OFS        0x0DF0      // Debug Register Offset inside NVIC

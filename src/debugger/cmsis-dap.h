@@ -167,7 +167,7 @@ struct cmsis_dap {
 	AdapterObject AdapterObj;	// 对象名必须为AdapterObj，不可以为指针，而且必须在第一个
 	int Version;	// CMSIS-DAP 版本
 	int MaxPcaketCount;	// 缓冲区最多容纳包的个数
-	int SendPacketSize, ReceivePacketSize;	// 包最大长度，按道理来说应该等同于USB的Endpoint支持的最大包长，但是万一不同呢
+	int PacketSize;	// 包最大长度
 	uint32_t capablityFlag;	// 该仿真器支持的功能
 	// TODO 实现更高版本仿真器支持 SWO、
 };

@@ -9,7 +9,6 @@
 #include <stdlib.h>
 
 int main(){
-	double sa = 3.14;
-	printf("asdsad %f\n", 3);
+	printf("asdsad %X\n", 0x01000000 | 0x20000000 | 0x02000000 | 0x00000040 | 0x00000010);
 	exit(0);
 }
