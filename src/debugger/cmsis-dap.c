@@ -305,11 +305,12 @@ static BOOL selectTrans(AdapterObject *adapterObj, enum transportType type){
 				log_trace("Read %d byte(s) from %s.", usbObj->Read(usbObj, resp, cmsis_dapObj->PacketSize, 0), adapterObj->DeviceDesc);
 				if(*CAST(uint8_t *, resp+1) != DAP_PORT_SWD){
 					log_warn("Switching SWD mode failed.");
+				}else{
+					// 发送切换swd序列
+					SWJ_JTAG2SWD(adapterObj);
+					adapterObj->currTrans = SWD;
+					log_info("Switch to SWD mode.");
 				}
-				// 发送切换swd序列
-				SWJ_JTAG2SWD(adapterObj);
-				adapterObj->currTrans = SWD;
-				log_info("Switch to SWD mode.");
 				break;
 
 			case JTAG:
@@ -324,11 +325,12 @@ static BOOL selectTrans(AdapterObject *adapterObj, enum transportType type){
 				log_trace("Read %d byte(s) from %s.", usbObj->Read(usbObj, resp, cmsis_dapObj->PacketSize, 0), adapterObj->DeviceDesc);
 				if(*CAST(uint8_t *, resp+1) != DAP_PORT_JTAG){
 					log_warn("Switching JTAG mode failed.");
+				}else{
+					// 发送切换JTAG序列
+					SWJ_SWD2JTAG(adapterObj);
+					adapterObj->currTrans = JTAG;
+					log_info("Switch to JTAG mode.");
 				}
-				// 发送切换JTAG序列
-				SWJ_SWD2JTAG(adapterObj);
-				adapterObj->currTrans = JTAG;
-				log_info("Switch to JTAG mode.");
 				break;
 			}
 			free(resp);
