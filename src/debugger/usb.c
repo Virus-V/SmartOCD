@@ -396,6 +396,20 @@ BOOL USBClaimInterface(USBObject *usbObj, int IFClass, int IFSubclass, int IFPro
 }
 
 /**
+ * 复位设备
+ */
+BOOL USBResetDevice(USBObject *usbObj){
+	assert(usbObj != NULL && usbObj->devHandle != NULL);
+	int retCode = libusb_reset_device(usbObj->devHandle);
+	if(retCode == 0){
+		return TRUE;
+	}else{
+		log_warn("libusb_reset_device():%s", libusb_error_name(retCode));
+		return FALSE;
+	}
+}
+
+/**
  * 获得PID和VID
  */
 BOOL USBGetPidVid(libusb_device *dev, uint16_t *pid_out, uint16_t *vid_out) {

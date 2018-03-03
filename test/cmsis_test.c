@@ -19,12 +19,16 @@ extern int print_bulk(char *data, int length, int rowLen);
 
 uint16_t vids[] = {0xc251, 0};
 uint16_t pids[] = {0xf001, 0};
+
+
 // 测试入口点
 int main(){
 	AdapterObject *adapterObj;
 	struct cmsis_dap *cmsis_dapObj;
-	uint32_t idcode, tmp;
-	log_set_level(LOG_INFO);
+	USBObject *usbObj;
+	uint32_t idcode = 0, tmp;
+	uint8_t irLen[] = {4,4};
+	log_set_level(LOG_DEBUG);
 	cmsis_dapObj = NewCMSIS_DAP();
 	if(cmsis_dapObj == NULL){
 		log_fatal("failed to new.");
@@ -36,18 +40,31 @@ int main(){
 		exit(1);
 	}
 	adapterObj = CAST(AdapterObject *, cmsis_dapObj);
+	usbObj = GET_USBOBJ(adapterObj);
 	// 初始化
 	adapterObj->Init(adapterObj);
+//#define USE_SWD
+#ifdef USE_SWD
+	// 设置SWJ频率，最大30MHz
+	adapterObj->Operate(adapterObj, CMDAP_SET_CLOCK, 1000u);
 	// 切换到SWD模式
 	adapterObj->SelectTrans(adapterObj, SWD);
-	// 设置SWJ频率，最大30MHz
-	adapterObj->Operate(adapterObj, CMDAP_SET_CLOCK, 30000000u);
 	adapterObj->Operate(adapterObj, CMDAP_TRANSFER_CONFIG, 5, 10, 10);
+#else
+	// 设置SWJ频率，最大30MHz
+	adapterObj->Operate(adapterObj, CMDAP_SET_CLOCK, 100000u);
+	// 切换到JTAG模式
+	adapterObj->SelectTrans(adapterObj, JTAG);
+	irLen[1] = 5;
+	adapterObj->Operate(adapterObj, CMDAP_JTAG_CONFIGURE, 1, irLen);
+	adapterObj->Operate(adapterObj, CMDAP_JTAG_IDCODE, 0, &tmp);
+	log_info("JTAG IDCODE:0x%X.", tmp);
+#endif
 	// 读取id code 寄存器
 	adapterObj->Operate(adapterObj, CMDAP_READ_DP_REG, 0, DP_IDCODE, &idcode);
 	log_info("SWD-DP with ID :0x%08x", idcode);
 	// 清除上次的stick error （SW Only）
-	adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_ABORT, STKCMPCLR | STKERRCLR | WDERRCLR | ORUNERRCLR);
+	adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_ABORT, STKCMPCLR | STKERRCLR | WDERRCLR | ORUNERRCLR | DAPABORT);
 	// 确保DPBANKSEL = 0，选中CTRL/STAT寄存器
 	adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, 0);
 	// 上电
@@ -70,14 +87,25 @@ int main(){
 		uint32_t romtable = 0;
 		uint32_t tmp = 0;
 		AP_IDRParse parse;
+		BOOL result;
 		t_start = time(NULL) ;
 		for(;apsel < 256; apsel ++){
 			select &= ~0xff000000u;
 			select |= apsel << 24;
 			// 修改select选中ap
-			adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, select);
+			result = adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, select);
+			if(result == FALSE) {
+				// write abort;
+				adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_ABORT, DAPABORT);
+				break;
+			}
 			// 读取AP的IDR
-			adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_IDR, &parse.regData);
+			result = adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_IDR, &parse.regData);
+			if(result == FALSE) {
+				// write abort;
+				adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_ABORT, DAPABORT);
+				break;
+			}
 			if(parse.regData != 0){
 				printf("probe Address: 0x%08X => 0x%08X\n", select, parse.regData);
 				printf("Revision:0x%x\nJep106:0x%x\nClass:0x%x\nVariant:0x%x\nType:0x%x.\n",

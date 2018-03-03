@@ -41,5 +41,6 @@ int USBBulkTransfer(USBObject *usbObj, uint8_t endpoint, uint8_t *data, int data
 int USBInterruptTransfer(USBObject *usbObj, uint8_t endpoint, uint8_t *data, int dataLength, int timeout);
 BOOL USBSetConfiguration(USBObject *usbObj, int configurationIndex);
 BOOL USBClaimInterface(USBObject *usbObj, int IFClass, int IFSubclass, int IFProtocol, int transType);
+BOOL USBResetDevice(USBObject *usbObj);
 BOOL USBGetPidVid(libusb_device *dev, uint16_t *pid_out, uint16_t *vid_out);
 #endif /* SRC_DEBUGGER_USB_H_ */

@@ -18,6 +18,24 @@
 #include "debugger/cmsis-dap.h"
 #include "arch/ARM/ADI/DAP.h"
 
+/**
+ * 这个宏是用来作为与cmsis-dap通信函数的外包部分
+ * 该宏实现自动申请cmsis-dap返回包缓冲空间并且带函数执行结束后
+ * 释放该空间
+ */
+#define CMDAP_FUN_WARP(size,func,...) ({	\
+	uint8_t *responseBuff; BOOL result = FALSE;	\
+	assert((size) > 0);	\
+	if((responseBuff = calloc((size), sizeof(uint8_t))) == NULL){	\
+		log_warn("Alloc reply packet buffer memory failed.");	\
+		result = FALSE;	\
+	}else{	\
+		result = (func)(responseBuff, ##__VA_ARGS__);	\
+		free(responseBuff);	\
+	}	\
+	result;	\
+})
+
 // CMSIS-DAP支持的仿真传输协议类型
 static const enum transportType supportTrans[] = {JTAG, SWD, UNKNOW_NULL};
 static BOOL init(AdapterObject *adapterObj);
@@ -89,6 +107,8 @@ BOOL ConnectCMSIS_DAP(struct cmsis_dap *cmsis_dapObj, const uint16_t *vids, cons
 		log_debug("Try connecting vid: 0x%02x, pid: 0x%02x usb device.", vids[idx], pids[idx]);
 		if(USBOpen(usbObj, vids[idx], pids[idx], serialNum)){
 			log_info("Successful connection vid: 0x%02x, pid: 0x%02x usb device.", vids[idx], pids[idx]);
+			// 复位设备
+			USBResetDevice(usbObj);
 			// 标志已连接
 			CAST(AdapterObject *, cmsis_dapObj)->ConnObject.connectFlag = 1;
 			// 选择配置和声明接口
@@ -105,22 +125,6 @@ BOOL ConnectCMSIS_DAP(struct cmsis_dap *cmsis_dapObj, const uint16_t *vids, cons
 	}
 	log_warn("No suitable device found.");
 	return FALSE;
-}
-
-// 读取应答包并丢弃
-static void discardPacket(AdapterObject *adapterObj){
-	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
-	int packetSize; char capablity;
-	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
-	assert(cmsis_dapObj->PacketSize != 0);
-
-	USBObject *usbObj = GET_USBOBJ(adapterObj);
-	uint8_t *response;
-	if((response = calloc(cmsis_dapObj->PacketSize, sizeof(uint8_t))) == NULL){
-		log_error("Failed to calloc receive buffer space. Cannot Discard.");
-	}
-	usbObj->Read(usbObj, response, cmsis_dapObj->PacketSize, 0);
-	free(response);
 }
 
 // 初始化CMSIS-DAP设备
@@ -216,35 +220,43 @@ static BOOL init(AdapterObject *adapterObj){
 	return TRUE;
 }
 
+/**
+ * Disconnect
+ */
+static BOOL DAP_Disconnect(uint8_t *respBuff, AdapterObject *adapterObj){
+	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
+	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
+	assert(cmsis_dapObj->PacketSize != 0);
+	USBObject *usbObj = GET_USBOBJ(adapterObj);
+	uint8_t command[1] = {ID_DAP_Disconnect};
+	log_trace("Write %d byte(s) to %s.", usbObj->Write(usbObj, command, 1, 0), adapterObj->DeviceDesc);
+	log_trace("Read %d byte(s) from %s.", usbObj->Read(usbObj, respBuff, cmsis_dapObj->PacketSize, 0), adapterObj->DeviceDesc);
+	// 检查返回值
+	if(respBuff[1] != DAP_OK){
+		log_warn("Disconnect execution failed.");
+		return FALSE;
+	}
+	return TRUE;
+}
+
 // 反初始化
 static BOOL deinit(AdapterObject *adapterObj){
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
 	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	assert(cmsis_dapObj->PacketSize != 0);
-	USBObject *usbObj = GET_USBOBJ(adapterObj);
-	uint8_t command[1] = {ID_DAP_Disconnect}, *response;
-	if((response = calloc(cmsis_dapObj->PacketSize, sizeof(uint8_t))) == NULL){
-		log_error("Failed to calloc receive buffer space.");
-		return FALSE;
-	}
-	log_trace("Write %d byte(s) to %s.", usbObj->Write(usbObj, command, 1, 0), adapterObj->DeviceDesc);
-	log_trace("Read %d byte(s) from %s.", usbObj->Read(usbObj, response, cmsis_dapObj->PacketSize, 0), adapterObj->DeviceDesc);
-	// 检查返回值
-	if(response[1] != DAP_OK){
-		log_warn("Disconnect execution failed.");
-		free(response);
-		return FALSE;
-	}
-	free(response);
-	return TRUE;
+	// 断开连接
+	return CMDAP_FUN_WARP(cmsis_dapObj->PacketSize, DAP_Disconnect, adapterObj);
 }
 
 /**
  * JTAG协议转SWD
  */
-static void SWJ_JTAG2SWD(AdapterObject *adapterObj){
+static BOOL SWJ_JTAG2SWD(uint8_t *respBuff, AdapterObject *adapterObj){
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
 	USBObject *usbObj = GET_USBOBJ(adapterObj);
+	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
+	assert(cmsis_dapObj->PacketSize != 0);
+
 	//SWJ发送 0xE79E，老版本的ARM发送0xB76D强制切换
 	uint8_t switchSque[] = {ID_DAP_SWJ_Sequence, 144,
 			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // 56 bit
@@ -253,16 +265,19 @@ static void SWJ_JTAG2SWD(AdapterObject *adapterObj){
 			0x00, 0x00,	// 16 bit
 	};	// DAP_SWJ_Sequence Command
 	usbObj->Write(usbObj, switchSque, sizeof(switchSque), 0);
-	// 丢弃它的相应包
-	discardPacket(adapterObj);
+	usbObj->Read(usbObj, respBuff, cmsis_dapObj->PacketSize, 0);
+	return TRUE;
 }
 
 /**
  * SWD协议转JTAG
  */
-static void SWJ_SWD2JTAG(AdapterObject *adapterObj){
+static BOOL SWJ_SWD2JTAG(uint8_t *respBuff, AdapterObject *adapterObj){
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
 	USBObject *usbObj = GET_USBOBJ(adapterObj);
+	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
+	assert(cmsis_dapObj->PacketSize != 0);
+
 	//SWJ发送 0xE79E，老版本的ARM发送0xB76D强制切换
 	uint8_t switchSque[] = {ID_DAP_SWJ_Sequence, 80,
 			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // 56 bit
@@ -270,8 +285,8 @@ static void SWJ_SWD2JTAG(AdapterObject *adapterObj){
 			0xff,	// 8 bit
 	};	// DAP_SWJ_Sequence Command
 	usbObj->Write(usbObj, switchSque, sizeof(switchSque), 0);
-	// 丢弃它的相应包
-	discardPacket(adapterObj);
+	usbObj->Read(usbObj, respBuff, cmsis_dapObj->PacketSize, 0);
+	return TRUE;
 }
 
 // 选择和切换传输协议
@@ -307,7 +322,7 @@ static BOOL selectTrans(AdapterObject *adapterObj, enum transportType type){
 					log_warn("Switching SWD mode failed.");
 				}else{
 					// 发送切换swd序列
-					SWJ_JTAG2SWD(adapterObj);
+					CMDAP_FUN_WARP(cmsis_dapObj->PacketSize, SWJ_JTAG2SWD, adapterObj);
 					adapterObj->currTrans = SWD;
 					log_info("Switch to SWD mode.");
 				}
@@ -327,7 +342,7 @@ static BOOL selectTrans(AdapterObject *adapterObj, enum transportType type){
 					log_warn("Switching JTAG mode failed.");
 				}else{
 					// 发送切换JTAG序列
-					SWJ_SWD2JTAG(adapterObj);
+					CMDAP_FUN_WARP(cmsis_dapObj->PacketSize, SWJ_SWD2JTAG, adapterObj);
 					adapterObj->currTrans = JTAG;
 					log_info("Switch to JTAG mode.");
 				}
@@ -348,9 +363,9 @@ static BOOL selectTrans(AdapterObject *adapterObj, enum transportType type){
  * —— CMSIS-DAP 文档
  * SWD、JTAG模式下均有效
  */
-static BOOL DAP_TransferConfigure(AdapterObject *adapterObj, uint8_t idleCycle, uint16_t waitRetry, uint16_t matchRetry){
+static BOOL DAP_TransferConfigure(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t idleCycle, uint16_t waitRetry, uint16_t matchRetry){
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
-	uint8_t DAPTransfer[6] = {ID_DAP_TransferConfigure}, *response;
+	uint8_t DAPTransfer[6] = {ID_DAP_TransferConfigure};
 	USBObject *usbObj = GET_USBOBJ(adapterObj);
 	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	assert(cmsis_dapObj->PacketSize != 0);
@@ -360,19 +375,13 @@ static BOOL DAP_TransferConfigure(AdapterObject *adapterObj, uint8_t idleCycle, 
 	DAPTransfer[3] = BYTE_IDX(waitRetry, 1);
 	DAPTransfer[4] = BYTE_IDX(matchRetry, 0);
 	DAPTransfer[5] = BYTE_IDX(matchRetry, 1);
-	if((response = calloc(cmsis_dapObj->PacketSize, sizeof(uint8_t))) == NULL){
-		log_error("Failed to calloc receive buffer space.");
-		return FALSE;
-	}
 	usbObj->Write(usbObj, DAPTransfer, sizeof(DAPTransfer), 0);
-	usbObj->Read(usbObj, response, cmsis_dapObj->PacketSize, 0);
+	usbObj->Read(usbObj, respBuff, cmsis_dapObj->PacketSize, 0);
 	// 增加判断是否成功
-	if(response[1] != DAP_OK){
-		free(response);
+	if(respBuff[1] != DAP_OK){
 		log_warn("Transfer config execution failed.");
 		return FALSE;
 	}
-	free(response);
 	return TRUE;
 }
 
@@ -382,9 +391,9 @@ static BOOL DAP_TransferConfigure(AdapterObject *adapterObj, uint8_t idleCycle, 
  * —— CMSIS-DAP 文档
  * SWD、JTAG模式下均有效
  */
-static BOOL DAP_SWJ_Clock(AdapterObject *adapterObj, uint32_t clockHz){
+static BOOL DAP_SWJ_Clock(uint8_t *respBuff, AdapterObject *adapterObj, uint32_t clockHz){
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
-	uint8_t clockHzPack[5] = {ID_DAP_SWJ_Clock}, *response;
+	uint8_t clockHzPack[5] = {ID_DAP_SWJ_Clock};
 	USBObject *usbObj = GET_USBOBJ(adapterObj);
 	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	assert(cmsis_dapObj->PacketSize != 0);
@@ -393,19 +402,14 @@ static BOOL DAP_SWJ_Clock(AdapterObject *adapterObj, uint32_t clockHz){
 	clockHzPack[2] = BYTE_IDX(clockHz, 1);
 	clockHzPack[3] = BYTE_IDX(clockHz, 2);
 	clockHzPack[4] = BYTE_IDX(clockHz, 3);
-	if((response = calloc(cmsis_dapObj->PacketSize, sizeof(uint8_t))) == NULL){
-		log_error("Failed to calloc receive buffer space.");
-		return FALSE;
-	}
+
 	usbObj->Write(usbObj, clockHzPack, sizeof(clockHzPack), 0);
-	usbObj->Read(usbObj, response, cmsis_dapObj->PacketSize, 0);
+	usbObj->Read(usbObj, respBuff, cmsis_dapObj->PacketSize, 0);
 	// 增加判断是否成功
-	if(response[1] != DAP_OK){
-		free(response);
+	if(respBuff[1] != DAP_OK){
 		log_warn("SWJ Clock execution failed.");
 		return FALSE;
 	}
-	free(response);
 	return TRUE;
 }
 
@@ -414,30 +418,24 @@ static BOOL DAP_SWJ_Clock(AdapterObject *adapterObj, uint32_t clockHz){
  * SWD、JTAG模式下均可调用，区分协议在DAP固件中完成
  * ——详情查看 DAP 手册
  */
-static BOOL DAPRegister(AdapterObject *adapterObj, uint8_t index, uint8_t request, uint32_t *reg_inout){
+static BOOL DAPRegister(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t index, uint8_t request, uint32_t *reg_inout){
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
 	USBObject *usbObj = GET_USBOBJ(adapterObj);
 	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	assert(cmsis_dapObj->PacketSize != 0);
 
-	uint8_t DAPTransferPack[] = {ID_DAP_Transfer, 0, 0x01, 0xFF, 0, 0, 0, 0}, *response;
-	if((response = calloc(cmsis_dapObj->PacketSize, sizeof(uint8_t))) == NULL){
-		log_error("Failed to calloc receive buffer space.");
-		return FALSE;
-	}
+	uint8_t DAPTransferPack[] = {ID_DAP_Transfer, 0, 0x01, 0xFF, 0, 0, 0, 0};
 	DAPTransferPack[1] = index;
 	DAPTransferPack[3] = request;
 	if((request & DAP_TRANSFER_RnW) == DAP_TRANSFER_RnW){	// 读取寄存器
 		usbObj->Write(usbObj, DAPTransferPack, 4, 0);
-		usbObj->Read(usbObj, response, cmsis_dapObj->PacketSize, 0);
+		usbObj->Read(usbObj, respBuff, cmsis_dapObj->PacketSize, 0);
 		// 检查返回值
-		if(response[1] == 1 && response[2] == 1){
-			*reg_inout = *CAST(uint32_t *, response+3);
-			free(response);
+		if(respBuff[1] == 1 && respBuff[2] == 1){
+			*reg_inout = *CAST(uint32_t *, respBuff+3);
 			return TRUE;
 		}else{
-			log_warn("Transmission %d bytes, the last response: %x.", response[1], response[2]);
-			free(response);
+			log_warn("Transmission %d bytes, the last response: %x.", respBuff[1], respBuff[2]);
 			return FALSE;
 		}
 	}else{	// 写寄存器
@@ -446,16 +444,79 @@ static BOOL DAPRegister(AdapterObject *adapterObj, uint8_t index, uint8_t reques
 		DAPTransferPack[6] = BYTE_IDX(*reg_inout, 2);
 		DAPTransferPack[7] = BYTE_IDX(*reg_inout, 3);
 		usbObj->Write(usbObj, DAPTransferPack, 8, 0);
-		usbObj->Read(usbObj, response, cmsis_dapObj->PacketSize, 0);
+		usbObj->Read(usbObj, respBuff, cmsis_dapObj->PacketSize, 0);
 		// 检查返回值
-		if(response[1] == 1 && response[2] == 1){
-			free(response);
+		if(respBuff[1] == 1 && respBuff[2] == 1){
 			return TRUE;
 		}else{
-			log_warn("Transmission %d bytes, the last response: %x.", response[1], response[2]);
-			free(response);
+			log_warn("Transmission %d bytes, the last response: %x.", respBuff[1], respBuff[2]);
 			return FALSE;
 		}
+	}
+}
+
+/**
+ * JTAG ID Code
+ */
+static BOOL JTAG_IDcode(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t index, uint32_t *reg_inout){
+	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
+	USBObject *usbObj = GET_USBOBJ(adapterObj);
+	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
+	assert(cmsis_dapObj->PacketSize != 0);
+
+	// 使状态机进入RUN-TEST/IDLE状态
+	uint8_t DAPTransferPack[] = {ID_DAP_JTAG_Sequence, 2,
+			0x45, 0x00, 0x01, 0x00,
+//			0x42, 0x00, 0x02, 0x00,
+//			0x04, 0x0e, 0x43, 0x00,
+//			0x02, 0x00, /* 19 */0xa0, 0x00, 0x00, 0x00, 0x00,
+//			0x42, 0x00, 0x01, 0x00
+	};
+
+	usbObj->Write(usbObj, DAPTransferPack, sizeof(DAPTransferPack), 0);
+	usbObj->Read(usbObj, respBuff, cmsis_dapObj->PacketSize, 0);
+
+	DAPTransferPack[0] = ID_DAP_JTAG_IDCODE;
+	DAPTransferPack[1] = index;
+	usbObj->Write(usbObj, DAPTransferPack, 2, 0);
+	usbObj->Read(usbObj, respBuff, cmsis_dapObj->PacketSize, 0);
+	// 检查返回值
+	if(respBuff[1] == DAP_OK){
+		*reg_inout = *CAST(uint32_t *, respBuff+2);
+		return TRUE;
+	}else{
+		log_warn("Get index %d JTAG ID Code Failed.", index);
+		return FALSE;
+	}
+	return TRUE;
+}
+
+/**
+ * The DAP_JTAG_Configure Command sets the JTAG device chain information for communication with Transfer Commands.
+ * The JTAG device chain needs to be iterated with DAP_JTAG_Sequence or manually configured by the debugger on the host computer.
+ */
+static BOOL JTAG_Configure(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t count, uint8_t *irLen){
+	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
+	USBObject *usbObj = GET_USBOBJ(adapterObj);
+	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
+	assert(cmsis_dapObj->PacketSize != 0);
+
+	uint8_t DAPTransferPack[10] = {ID_DAP_JTAG_Configure, 0};	// 2 + 8 一般jtag scan chain最大有8个
+	if(count > 8){
+		log_warn("Devices count more than 8!");
+		return FALSE;
+	}
+	DAPTransferPack[1] = count;
+	// 复制irlen data
+	memcpy(DAPTransferPack+2, irLen, count);
+	usbObj->Write(usbObj, DAPTransferPack, count + 2, 0);
+	usbObj->Read(usbObj, respBuff, cmsis_dapObj->PacketSize, 0);
+	// 检查返回值
+	if(respBuff[1] == DAP_OK){
+		return TRUE;
+	}else{
+		log_warn("Set IR Length Failed.");
+		return FALSE;
 	}
 }
 
@@ -472,13 +533,13 @@ static BOOL DAPRegister(AdapterObject *adapterObj, uint8_t index, uint8_t reques
  * 的内存区域，需要多大内存自己把握
  * response 中的数据只在返回值为TRUE时有效
  */
-static BOOL DAP_Transfer(AdapterObject *adapterObj, uint8_t index, uint8_t count, uint8_t *data, int length, uint8_t *response){
+static BOOL DAP_Transfer(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t index, uint8_t count, uint8_t *data, int length, uint8_t *response){
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
 	USBObject *usbObj = GET_USBOBJ(adapterObj);
 	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	assert(cmsis_dapObj->PacketSize != 0);
 
-	uint8_t *DAP_TransferPacket, *respPcak, readCount = 0, idx;
+	uint8_t *DAP_TransferPacket, readCount = 0, idx;
 	if((length + 3) > cmsis_dapObj->PacketSize){
 		log_error("Packet too large.");
 		return FALSE;
@@ -497,11 +558,6 @@ static BOOL DAP_Transfer(AdapterObject *adapterObj, uint8_t index, uint8_t count
 		log_error("Failed to alloc Packet buffer.");
 		return FALSE;
 	}
-	if((respPcak = calloc(cmsis_dapObj->PacketSize, sizeof(uint8_t))) == NULL){
-		log_error("Failed to alloc Packet buffer.");
-		free(DAP_TransferPacket);
-		return FALSE;
-	}
 	// 构造数据包头部
 	DAP_TransferPacket[0] = ID_DAP_Transfer;
 	DAP_TransferPacket[1] = index;	// DAP index, JTAG ScanChain 中的位置，在SWD模式下忽略该参数
@@ -509,17 +565,15 @@ static BOOL DAP_Transfer(AdapterObject *adapterObj, uint8_t index, uint8_t count
 	// 将数据拷贝到包中
 	memcpy(DAP_TransferPacket + 3, data, length);
 	log_trace("Write %d byte(s) to %s.", usbObj->Write(usbObj, DAP_TransferPacket, 3 + length, 0), adapterObj->DeviceDesc);
-	log_trace("Read %d byte(s) from %s.", usbObj->Read(usbObj, respPcak, cmsis_dapObj->PacketSize, 0), adapterObj->DeviceDesc);
-	if(respPcak[1] == count && respPcak[2] == 1){
+	log_trace("Read %d byte(s) from %s.", usbObj->Read(usbObj, respBuff, cmsis_dapObj->PacketSize, 0), adapterObj->DeviceDesc);
+	if(respBuff[1] == count && respBuff[2] == 1){
 		// 拷贝数据
-		memcpy(response, respPcak, readCount*sizeof(uint32_t));
+		memcpy(response, respBuff, readCount*sizeof(uint32_t));
 		free(DAP_TransferPacket);
-		free(respPcak);
 		return TRUE;
 	}else{
-		log_warn("Transmission %d bytes, the last response: %x.", response[1], response[2]);
+		log_warn("Transmission %d bytes, the last response: %x.", respBuff[1], respBuff[2]);
 		free(DAP_TransferPacket);
-		free(respPcak);
 		return FALSE;
 	}
 
@@ -532,6 +586,7 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
 	va_list parames;
 	BOOL result = FALSE;
+	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	va_start(parames, operate);	// 确定可变参数起始位置
 	// 根据指令选择操作
 	// TODO 根据协议（SWD、JTAG）选择不同的操作
@@ -542,7 +597,7 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 			// 获得index
 			uint8_t dap_index = (uint8_t)va_arg(parames, int);
 			uint32_t *idCode_out = va_arg(parames, uint32_t *);
-			result = DAPRegister(adapterObj, dap_index, DAP_TRANSFER_RnW | DP_IDCODE, idCode_out);
+			result = CMDAP_FUN_WARP(cmsis_dapObj->PacketSize, DAPRegister, adapterObj, dap_index, DAP_TRANSFER_RnW | DP_IDCODE, idCode_out);
 		}while(0);
 		break;
 
@@ -560,7 +615,7 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 		do{
 			uint32_t clockHz = va_arg(parames, uint32_t);
 			log_debug("clockHz: %d.", clockHz);
-			result = DAP_SWJ_Clock(adapterObj, clockHz);
+			result = CMDAP_FUN_WARP(cmsis_dapObj->PacketSize, DAP_SWJ_Clock, adapterObj, clockHz);
 		}while(0);
 		break;
 
@@ -571,7 +626,7 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 			uint16_t waitRetry = (uint16_t)va_arg(parames, int);	// 得到WAIT Response后重试次数
 			uint16_t matchRetry = (uint16_t)va_arg(parames, int);	// 在匹配模式下不匹配时重试次数
 			log_debug("idle:%d, wait:%d, match:%d.", idleCycle, waitRetry, matchRetry);
-			result = DAP_TransferConfigure(adapterObj, idleCycle, waitRetry, matchRetry);
+			result = CMDAP_FUN_WARP(cmsis_dapObj->PacketSize, DAP_TransferConfigure, adapterObj, idleCycle, waitRetry, matchRetry);
 		}while(0);
 		break;
 
@@ -584,7 +639,7 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 			uint8_t address = (uint8_t)va_arg(parames, int);
 			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
 			uint32_t *reg_out = va_arg(parames, uint32_t *);	// 数据输出地址
-			result = DAPRegister(adapterObj, dap_index, DAP_TRANSFER_RnW | address, reg_out);
+			result = CMDAP_FUN_WARP(cmsis_dapObj->PacketSize, DAPRegister, adapterObj, dap_index, DAP_TRANSFER_RnW | address, reg_out);
 		}while(0);
 
 		break;
@@ -598,7 +653,7 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 			uint8_t address = (uint8_t)va_arg(parames, int);
 			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
 			uint32_t *reg_out = va_arg(parames, uint32_t *);	// 数据输出地址
-			result = DAPRegister(adapterObj, dap_index, DAP_TRANSFER_RnW | DAP_TRANSFER_APnDP | address, reg_out);
+			result = CMDAP_FUN_WARP(cmsis_dapObj->PacketSize, DAPRegister, adapterObj, dap_index, DAP_TRANSFER_RnW | DAP_TRANSFER_APnDP | address, reg_out);
 		}while(0);
 		break;
 
@@ -611,7 +666,7 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 			uint8_t address = (uint8_t)va_arg(parames, int);
 			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
 			uint32_t reg_in = (uint32_t)va_arg(parames, int);	// 数据地址
-			result = DAPRegister(adapterObj, dap_index, address, &reg_in);
+			result = CMDAP_FUN_WARP(cmsis_dapObj->PacketSize, DAPRegister, adapterObj, dap_index, address, &reg_in);
 		}while(0);
 		break;
 
@@ -624,7 +679,7 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 			uint8_t address = (uint8_t)va_arg(parames, int);
 			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
 			uint32_t reg_in = (uint32_t)va_arg(parames, int);	// 数据地址
-			result = DAPRegister(adapterObj, dap_index, DAP_TRANSFER_APnDP | address, &reg_in);
+			result = CMDAP_FUN_WARP(cmsis_dapObj->PacketSize, DAPRegister, adapterObj, dap_index, DAP_TRANSFER_APnDP | address, &reg_in);
 		}while(0);
 		break;
 
@@ -636,7 +691,7 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 			uint8_t *data = va_arg(parames, uint8_t *);
 			int length = va_arg(parames, int);
 			uint8_t *response = va_arg(parames, uint8_t *);
-			result = DAP_Transfer(adapterObj, dap_index, count, data, length, response);
+			result = CMDAP_FUN_WARP(cmsis_dapObj->PacketSize, DAP_Transfer, adapterObj, dap_index, count, data, length, response);
 		}while(0);
 		break;
 
@@ -648,6 +703,24 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 	case CMDAP_TRANSFER_ABORT:
 		log_trace("Execution command: DAP Transfer Abort.");
 
+		break;
+
+	case CMDAP_JTAG_IDCODE:
+		log_trace("Execution command: JTAG IDCODE.");
+		do{
+			uint8_t dap_index = (uint8_t)va_arg(parames, int);
+			uint32_t *idCode = va_arg(parames, uint32_t *);
+			result = CMDAP_FUN_WARP(cmsis_dapObj->PacketSize, JTAG_IDcode, adapterObj, dap_index, idCode);
+		}while(0);
+		break;
+
+	case CMDAP_JTAG_CONFIGURE:
+		log_trace("Execution command: JTAG CONFIGURE.");
+		do{
+			uint8_t count = (uint8_t)va_arg(parames, int);
+			uint8_t *irLen = va_arg(parames, uint8_t *);
+			result = CMDAP_FUN_WARP(cmsis_dapObj->PacketSize, JTAG_Configure, adapterObj, count, irLen);
+		}while(0);
 		break;
 	default:
 		log_warn("Unsupported operation: %d.", operate);

@@ -161,6 +161,8 @@ enum cmsis_dapInstr {
 	CMDAP_TRANSFER,		// DAP_Transfer
 	CMDAP_TRANSFER_BLOCK,	// DAP_TransferBlock
 	CMDAP_TRANSFER_ABORT,	// DAP_TransferAbort
+	CMDAP_JTAG_IDCODE,		// 获得JTAG的IDCode
+	CMDAP_JTAG_CONFIGURE,	// 设置JTAG设备的IR长度
 };
 
 struct cmsis_dap {
