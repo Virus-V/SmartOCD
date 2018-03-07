@@ -26,37 +26,37 @@ static int bulkRead(USBObject *usbObj, uint8_t *data, int dataLength, int timeou
 static int interruptWrite(USBObject *usbObj, uint8_t *data, int dataLength, int timeout);
 static int interruptRead(USBObject *usbObj, uint8_t *data, int dataLength, int timeout);
 static int unsupportRW(USBObject *usbObj, uint8_t *data, int dataLength, int timeout);
+static BOOL defaultInitDeinit(USBObject *usbObj);
+static BOOL defaultReset(USBObject *usbObj);
+
 /*
- * 新建Debugger USB对象
+ * 初始化Debugger USB对象
  * desc: 设备的描述
  */
-USBObject * NewUSBObject(){
-	USBObject *object = calloc(1, sizeof(USBObject));
-	if(object == NULL){
-		// 内存分配失败
-		log_error("Failed to make USB Object");
-		return NULL;
-	}
+BOOL InitUSBObject(USBObject *object){
+	assert(object != NULL);
+
 	if (libusb_init(&object->libusbContext) < 0){
 		log_error("libusb_init() failed.");
-		return NULL;
+		return FALSE;
 	}
 	// 禁止写入操作
 	object->Read = object->Write = unsupportRW;
+	object->Init = object->Deinit = defaultInitDeinit;
+	object->Reset = defaultReset;
 	object->clamedIFNum = object->currConfVal = -1;
-	return object;
+	return TRUE;
 }
 
 /*
  * 销毁USB对象
  * object: 要销毁的USB对象
  */
-void FreeUSBObject(USBObject *object){
+void DeinitUSBObject(USBObject *object){
 	assert(object != NULL
 			&& object->libusbContext != NULL);
 	libusb_exit(object->libusbContext);
 	object->libusbContext = NULL;
-	free(object);
 }
 
 /**
@@ -230,6 +230,11 @@ static int unsupportRW(USBObject *usbObj, uint8_t *data, int dataLength, int tim
 	return -1;
 }
 
+static BOOL defaultInitDeinit(USBObject *usbObj){
+	log_warn("Init deinit nothing.");
+	return TRUE;
+}
+
 /**
  * 设置活跃配置
  * configurationValue: 配置的索引，第一个配置索引为0
@@ -395,6 +400,11 @@ BOOL USBClaimInterface(USBObject *usbObj, int IFClass, int IFSubclass, int IFPro
 	return FALSE;
 }
 
+static BOOL defaultReset(USBObject *usbObj){
+	log_info("nothing reset.");
+	return FALSE;
+}
+
 /**
  * 复位设备
  */
@@ -409,19 +419,3 @@ BOOL USBResetDevice(USBObject *usbObj){
 	}
 }
 
-/**
- * 获得PID和VID
- */
-BOOL USBGetPidVid(libusb_device *dev, uint16_t *pid_out, uint16_t *vid_out) {
-	struct libusb_device_descriptor devDesc;
-	if(pid_out == NULL && vid_out == NULL){
-		log_info("Nothing to do.");
-		return TRUE;
-	}
-	if (libusb_get_device_descriptor(dev, &devDesc) == 0) {
-		if(pid_out != NULL) *pid_out = devDesc.idProduct;
-		if(vid_out != NULL) *vid_out = devDesc.idVendor;
-		return TRUE;
-	}
-	return TRUE;
-}

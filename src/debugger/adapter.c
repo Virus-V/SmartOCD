@@ -21,7 +21,7 @@ static BOOL selectTrans(AdapterObject *adapterObj, enum transportType type);	// 
 static BOOL operate(AdapterObject *adapterObj, int operate, ...);	// 执行动作
 
 // 初始化Adapter对象
-AdapterObject *InitAdapterObject(AdapterObject *object, const char *desc){
+BOOL InitAdapterObject(AdapterObject *object, const char *desc){
 	assert(object != NULL);
 	object->DeviceDesc = strdup(desc);
 
@@ -30,7 +30,7 @@ AdapterObject *InitAdapterObject(AdapterObject *object, const char *desc){
 	object->Deinit = deinit;
 	object->SelectTrans = selectTrans;
 	object->Operate = operate;
-	return object;
+	return TRUE;
 }
 
 void DeinitAdapterObject(AdapterObject *object){

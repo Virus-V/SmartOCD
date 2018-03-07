@@ -118,6 +118,7 @@
 #define DAP_TRANSFER_A3                 (1U<<3)
 #define DAP_TRANSFER_MATCH_VALUE        (1U<<4)
 #define DAP_TRANSFER_MATCH_MASK         (1U<<5)
+#define DAP_TRANSFER_TIME_STAMP         (1U<<7)	// > V1.0
 
 // DAP Transfer Response
 #define DAP_TRANSFER_OK                 (1U<<0)
@@ -150,17 +151,24 @@
 // 判断CMSIS-DAP是否支持某功能
 #define CMSIS_DAP_HAS_CAPALITY(pc,cap) (((pc)->capablityFlag & (cap)) == (cap))
 
+// CMSIS-DAP Status灯
+enum cmsis_dapStatus {
+	DAP_STATUS_CONNECTED,	// DAP已连接
+	DAP_STATUS_DISCONNECT,	// DAP已断开
+	DAP_STATUS_RUNING,		// DAP正在运行
+	DAP_STATUS_IDLE,		// DAP空闲
+};
+
 // CMSIS-DAP操作指令
 enum cmsis_dapInstr {
 	CMDAP_TRANSFER_CONFIG = AINS_COMM_LAST,	// 接着公共指令排列
-	CMDAP_SET_CLOCK,		// 设置仿真器的时钟
+	CMDAP_TRANSFER,		// DAP_Transfer
+	CMDAP_TRANSFER_BLOCK,	// DAP_TransferBlock
+	CMDAP_WRITE_ABORT,	// 写入ABORT寄存器
 	CMDAP_READ_DP_REG,	// 读取DP寄存器
 	CMDAP_WRITE_DP_REG,	// 写入DP寄存器
 	CMDAP_READ_AP_REG,	// 读取AP寄存器
 	CMDAP_WRITE_AP_REG,	// 写入AP寄存器
-	CMDAP_TRANSFER,		// DAP_Transfer
-	CMDAP_TRANSFER_BLOCK,	// DAP_TransferBlock
-	CMDAP_TRANSFER_ABORT,	// DAP_TransferAbort
 	CMDAP_JTAG_IDCODE,		// 获得JTAG的IDCode
 	CMDAP_JTAG_CONFIGURE,	// 设置JTAG设备的IR长度
 };
