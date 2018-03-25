@@ -23,3 +23,9 @@
  * ///读写64位地址的内存8、16、32、64
  * ///读写地址自增方式读写一块内存
  */
+
+uint32_t DAP_ReadDPReg(DAPObject *dapObj, int DPReg){
+	assert(dapObj->adapterObj != NULL);
+
+
+}

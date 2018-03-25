@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <time.h>
+#include <math.h>
 
 #include "smart_ocd.h"
 #include "misc/log.h"
@@ -44,6 +45,52 @@ static void printAPInfo(uint32_t APIDR){
 			parse.regInfo.JEP106Code,
 			parse.regInfo.Variant);
 
+}
+static uint32_t readMem(AdapterObject *adapterObj, uint32_t addr){
+	uint32_t tmp;
+	adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, 0x0);	// 选择AP bank0
+	adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_TAR_LSB, addr);
+	adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &tmp);
+	return tmp;
+}
+static void printComponentInfo(AdapterObject *adapterObj, uint32_t startAddr){
+	uint32_t addr, tmp, size;
+	addr = (startAddr & ~0xfff) | 0xFF4;
+	tmp = readMem(adapterObj, addr);
+	// 判断组件类型
+	switch(tmp>>4){
+	case 0x0:
+		printf("Generic verification componment");
+		break;
+	case 0x1:
+		printf("ROM Table");
+		break;
+	case 0x9:
+		printf("Debug componment");
+		break;
+	case 0xb:
+		printf("Peripheral Test Block(PTB)");
+		break;
+	case 0xd:
+		printf("OptimoDE Data Engine Subsystem (DESS) componment");
+		break;
+	case 0xe:
+		printf("Generic IP Componment");
+		break;
+	case 0xf:
+		printf("PrimeCell peripheral");
+		break;
+	default:
+		printf("Unknow componment");
+		break;
+	}
+	// 计算组件占用空间大小
+	addr = (startAddr & ~0xfff) | 0xFD0;
+	tmp = readMem(adapterObj, addr);
+	printf("%08X\n", tmp);
+	tmp = (tmp >> 4);
+	size = pow(2, tmp);
+	printf(",occupies %d blocks.\n", size);
 }
 
 // 测试入口点
@@ -84,11 +131,11 @@ int main(){
 	adapterObj->Operate(adapterObj, CMDAP_WRITE_ABORT, 0, STKCMPCLR | STKERRCLR | WDERRCLR | ORUNERRCLR);
 #else
 	// 设置SWJ频率，最大30MHz
-	adapterObj->Operate(adapterObj, AINS_SET_CLOCK, 100000u);
+	adapterObj->Operate(adapterObj, AINS_SET_CLOCK, 10000000u);
 	// 切换到JTAG模式
 	adapterObj->SelectTrans(adapterObj, JTAG);
 	irLen[1] = 5;
-	adapterObj->Operate(adapterObj, CMDAP_JTAG_CONFIGURE, 2, irLen);
+	adapterObj->Operate(adapterObj, CMDAP_JTAG_CONFIGURE, 1, irLen);
 	adapterObj->Operate(adapterObj, CMDAP_JTAG_IDCODE, 0, &idcode);
 	log_info("JTAG-DP with ID:0x%08X.", idcode);
 #endif
@@ -105,7 +152,7 @@ int main(){
 	} while((tmp & (CDBGPWRUPACK | CSYSPWRUPACK)) != (CDBGPWRUPACK | CSYSPWRUPACK));
 	log_info("Power up.");
 	// 写入一些初始化数据
-	adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_CTRL_STAT, CSYSPWRUPREQ | CDBGPWRUPREQ | TRNNORMAL | MASKLANE);
+	adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_CTRL_STAT, CSYSPWRUPREQ | CDBGPWRUPREQ | TRNNORMAL | MASKLANE | ORUNDETECT);
 	// 读取AP的IDR
 	do{
 		time_t t_start, t_end;
@@ -116,7 +163,7 @@ int main(){
 
 		BOOL result;
 		t_start = time(NULL) ;
-		for(;apsel < 256; apsel ++){
+		for(;apsel < 3; apsel ++){
 			select &= ~0xff000000u;
 			select |= apsel << 24;
 			// 修改select选中ap
@@ -133,48 +180,54 @@ int main(){
 			// 读取AP的IDR
 			result = adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_IDR, &tmp);
 			if(result == FALSE) {
-				// write abort;
-				adapterObj->Operate(adapterObj, CMDAP_WRITE_ABORT, 0, DAPABORT);
-				adapterObj->Operate(adapterObj, CMDAP_READ_DP_REG, 0, DP_CTRL_STAT, &tmp);
+				if(adapterObj->Operate(adapterObj, CMDAP_READ_DP_REG, 0, DP_CTRL_STAT, &tmp)==FALSE){
+					log_error("Read CTRL/STAT Register Failed!!!");
+				}
 				log_warn("Read AP_IDR Failed, CTRL : 0x%08X.", tmp);
+				// write abort;
+				if(adapterObj->Operate(adapterObj, CMDAP_WRITE_ABORT, 0, DAPABORT)== FALSE){
+					log_error("Write Abort Failed!!!");
+					goto EXIT;
+				}
 				break;
 			}
 			if(tmp != 0){
 				printf("probe Address: 0x%08X => 0x%08X\n", select, tmp);
 				printAPInfo(tmp);
+				// 读取ROM Table
+				//adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, 0xf0);
+				adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_ROM_LSB, &romtable);
+				adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, 0x0);	// 选择AP bank0
+				adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_CSW, 0x23000050 | CSW_SIZE32);
+				// ROM Table的首地址
+				addr = romtable & ~0xfff;
+				log_info("ROM Table Base: 0x%08X.", addr);
+				do{
+					// ROM Table[11:0]不在BaseAddr里面，[1]为1代表该寄存器是ADIv5的类型，[0]代表是否存在DebugEntry
+					// 注意还有Lagacy format要看一下资料
+					adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_TAR_LSB, addr);
+					adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &int_val);
+					if(int_val == 0) break;
+					int_val &= 0xfffff000u;	// Address Offset
+					int_val = (int32_t)addr + int_val;
+					log_info("Component Base Addr: 0x%08X.", int_val);
+					printComponentInfo(adapterObj, int_val);
+					addr += 4;
+				}while(1);
+				addr = (romtable & ~0xfff) | 0xFCC;
+				adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_TAR_LSB, addr);
+				adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &int_val);
+				log_info("Mem Type: %x.", int_val);
+				for(idx=0xFD0; idx < 0xFFF; idx += 4){
+					addr = (romtable & ~0xfff) | idx;
+					adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_TAR_LSB, addr);
+					adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &int_val);
+					log_info("0x%03X:0x%08X.", idx, int_val);
+				}
 			}
 		}
 		t_end = time(NULL);
 		printf("time: %.0f s\n", difftime(t_end,t_start));
-		// 读取ROM Table
-		adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, 0xf0);
-		adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_ROM_LSB, &romtable);
-		adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, 0x0);	// 选择AP bank0
-		adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_CSW, 0x23000050 | CSW_SIZE32);
-		// ROM Table的首地址
-		addr = romtable & ~0xfff;
-		log_info("ROM Table Base: 0x%08X.", addr);
-		do{
-			// ROM Table[11:0]不在BaseAddr里面，[1]为1代表该寄存器是ADIv5的类型，[0]代表是否存在DebugEntry
-			// 注意还有Lagacy format要看一下资料
-			adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_TAR_LSB, addr);
-			adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &int_val);
-			if(int_val == 0) break;
-			int_val &= 0xfffff000u;	// Address Offset
-			int_val = (int32_t)addr + int_val;
-			log_info("Component Base Addr: 0x%08X.", int_val);
-			addr += 4;
-		}while(1);
-		addr = (romtable & ~0xfff) | 0xFCC;
-		adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_TAR_LSB, addr);
-		adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &int_val);
-		log_info("Mem Type: %x.", int_val);
-		for(idx=0xFD0; idx < 0xFFF; idx += 4){
-			addr = (romtable & ~0xfff) | idx;
-			adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_TAR_LSB, addr);
-			adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &int_val);
-			log_info("0x%03X:0x%08X.", idx, int_val);
-		}
 	}while(0);
 EXIT:
 	adapterObj->Deinit(adapterObj);

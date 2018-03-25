@@ -16,8 +16,7 @@
 enum transportType {
 	UNKNOW_NULL = 0,	// 未知协议，由仿真器指定
 	JTAG,
-	SWD,
-	SWIM
+	SWD
 };
 
 // 支持的仿真器类型
@@ -89,37 +88,44 @@ enum commonInstr {
 	 *
 	 * pinOutput是引脚将要设置的值，引脚映射参见上面。
 	 * pinInput是当pinOutput的数据实现（全部响应或者等待pinWait超时）之后，读取全部引脚当前的值。如果不需要读取则该参数为NULL。
-	 * pinWait是死区等待时间。死区等待时间在nRESET引脚或其他引脚实现为开漏输出的系统中非常有用。
+	 * pinWait是死区等待时间(µs)。死区等待时间在nRESET引脚或其他引脚实现为开漏输出的系统中非常有用。
 	 * 在调试器de-assert nRESET引脚之后，外部电路可能没有立即反应，仍然将目标器件保持在复位状态一段时间。
-	 * 调试器可以监视选定的I/O引脚并等待，直到它们出现预期值或超时pinWait设置的死区时间。
+	 * 调试器可以监视选定的I/O引脚并等待，直到它们出现预期值或超时pinWait设置的死区时间。不可超过3秒
 	 */
 	AINS_JTAG_PINS,
 	/**
-	 * 发送一个或多个SWD时序
-	 * 参数：uint8_t sequenceCount, uint8_t *data, uint8_t *response
-	 * 其中：sequenceCount是一共需要发送多少个序列；
-	 * data是一个数组。其格式为：
-	 * {(uint8_t)Sequence Info [ + (uint8_t)SWDIO Data...]}...
-	 * Sequence Info: Contains number of SWCLK cycles and SWDIO mode
-	 * Bit 5 .. 0: Number of TCK cycles: 1 .. 64 (64 encoded as 0)
-	 * Bit 6: reserved
-	 * Bit 7: mode: 0=output (SWDIO Data in command), 1=input (SWDIO Data in response)
-	 *
-	 * SWDIO Data (only for output mode): Data generated on SWDIO
-	 * One bit for each TCK cycle
-	 * LSB transmitted first, padded to BYTE boundary
-	 *
-	 * SWDIO Data 只在输出模式的时候才存在，如果是输入模式，则不需要它。
-	 *
-	 * response是一个用来存放接收SWDIO Data的内存空间，具体大小根据data的sequence info决定。
-	 * SWDIO Data (only for input mode): Data captured from SWDIO
-	 * One bit for each SWCLK cycle for input mode
-	 * LSB received first, padded to BYTE boundary
-	 *
-	 * 返回值：如果该指令无法实现或者出现错误，则直接返回FALSE
-	 * 成功返回TRUE
+	 * 发送一个或多个DAP协议时序，DAP协议专用，SWD和JTAG
+	 * 参数：uint8_t index, uint8_t transferCount, uint8_t *data, uint8_t *response
+	 * 其中各参数：
+	 * index: 从0开始算起JTAG扫描链中设备的索引值。在SWD模式下该值被忽略。
+	 * transferCount: Number of transfers: 1 .. 255. For each transfer a Transfer Request BYTE is sent.
+	 * 		Depending on the request an additional Transfer Data WORD is sent.
+	 * data: Contains information about requested access from host debugger.
+	 * 		Bit 0: APnDP: 0 = Debug Port (DP), 1 = Access Port (AP).
+	 * 		Bit 1: RnW: 0 = Write Register, 1 = Read Register.
+	 * 		Bit 2: A2 Register Address bit 2.
+	 * 		Bit 3: A3 Register Address bit 3.
+	 * response:是一个数组空间，用来保存输出的，具体大小需要根据你的指令去决定。
+	 * 第一个字节：Transfer Count: Number of transfers: 1 .. 255 that are executed.
+	 * 第二个字节：Transfer Response: Contains information about last response from target Device.
+	 * 		Bit 2..0: ACK (Acknowledge) value:
+	 * 		1 = OK (for SWD protocol), OK or FAULT (for JTAG protocol),
+	 * 		2 = WAIT
+	 * 		4 = FAULT
+	 * 		7 = NO_ACK (no response from target)
+	 * 		Bit 3: 1 = Protocol Error (SWD)
+	 * Transfer Data: register value or match value in the order of the Transfer Request.
+	 * 		for Read Register transfer request: the register value of the CoreSight register.
+	 * 		no data is sent for other operations.
+	 * 返回值：只有TRUE
 	 */
-	AINS_SWD_SEQUENCE,
+	AINS_DAP_TRANSFER,
+	/**
+	 * 返回最大载荷长度
+	 * 批量执行指令的时候，指令包的最大长度
+	 * 参数：int *payload
+	 */
+	AINS_DAP_PAYLOAD,
 	AINS_COMM_LAST	// 分隔符，代表最后一个
 };
 
@@ -162,7 +168,7 @@ struct AdapterObject{
 // 获得子类的Adapter对象
 #define GET_ADAPTER(p) CAST(AdapterObject *, &(p)->AdapterObj)
 
-BOOL InitAdapterObject(AdapterObject *object, const char *desc);
-void DeinitAdapterObject(AdapterObject *object);
+BOOL __CONSTRUCT(Adapter)(AdapterObject *object, const char *desc);
+void __DESTORY(Adapter)(AdapterObject *object);
 
 #endif /* SRC_DEBUGGER_ADAPTER_H_ */

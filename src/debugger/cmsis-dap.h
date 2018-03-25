@@ -10,7 +10,7 @@
 
 #include "debugger/adapter.h"
 
-// DAP Command IDs
+// CMSIS-DAP Command IDs
 // V1.0
 #define ID_DAP_Info                     0x00U
 #define ID_DAP_HostStatus               0x01U
@@ -103,23 +103,6 @@
 #define DAP_PORT_SWD                    1U      // SWD Port (SWCLK, SWDIO) + nRESET
 #define DAP_PORT_JTAG                   2U      // JTAG Port (TCK, TMS, TDI, TDO, nTRST) + nRESET
 
-// DAP SWJ Pins
-#define DAP_SWJ_SWCLK_TCK               0       // SWCLK/TCK
-#define DAP_SWJ_SWDIO_TMS               1       // SWDIO/TMS
-#define DAP_SWJ_TDI                     2       // TDI
-#define DAP_SWJ_TDO                     3       // TDO
-#define DAP_SWJ_nTRST                   5       // nTRST
-#define DAP_SWJ_nRESET                  7       // nRESET
-
-// DAP Transfer Request
-#define DAP_TRANSFER_APnDP              (1U<<0)
-#define DAP_TRANSFER_RnW                (1U<<1)
-#define DAP_TRANSFER_A2                 (1U<<2)
-#define DAP_TRANSFER_A3                 (1U<<3)
-#define DAP_TRANSFER_MATCH_VALUE        (1U<<4)
-#define DAP_TRANSFER_MATCH_MASK         (1U<<5)
-#define DAP_TRANSFER_TIME_STAMP         (1U<<7)	// > V1.0
-
 // DAP Transfer Response
 #define DAP_TRANSFER_OK                 (1U<<0)
 #define DAP_TRANSFER_WAIT               (1U<<1)
@@ -162,13 +145,8 @@ enum cmsis_dapStatus {
 // CMSIS-DAP操作指令
 enum cmsis_dapInstr {
 	CMDAP_TRANSFER_CONFIG = AINS_COMM_LAST,	// 接着公共指令排列
-	CMDAP_TRANSFER,		// DAP_Transfer
 	CMDAP_TRANSFER_BLOCK,	// DAP_TransferBlock
 	CMDAP_WRITE_ABORT,	// 写入ABORT寄存器
-	CMDAP_READ_DP_REG,	// 读取DP寄存器
-	CMDAP_WRITE_DP_REG,	// 写入DP寄存器
-	CMDAP_READ_AP_REG,	// 读取AP寄存器
-	CMDAP_WRITE_AP_REG,	// 写入AP寄存器
 	CMDAP_JTAG_IDCODE,		// 获得JTAG的IDCode
 	CMDAP_JTAG_CONFIGURE,	// 设置JTAG设备的IR长度
 };

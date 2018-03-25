@@ -58,14 +58,14 @@ struct cmsis_dap *NewCMSIS_DAP(){
 	}
 	adapterObj = CAST(AdapterObject *, cmsis_dapObj);
 	// 构造Adapter对象
-	if(InitAdapterObject(adapterObj, "ARM CMSIS-DAP") == FALSE){
+	if(__CONSTRUCT(Adapter)(adapterObj, "ARM CMSIS-DAP") == FALSE){
 		free(cmsis_dapObj);
 		log_warn("Failed to Init AdapterObject.");
 		return NULL;
 	}
 	// 构造USB对象
-	if(InitUSBObject(GET_USBOBJ(adapterObj)) == FALSE){
-		DeinitAdapterObject(adapterObj);
+	if(__CONSTRUCT(USB)(GET_USBOBJ(adapterObj)) == FALSE){
+		__DESTORY(Adapter)(adapterObj);
 		free(cmsis_dapObj);
 		log_warn("Failed to create USB object.");
 		return NULL;
@@ -89,14 +89,14 @@ struct cmsis_dap *NewCMSIS_DAP(){
 void FreeCMSIS_DAP(struct cmsis_dap *cmsis_dapObj){
 	assert(cmsis_dapObj != NULL);
 	// 反初始化Adapter对象
-	DeinitAdapterObject(CAST(AdapterObject *, cmsis_dapObj));
+	__DESTORY(Adapter)(CAST(AdapterObject *, cmsis_dapObj));
 	// 关闭USB对象
 	if(GET_ADAPTER(cmsis_dapObj)->ConnObject.connectFlag){
 		USBClose(GET_USBOBJ(CAST(AdapterObject *, cmsis_dapObj)));
 		GET_ADAPTER(cmsis_dapObj)->ConnObject.connectFlag = 0;
 	}
 	// 释放USB对象
-	DeinitUSBObject(GET_USBOBJ(CAST(AdapterObject *, cmsis_dapObj)));
+	__DESTORY(USB)(GET_USBOBJ(CAST(AdapterObject *, cmsis_dapObj)));
 	// 释放CMSIS-DAP对象
 	free(cmsis_dapObj);
 }
@@ -402,69 +402,6 @@ static BOOL DAP_TransferConfigure(uint8_t *respBuff, AdapterObject *adapterObj, 
 }
 
 /**
- * DAP_Transfer
- * SWD和JTAG模式下均有效
- * 具体手册参考CMSIS-DAP DAP_Transfer这一小节
- * 关于response 参数所指向的内存区域，resquest中有多少个读指令，就应该备好多少个WORD
- * 如果指定了TimeStamp标志位，则还需要多个WORD用来存放时间戳
- * response 中的数据只在返回值为TRUE时有效
- */
-static BOOL DAP_Transfer(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t index, uint8_t sequenceCount, uint8_t *data, uint8_t *response){
-	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
-	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
-	assert(cmsis_dapObj->PacketSize != 0);
-
-	uint8_t *DAP_TransferPacket, seqIdx;
-	int readCount = 0, writeCount=0, idx;
-
-	// 统计一些信息
-	for(idx = 0, seqIdx = 0; seqIdx < sequenceCount; seqIdx ++){
-		// 判断是否是读寄存器
-		if((data[idx] & DAP_TRANSFER_RnW) == DAP_TRANSFER_RnW){
-			idx += 1;
-			readCount += 4;
-		}else{	// 写寄存器
-			idx += 5;
-			writeCount += 4;
-		}
-		// 是否附带时间戳
-		if(cmsis_dapObj->Version > 100
-				&& CMSIS_DAP_HAS_CAPALITY(cmsis_dapObj, CAP_FLAG_TEST_DOMAIN_TIMER)
-				&& (data[idx] & DAP_TRANSFER_TIME_STAMP) == DAP_TRANSFER_TIME_STAMP){
-			readCount += 4;
-		}
-	}
-	// 判断是否超出最大包长度
-	if((3 + writeCount + sequenceCount) > cmsis_dapObj->PacketSize || (3 + readCount) > cmsis_dapObj->PacketSize){
-		log_error("Packet too large.");
-		return FALSE;
-	}
-	if((DAP_TransferPacket = calloc(3 + writeCount + sequenceCount, sizeof(uint8_t))) == NULL){
-		log_error("Failed to alloc Packet buffer.");
-		return FALSE;
-	}
-	// 构造数据包头部
-	DAP_TransferPacket[0] = ID_DAP_Transfer;
-	DAP_TransferPacket[1] = index;	// DAP index, JTAG ScanChain 中的位置，在SWD模式下忽略该参数
-	DAP_TransferPacket[2] = sequenceCount;	// 传输多少个request
-	// 将数据拷贝到包中
-	memcpy(DAP_TransferPacket + 3, data, writeCount + sequenceCount);
-	DAP_EXCHANGE_DATA(adapterObj, DAP_TransferPacket, 3 + writeCount + sequenceCount, respBuff);
-
-	if(respBuff[1] == sequenceCount && respBuff[2] == 1){
-		// 拷贝数据
-		if(response)
-			memcpy(response, respBuff + 3, readCount);
-		free(DAP_TransferPacket);
-		return TRUE;
-	}else{
-		log_info("Transmission %d bytes, the last response: %x.", respBuff[1], respBuff[2]);
-		free(DAP_TransferPacket);
-		return FALSE;
-	}
-}
-
-/**
  * 读取AP、DP寄存器
  * SWD、JTAG模式下均可调用，区分协议在DAP固件中完成
  * index：device在scanchain中的索引
@@ -570,6 +507,21 @@ static BOOL DAP_WriteAbort(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t
 	if(respBuff[1] == DAP_OK){
 		return TRUE;
 	}
+	return FALSE;
+}
+
+/**
+ * 发送一个或多个SWD时序
+ */
+static BOOL DAP_SWD_Sequence(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t sequenceCount, uint8_t *data, uint8_t *response){
+	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
+	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
+	assert(cmsis_dapObj->PacketSize != 0);
+	if(cmsis_dapObj->Version < 110 || !CMSIS_DAP_HAS_CAPALITY(cmsis_dapObj, CAP_FLAG_SWD_SEQUENCE)){
+		// 不支持发送SWD时序
+		return FALSE;
+	}
+	// TODO 实现SWD_Sequence
 	return FALSE;
 }
 
@@ -684,7 +636,7 @@ static BOOL DAP_JTAG_Sequence(uint8_t *respBuff, AdapterObject *adapterObj, uint
 }
 
 /**
- * 必须实现指令之 AINS_SWD_SEQUENCE
+ * 必须实现指令之 AINS_JTAG_PINS
  * pinSelect：选择哪一个pin
  * pinOutput：引脚将要输出的信号
  * pinInput：pinOutput的信号稳定后，读取全部的引脚数据
@@ -711,19 +663,53 @@ static BOOL DAP_SWJ_Pins(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t p
 }
 
 /**
- * 必须实现指令之 AINS_JTAG_PINS
- * 发送一个或多个SWD时序
+ * 必须实现指令之 AINS_DAP_TRANSFER
+ * SWD和JTAG模式下均有效
+ * 具体手册参考CMSIS-DAP DAP_Transfer这一小节
+ * 关于response 参数所指向的内存区域，resquest中有多少个读指令，就应该备好多少个WORD
+ * 如果指定了TimeStamp标志位，则还需要多个WORD用来存放时间戳
  */
-static BOOL DAP_SWD_Sequence(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t sequenceCount, uint8_t *data, uint8_t *response){
+static BOOL DAP_Transfer(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t index, uint8_t transferCount, uint8_t *data, uint8_t *response){
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
+	assert(response != NULL);
 	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	assert(cmsis_dapObj->PacketSize != 0);
-	if(cmsis_dapObj->Version < 110 || !CMSIS_DAP_HAS_CAPALITY(cmsis_dapObj, CAP_FLAG_SWD_SEQUENCE)){
-		// 不支持发送SWD时序
+
+	uint8_t *DAP_TransferPacket, seqIdx;
+	int readCount = 0, writeCount = transferCount, idx;
+
+	// 统计一些信息
+	for(idx = 0, seqIdx = 0; seqIdx < transferCount; seqIdx ++){
+		data[idx] &= 0xf;	// 只保留[3:0]位
+		// 判断是否是读寄存器
+		if((data[idx] & DAP_TRANSFER_RnW) == DAP_TRANSFER_RnW){
+			idx += 1;
+			readCount += 4;
+		}else{	// 写寄存器
+			idx += 5;
+			writeCount += 4;
+		}
+	}
+	// 判断是否超出最大包长度
+	if((3 + writeCount) > cmsis_dapObj->PacketSize || (3 + readCount) > cmsis_dapObj->PacketSize){
+		log_error("Packet too large.");
 		return FALSE;
 	}
-	// TODO 实现SWD_Sequence
-	return FALSE;
+	if((DAP_TransferPacket = calloc(3 + writeCount, sizeof(uint8_t))) == NULL){
+		log_error("Failed to alloc Packet buffer.");
+		return FALSE;
+	}
+	// 构造数据包头部
+	DAP_TransferPacket[0] = ID_DAP_Transfer;
+	DAP_TransferPacket[1] = index;	// DAP index, JTAG ScanChain 中的位置，在SWD模式下忽略该参数
+	DAP_TransferPacket[2] = transferCount;	// 传输多少个request
+	// 将数据拷贝到包中
+	memcpy(DAP_TransferPacket + 3, data, writeCount);
+	DAP_EXCHANGE_DATA(adapterObj, DAP_TransferPacket, 3 + writeCount, respBuff);
+	// 拷贝数据
+	memcpy(response, respBuff + 1, readCount + 2);
+	free(DAP_TransferPacket);
+	return TRUE;
 }
 
 /**
@@ -775,13 +761,24 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 		}while(0);
 		break;
 
-	case AINS_SWD_SEQUENCE:
-		log_trace("Execution command: SWD Sequence.");
-		do{
-			uint8_t sequenceCount = (uint8_t)va_arg(parames, int);
+	case AINS_DAP_TRANSFER:
+		log_trace("Execution command: DAP Transfer.");
+		do {
+			uint8_t dap_index = (uint8_t)va_arg(parames, int);
+			uint8_t count = (uint8_t)va_arg(parames, int);
 			uint8_t *data = va_arg(parames, uint8_t *);
 			uint8_t *response = va_arg(parames, uint8_t *);
-			result = CMDAP_FUN_WARP(adapterObj, DAP_SWD_Sequence, adapterObj, sequenceCount, data, response);
+			result = CMDAP_FUN_WARP(adapterObj, DAP_Transfer, adapterObj, dap_index, count, data, response);
+		}while(0);
+		break;
+
+	case AINS_DAP_PAYLOAD:
+		log_trace("Execution command: Get Payload.");
+		do{
+			assert(cmsis_dapObj->PacketSize != 0);
+			int * payload = va_arg(parames, int *);
+			*payload = cmsis_dapObj->PacketSize - 3;
+			result = TRUE;
 		}while(0);
 		break;
 
@@ -796,69 +793,58 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 		}while(0);
 		break;
 
-	case CMDAP_READ_DP_REG:
-		log_trace("Execution command: Read DP Register.");
-		do{
-			// 获得index
-			uint8_t dap_index = (uint8_t)va_arg(parames, int);
-			// 获得地址
-			uint8_t address = (uint8_t)va_arg(parames, int);
-			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
-			uint32_t *reg_out = va_arg(parames, uint32_t *);	// 数据输出地址
-			result = CMDAP_FUN_WARP(adapterObj, DAPRegister, adapterObj, dap_index, DAP_TRANSFER_RnW | address, reg_out);
-		}while(0);
-
-		break;
-
-	case CMDAP_READ_AP_REG:
-		log_trace("Execution command: Read AP Register.");
-		do{
-			// 获得index
-			uint8_t dap_index = (uint8_t)va_arg(parames, int);
-			// 获得地址
-			uint8_t address = (uint8_t)va_arg(parames, int);
-			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
-			uint32_t *reg_out = va_arg(parames, uint32_t *);	// 数据输出地址
-			result = CMDAP_FUN_WARP(adapterObj, DAPRegister, adapterObj, dap_index, DAP_TRANSFER_RnW | DAP_TRANSFER_APnDP | address, reg_out);
-		}while(0);
-		break;
-
-	case CMDAP_WRITE_DP_REG:
-		log_trace("Execution command: Write DP Register.");
-		do{
-			// 获得index
-			uint8_t dap_index = (uint8_t)va_arg(parames, int);
-			// 获得地址
-			uint8_t address = (uint8_t)va_arg(parames, int);
-			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
-			uint32_t reg_in = (uint32_t)va_arg(parames, int);	// 数据地址
-			result = CMDAP_FUN_WARP(adapterObj, DAPRegister, adapterObj, dap_index, address, &reg_in);
-		}while(0);
-		break;
-
-	case CMDAP_WRITE_AP_REG:
-		log_trace("Execution command: Write AP Register.");
-		do{
-			// 获得index
-			uint8_t dap_index = (uint8_t)va_arg(parames, int);
-			// 获得地址
-			uint8_t address = (uint8_t)va_arg(parames, int);
-			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
-			uint32_t reg_in = (uint32_t)va_arg(parames, int);	// 数据地址
-			result = CMDAP_FUN_WARP(adapterObj, DAPRegister, adapterObj, dap_index, DAP_TRANSFER_APnDP | address, &reg_in);
-		}while(0);
-		break;
-
-	case CMDAP_TRANSFER:
-		log_trace("Execution command: DAP Transfer.");
-		do {
-			uint8_t dap_index = (uint8_t)va_arg(parames, int);
-			uint8_t count = (uint8_t)va_arg(parames, int);
-			uint8_t *data = va_arg(parames, uint8_t *);
-			uint8_t *response = va_arg(parames, uint8_t *);
-			result = CMDAP_FUN_WARP(adapterObj, DAP_Transfer, adapterObj, dap_index, count, data, response);
-		}while(0);
-		break;
+//	case CMDAP_READ_DP_REG:
+//		log_trace("Execution command: Read DP Register.");
+//		do{
+//			// 获得index
+//			uint8_t dap_index = (uint8_t)va_arg(parames, int);
+//			// 获得地址
+//			uint8_t address = (uint8_t)va_arg(parames, int);
+//			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
+//			uint32_t *reg_out = va_arg(parames, uint32_t *);	// 数据输出地址
+//			result = CMDAP_FUN_WARP(adapterObj, DAPRegister, adapterObj, dap_index, DAP_TRANSFER_RnW | address, reg_out);
+//		}while(0);
+//
+//		break;
+//
+//	case CMDAP_READ_AP_REG:
+//		log_trace("Execution command: Read AP Register.");
+//		do{
+//			// 获得index
+//			uint8_t dap_index = (uint8_t)va_arg(parames, int);
+//			// 获得地址
+//			uint8_t address = (uint8_t)va_arg(parames, int);
+//			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
+//			uint32_t *reg_out = va_arg(parames, uint32_t *);	// 数据输出地址
+//			result = CMDAP_FUN_WARP(adapterObj, DAPRegister, adapterObj, dap_index, DAP_TRANSFER_RnW | DAP_TRANSFER_APnDP | address, reg_out);
+//		}while(0);
+//		break;
+//
+//	case CMDAP_WRITE_DP_REG:
+//		log_trace("Execution command: Write DP Register.");
+//		do{
+//			// 获得index
+//			uint8_t dap_index = (uint8_t)va_arg(parames, int);
+//			// 获得地址
+//			uint8_t address = (uint8_t)va_arg(parames, int);
+//			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
+//			uint32_t reg_in = (uint32_t)va_arg(parames, int);	// 数据地址
+//			result = CMDAP_FUN_WARP(adapterObj, DAPRegister, adapterObj, dap_index, address, &reg_in);
+//		}while(0);
+//		break;
+//
+//	case CMDAP_WRITE_AP_REG:
+//		log_trace("Execution command: Write AP Register.");
+//		do{
+//			// 获得index
+//			uint8_t dap_index = (uint8_t)va_arg(parames, int);
+//			// 获得地址
+//			uint8_t address = (uint8_t)va_arg(parames, int);
+//			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
+//			uint32_t reg_in = (uint32_t)va_arg(parames, int);	// 数据地址
+//			result = CMDAP_FUN_WARP(adapterObj, DAPRegister, adapterObj, dap_index, DAP_TRANSFER_APnDP | address, &reg_in);
+//		}while(0);
+//		break;
 
 	case CMDAP_TRANSFER_BLOCK:
 		log_trace("Execution command: DAP Transfer Block.");

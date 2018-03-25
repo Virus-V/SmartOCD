@@ -18,6 +18,12 @@ typedef enum {
 
 #define CAST(type,val) ((type)(val))
 #define BYTE_IDX(data,idx) (((data) >> (idx * 8)) & 0xff)
+
+// 对象的构造函数和析构函数的定义和调用
+#define __CONSTRUCT(class) __construct_##class##Object
+#define __DESTORY(class) __destory_##class##Object
+
+// 新建对象
 // 用户输入lua命令历史记录文件
 #define COMMAND_HISTORY "smartocd_history.txt"
 #endif /* SRC_SMART_OCD_H_ */

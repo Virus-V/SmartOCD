@@ -30,21 +30,21 @@ static BOOL defaultInitDeinit(USBObject *usbObj);
 static BOOL defaultReset(USBObject *usbObj);
 
 /*
- * 初始化Debugger USB对象
+ * USB对象构造函数
  * desc: 设备的描述
  */
-BOOL InitUSBObject(USBObject *object){
-	assert(object != NULL);
+BOOL __CONSTRUCT(USB)(USBObject *obj){
+	assert(obj != NULL);
 
-	if (libusb_init(&object->libusbContext) < 0){
+	if (libusb_init(&obj->libusbContext) < 0){
 		log_error("libusb_init() failed.");
 		return FALSE;
 	}
 	// 禁止写入操作
-	object->Read = object->Write = unsupportRW;
-	object->Init = object->Deinit = defaultInitDeinit;
-	object->Reset = defaultReset;
-	object->clamedIFNum = object->currConfVal = -1;
+	obj->Read = obj->Write = unsupportRW;
+	obj->Init = obj->Deinit = defaultInitDeinit;
+	obj->Reset = defaultReset;
+	obj->clamedIFNum = obj->currConfVal = -1;
 	return TRUE;
 }
 
@@ -52,11 +52,11 @@ BOOL InitUSBObject(USBObject *object){
  * 销毁USB对象
  * object: 要销毁的USB对象
  */
-void DeinitUSBObject(USBObject *object){
-	assert(object != NULL
-			&& object->libusbContext != NULL);
-	libusb_exit(object->libusbContext);
-	object->libusbContext = NULL;
+void __DESTORY(USB)(USBObject *obj){
+	assert(obj != NULL
+			&& obj->libusbContext != NULL);
+	libusb_exit(obj->libusbContext);
+	obj->libusbContext = NULL;
 }
 
 /**
