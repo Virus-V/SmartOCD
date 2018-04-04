@@ -325,49 +325,52 @@ static BOOL selectTrans(AdapterObject *adapterObj, enum transportType type){
 			switch(type){
 			case SWD:
 				if(!CMSIS_DAP_HAS_CAPALITY(cmsis_dapObj, CAP_FLAG_SWD)){
-					free(resp);
-					// 不支持
-					return FALSE;
+					goto EXIT_FAILED;
 				}
 				// 切换到SWD模式
 				command[1] = DAP_PORT_SWD;
 				DAP_EXCHANGE_DATA(adapterObj, command, 2, resp);
 				if(*CAST(uint8_t *, resp+1) != DAP_PORT_SWD){
 					log_warn("Switching SWD mode failed.");
+					goto EXIT_FAILED;
 				}else{
 					// 发送切换swd序列
 					CMDAP_FUN_WARP(adapterObj, SWJ_JTAG2SWD, adapterObj);
 					adapterObj->currTrans = SWD;
 					log_info("Switch to SWD mode.");
+					goto EXIT_TRUE;
 				}
 				break;
 
 			case JTAG:
 				if(!CMSIS_DAP_HAS_CAPALITY(cmsis_dapObj, CAP_FLAG_JTAG)){
-					free(resp);
-					// 不支持
-					return FALSE;
+					goto EXIT_FAILED;
 				}
 				// 切换到JTAG模式
 				command[1] = DAP_PORT_JTAG;
 				DAP_EXCHANGE_DATA(adapterObj, command, 2, resp);
 				if(*CAST(uint8_t *, resp+1) != DAP_PORT_JTAG){
 					log_warn("Switching JTAG mode failed.");
+					goto EXIT_FAILED;
 				}else{
 					// 发送切换JTAG序列
 					CMDAP_FUN_WARP(adapterObj, SWJ_SWD2JTAG, adapterObj);
 					adapterObj->currTrans = JTAG;
 					log_info("Switch to JTAG mode.");
+					goto EXIT_TRUE;
 				}
 				break;
 			}
-			free(resp);
-			return TRUE;
 		}
 	}
-	free(resp);
+
+EXIT_FAILED:
 	// 协议不支持
+	free(resp);
 	return FALSE;
+EXIT_TRUE:
+	free(resp);
+	return TRUE;
 }
 
 /**
@@ -593,13 +596,13 @@ static BOOL DAP_JTAG_Sequence(uint8_t *respBuff, AdapterObject *adapterObj, int 
 		return FALSE;
 	}
 	int inputIdx = 0,outputIdx = 0, seqIdx = 0;	// 输入数据的指针，sequence信息指针，缓冲区指针
-	int readByteCount, sendByteCount;	// 要发送和接收的总字节
+	int readPayloadLen, sendPayloadLen;	// 要发送和接收的总字节
 	uint8_t seqCount;	// 统计当前有多少个seq
 	sendPackBuff[0] = ID_DAP_JTAG_Sequence;	// 指令头部 0
 MAKE_PACKT:
 	seqCount = 0;
-	readByteCount = 2;
-	sendByteCount = 2;
+	readPayloadLen = 0;
+	sendPayloadLen = 0;
 	// 计算空间长度
 	for(; seqIdx < sequenceCount; seqIdx++){
 		// GNU编译器下面可以直接这样用：uint8_t tckCount = data[idx] & 0x1f ? : 64;
@@ -608,12 +611,12 @@ MAKE_PACKT:
 		uint8_t tdiByte = CEIL_FACTOR(tckCount, 8);	// 将TCK个数圆整到字节，表示后面跟几个byte的tdi数据
 
 		// 如果当前数据长度加上tdiByte之后大于包长度
-		if(sendByteCount + tdiByte >= cmsis_dapObj->PacketSize){
+		if(sendPayloadLen + tdiByte + 2 > cmsis_dapObj->PacketSize){
 			break;
-		}else sendByteCount += tdiByte;
+		}else sendPayloadLen += tdiByte;
 		//如果TDO Capture标志置位，则从TDO接收tdiByte字节的数据
 		if((data[inputIdx] & 0x80)){
-			readByteCount += tdiByte;	// readByteCount 一定会比sendByteCount少，所以上面检查过sendByteCount不超过最大包长度，readByteCount必不会超过
+			readPayloadLen += tdiByte;	// readByteCount 一定会比sendByteCount少，所以上面检查过sendByteCount不超过最大包长度，readByteCount必不会超过
 		}
 		inputIdx += tdiByte + 1;	// 跳到下一个sequence info
 		seqCount++;
@@ -622,17 +625,18 @@ MAKE_PACKT:
 		}
 	}
 	sendPackBuff[1] = seqCount;	// sequence count
-	memcpy(sendPackBuff + 2, data, sendByteCount);
-	DAP_EXCHANGE_DATA(adapterObj, sendPackBuff,  sendByteCount, respBuff);
-	log_debug("Send %d bytes, receive %d bytes.", sendByteCount, readByteCount);
+	memcpy(sendPackBuff + 2, data, sendPayloadLen);
+	DAP_EXCHANGE_DATA(adapterObj, sendPackBuff,  sendPayloadLen + 2, respBuff);
+	log_debug("Trasmission load: Send %d bytes, receive %d bytes.", sendPayloadLen, readPayloadLen);
 	if(respBuff[1] == DAP_OK){
 		// 拷贝数据
 		if(response){
-			memcpy(response + outputIdx, respBuff + 2, readByteCount);
-			outputIdx += readByteCount;
+			memcpy(response + outputIdx, respBuff + 2, readPayloadLen);
+			outputIdx += readPayloadLen;
 		}
 		// 判断是否处理完，如果没有则跳回去重新处理
-		if(seqIdx != (sequenceCount-1)) goto MAKE_PACKT;
+		if(seqIdx < (sequenceCount-1)) goto MAKE_PACKT;
+		free(sendPackBuff);
 		return TRUE;
 	}else{
 		free(sendPackBuff);

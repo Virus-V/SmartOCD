@@ -20,7 +20,7 @@
  */
 struct JTAG_Instr{
 	enum JTAG_TAP_Status Status;	// 要切换到的状态
-	volatile uint8_t *TAP_Index;
+	struct JTAG_TAP *TAP;
 	struct {
 		uint8_t *tdiData;	// 指向TDI将要输出的数据，LSB
 		uint8_t ctrl;	// 记录TDI要传输的数据个数，最大不超过64个k[5:0]，0代表64，最高位为TDO capture
@@ -31,15 +31,16 @@ struct JTAG_Instr{
  * JTAG TAP对象
  */
 struct JTAG_TAP{
+	uint32_t IDCODE;	// 该TAP的IDCODE
 	uint16_t IR_Len;		// IR 寄存器长度
 	uint8_t NeedClockNum;	// 从当前状态切换到该TAP所需要的状态需要的时钟周期数
-	uint8_t TAP_Index;
-	list_t *JTAG_Instr;	// 该TAP待执行的指令
+	list_t *instructQueue;	// 该TAP待执行的指令
 };
 
 // JTAG指令队列
 struct JTAG_InstrQueueEle{
-	list_t *JTAG_Instr;	// jtag指令：对象
+	enum JTAG_TAP_Status Status;	// 要切换到的状态
+	list_t *instructQueue;	// jtag指令：对象
 };
 
 /**
@@ -51,7 +52,8 @@ struct TargetObject {
 	AdapterObject *adapterObj;	// Adapter对象
 	enum JTAG_TAP_Status currentStatus;	// TAP状态机当前状态
 	list_t *taps;	// jtag扫描链中的TAP对象
-	list_t *jtagInstrQueue;	// JTAG指令队列，元素对象：struct JTAG_instrQueueEle
+	list_t *jtagInstrQueue;	// JTAG指令队列，元素对象：struct JTAG_InstrQueueEle
+	list_node_t *nextToProc;	// 下一个将要处理的指令
 	// TODO SWD部分
 
 };
