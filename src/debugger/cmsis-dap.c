@@ -622,17 +622,18 @@ MAKE_PACKT:
 		}
 	}
 	sendPackBuff[1] = seqCount;	// sequence count
-	memcpy(sendPackBuff + 2, data, sendByteCount);
+	memcpy(sendPackBuff + 2, data, sendByteCount - 2);
 	DAP_EXCHANGE_DATA(adapterObj, sendPackBuff,  sendByteCount, respBuff);
 	log_debug("Send %d bytes, receive %d bytes.", sendByteCount, readByteCount);
 	if(respBuff[1] == DAP_OK){
 		// 拷贝数据
 		if(response){
-			memcpy(response + outputIdx, respBuff + 2, readByteCount);
+			memcpy(response + outputIdx, respBuff + 2, readByteCount - 2);
 			outputIdx += readByteCount;
 		}
 		// 判断是否处理完，如果没有则跳回去重新处理
 		if(seqIdx != (sequenceCount-1)) goto MAKE_PACKT;
+		free(sendPackBuff);
 		return TRUE;
 	}else{
 		free(sendPackBuff);

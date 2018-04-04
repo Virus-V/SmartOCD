@@ -6,6 +6,7 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 #include "target/target.h"
 #include "misc/log.h"
 
@@ -279,10 +280,10 @@ REPROC:
 	for(; tap_node; tap_node = list_iterator_next(tapIterator)){
 		struct JTAG_TAP *tap = tap_node->val;
 		list_node_t * instr_node = list_at(tap->JTAG_Instr, 0);	// 获得第一个指令
-		struct jtagInstr *jtag_instr = instr_node->val;	// 指令对象
-		instrStatusCount[jtag_instr->status] ++;	//统计当前
+		struct JTAG_Instr *jtag_instr = instr_node->val;	// 指令对象
+		instrStatusCount[jtag_instr->Status] ++;	//统计当前
 		// 同时计算当前TAP状态和指令需要的状态之间的长度
-		tap->NeedClockNum = JTAG_getTMSSequence(targetObj->currentStatus, jtag_instr->status) & 0xff;	// 取得低8位长度数据
+		tap->NeedClockNum = JTAG_getTMSSequence(targetObj->currentStatus, jtag_instr->Status) & 0xff;	// 取得低8位长度数据
 	}
 	int idx = 0, maxIdx = 0;
 	// 找到最多的那个
@@ -306,14 +307,14 @@ REPROC:
 				for(; tap_node; tap_node = list_iterator_next(tapIterator)){
 					struct JTAG_TAP *tap = tap_node->val;
 					list_node_t * instr_node = list_at(tap->JTAG_Instr, 0);	// 获得第一个指令
-					struct jtagInstr *jtag_instr = instr_node->val;	// 指令对象
+					struct JTAG_Instr *jtag_instr = instr_node->val;	// 指令对象
 
-					if(jtag_instr->status == idx){
+					if(jtag_instr->Status == idx){
 
 					}
 				}
 				// 找到该状态的指令
-				break;
+				//break;
 			}
 	// 标记需要处理指令的TAP
 
