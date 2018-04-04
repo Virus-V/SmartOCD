@@ -8,6 +8,7 @@
 #ifndef SRC_ARCH_ARM_ADI_ADIV5_SWD_H_
 #define SRC_ARCH_ARM_ADI_ADIV5_SWD_H_
 
+#include "smart_ocd.h"
 #include "arch/ARM/ADI/DAP.h"
 
 // 定义DAP命令结构体

@@ -9,6 +9,11 @@
 #define SRC_SMART_OCD_H_
 
 #include <assert.h>
+#include <stdint.h>
+
+#ifdef HAVE_CONFIG
+#include "global_config.h"
+#endif
 
 // 定义BOOL类型
 typedef enum {

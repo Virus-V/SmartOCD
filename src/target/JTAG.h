@@ -5,14 +5,14 @@
  *      Author: virusv
  */
 
-#ifndef SRC_ARCH_COMMON_JTAG_H_
-#define SRC_ARCH_COMMON_JTAG_H_
+#ifndef SRC_TARGET_JTAG_H_
+#define SRC_TARGET_JTAG_H_
 
-#include "debugger/adapter.h"
+#include "smart_ocd.h"
+#include "misc/list/list.h"
 
 enum JTAG_TAP_Status {
 	/* 特殊状态 */
-	//JTAG_TAP_INIT = 0,
 	JTAG_TAP_RESET = 0,
 	JTAG_TAP_IDLE,
 	/* DR相关状态 */
@@ -30,18 +30,10 @@ enum JTAG_TAP_Status {
 	JTAG_TAP_IREXIT1,
 	JTAG_TAP_IRPAUSE,
 	JTAG_TAP_IREXIT2,
-	JTAG_TAP_IRUPDATE
+	JTAG_TAP_IRUPDATE,
+	JTAG_TAP_STATUS_NUM,	// JTAG所有状态个数
 };
 
-/*
- * JTAG TAP状态机
- */
-struct JTAG_TAPSM {
-	enum JTAG_TAP_Status currentStatus;	// TAP状态机当前状态
-};
+uint16_t JTAG_getTMSSequence(enum JTAG_TAP_Status fromStatus, enum JTAG_TAP_Status toStatus);
 
-// 状态机复位
-BOOL JTAG_TAP_Reset(AdapterObject *adapterObj, BOOL hard);
-// TODO 状态机切换状态
-
-#endif /* SRC_ARCH_COMMON_JTAG_H_ */
+#endif /* SRC_TARGET_JTAG_H_ */

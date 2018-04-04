@@ -30,8 +30,18 @@ list_iterator_new_from_node(list_node_t *node, list_direction_t direction) {
   list_iterator_t *self;
   if (!(self = LIST_MALLOC(sizeof(list_iterator_t))))
     return NULL;
-  self->next = node;
+  self->origin = self->next = node;
   self->direction = direction;
+  return self;
+}
+
+/*
+ * Reset iterators
+ * return self;
+ */
+list_iterator_t *
+list_iterator_reset(list_iterator_t *self) {
+  self->next = self->origin;
   return self;
 }
 

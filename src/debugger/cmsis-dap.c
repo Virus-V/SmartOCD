@@ -5,15 +5,10 @@
  *      Author: virusv
  */
 
-#ifdef HAVE_CONFIG
-#include "global_config.h"
-#endif
-
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 
-#include "smart_ocd.h"
 #include "misc/log.h"
 #include "debugger/cmsis-dap.h"
 #include "arch/ARM/ADI/DAP.h"
@@ -585,54 +580,65 @@ static BOOL DAP_SWJ_Clock (uint8_t *respBuff, AdapterObject *adapterObj, uint32_
  * data ：时序表示数据
  * response：TDO返回数据
  */
-// TODO DAP_JTAG_Sequence 需要测试
-static BOOL DAP_JTAG_Sequence(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t sequenceCount, uint8_t *data, uint8_t *response){
+// TODO 对数据包进行分片，并测试，检查是否是jtag状态
+static BOOL DAP_JTAG_Sequence(uint8_t *respBuff, AdapterObject *adapterObj, int sequenceCount, uint8_t *data, uint8_t *response){
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
 	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	assert(cmsis_dapObj->PacketSize != 0);
-
-	uint8_t *DAP_TransferPacket, idx, seqIdx;
-	int readByteCount = 0, sendByteCount = sequenceCount;
+#define CEIL_FACTOR(x,n) (((x) + (n)-1) / (n))
+	// 发送包缓冲区
+	uint8_t *sendPackBuff = malloc(cmsis_dapObj->PacketSize);
+	if(sendPackBuff == NULL){
+		log_warn("Unable to allocate send packet buffer, the heap may be full.");
+		return FALSE;
+	}
+	int inputIdx = 0,outputIdx = 0, seqIdx = 0;	// 输入数据的指针，sequence信息指针，缓冲区指针
+	int readByteCount, sendByteCount;	// 要发送和接收的总字节
+	uint8_t seqCount;	// 统计当前有多少个seq
+	sendPackBuff[0] = ID_DAP_JTAG_Sequence;	// 指令头部 0
+MAKE_PACKT:
+	seqCount = 0;
+	readByteCount = 2;
+	sendByteCount = 2;
 	// 计算空间长度
-	for(idx = 0, seqIdx = 0; seqIdx < sequenceCount; seqIdx++){
+	for(; seqIdx < sequenceCount; seqIdx++){
 		// GNU编译器下面可以直接这样用：uint8_t tckCount = data[idx] & 0x1f ? : 64;
-		uint8_t tckCount = data[idx] & 0x1f;
+		uint8_t tckCount = data[inputIdx] & 0x1f;
 		tckCount = tckCount ? tckCount : 64;
-		uint8_t tdiByte = (tckCount + 7) / 8;	// 将TCK个数圆整到字节
-		sendByteCount += tdiByte;
-		if((data[idx] & 0x80)){	//TDO Capture
-			readByteCount += tdiByte;
+		uint8_t tdiByte = CEIL_FACTOR(tckCount, 8);	// 将TCK个数圆整到字节，表示后面跟几个byte的tdi数据
+
+		// 如果当前数据长度加上tdiByte之后大于包长度
+		if(sendByteCount + tdiByte >= cmsis_dapObj->PacketSize){
+			break;
+		}else sendByteCount += tdiByte;
+		//如果TDO Capture标志置位，则从TDO接收tdiByte字节的数据
+		if((data[inputIdx] & 0x80)){
+			readByteCount += tdiByte;	// readByteCount 一定会比sendByteCount少，所以上面检查过sendByteCount不超过最大包长度，readByteCount必不会超过
 		}
-		idx += tdiByte + 1;
+		inputIdx += tdiByte + 1;	// 跳到下一个sequence info
+		seqCount++;
+		if(seqCount == 255){	// 判断是否到达最大序列数目
+			break;
+		}
 	}
-
-	if(sendByteCount+2 > cmsis_dapObj->PacketSize || readByteCount+2 > cmsis_dapObj->PacketSize){
-		log_error("Packet too large.");
-		return FALSE;
-	}
-	log_debug("Send %d bytes, receive %d bytes.", sendByteCount + 2, readByteCount + 2);
-
-	// 构造发送包
-	if((DAP_TransferPacket = calloc(sendByteCount + 2, sizeof(uint8_t))) == NULL){ 	// ID+Sequence Count
-		log_error("Failed to alloc Packet buffer.");
-		return FALSE;
-	}
-	// 构造数据包头部
-	DAP_TransferPacket[0] = ID_DAP_JTAG_Sequence;
-	DAP_TransferPacket[1] = sequenceCount;
-	// 将数据拷贝到包中
-	memcpy(DAP_TransferPacket + 2, data, sendByteCount);
-	DAP_EXCHANGE_DATA(adapterObj, DAP_TransferPacket,  sendByteCount + 2, respBuff);
+	sendPackBuff[1] = seqCount;	// sequence count
+	memcpy(sendPackBuff + 2, data, sendByteCount);
+	DAP_EXCHANGE_DATA(adapterObj, sendPackBuff,  sendByteCount, respBuff);
+	log_debug("Send %d bytes, receive %d bytes.", sendByteCount, readByteCount);
 	if(respBuff[1] == DAP_OK){
 		// 拷贝数据
-		if(response)
-			memcpy(response, respBuff + 2, readByteCount);
-		free(DAP_TransferPacket);
+		if(response){
+			memcpy(response + outputIdx, respBuff + 2, readByteCount);
+			outputIdx += readByteCount;
+		}
+		// 判断是否处理完，如果没有则跳回去重新处理
+		if(seqIdx != (sequenceCount-1)) goto MAKE_PACKT;
 		return TRUE;
 	}else{
-		free(DAP_TransferPacket);
+		free(sendPackBuff);
 		return FALSE;
 	}
+#undef CEIL_FACTOR
 }
 
 /**
@@ -743,7 +749,7 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 	case AINS_JTAG_SEQUENCE:
 		log_trace("Execution command: JTAG Sequence.");
 		do{
-			uint8_t sequenceCount = (uint8_t)va_arg(parames, int);
+			int sequenceCount = va_arg(parames, int);
 			uint8_t *data = va_arg(parames, uint8_t *);
 			uint8_t *response = va_arg(parames, uint8_t *);
 			result = CMDAP_FUN_WARP(adapterObj, DAP_JTAG_Sequence, adapterObj, sequenceCount, data, response);
@@ -769,16 +775,6 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 			uint8_t *data = va_arg(parames, uint8_t *);
 			uint8_t *response = va_arg(parames, uint8_t *);
 			result = CMDAP_FUN_WARP(adapterObj, DAP_Transfer, adapterObj, dap_index, count, data, response);
-		}while(0);
-		break;
-
-	case AINS_DAP_PAYLOAD:
-		log_trace("Execution command: Get Payload.");
-		do{
-			assert(cmsis_dapObj->PacketSize != 0);
-			int * payload = va_arg(parames, int *);
-			*payload = cmsis_dapObj->PacketSize - 3;
-			result = TRUE;
 		}while(0);
 		break;
 

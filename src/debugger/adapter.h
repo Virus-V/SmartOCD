@@ -10,6 +10,7 @@
 #define SRC_DEBUGGER_ADAPTER_H_
 
 #include <stdarg.h>
+#include "smart_ocd.h"
 #include "debugger/usb.h"
 
 // 仿真通信方式
@@ -45,7 +46,7 @@ enum commonInstr {
 	AINS_SET_CLOCK,
 	/**
 	 * 发送一个jtag时序
-	 * 参数：uint8_t sequenceCount, uint8_t *data, uint8_t *response
+	 * 参数：int sequenceCount, uint8_t *data, uint8_t *response
 	 * 其中：sequenceCount是一共需要发送多少个序列；
 	 * data是一个数组，用来描述jtag时序。格式为：
 	 * {(uint8_t)Sequence Info + (uint8_t)TDI Data...}...
@@ -120,12 +121,6 @@ enum commonInstr {
 	 * 返回值：只有TRUE
 	 */
 	AINS_DAP_TRANSFER,
-	/**
-	 * 返回最大载荷长度
-	 * 批量执行指令的时候，指令包的最大长度
-	 * 参数：int *payload
-	 */
-	AINS_DAP_PAYLOAD,
 	AINS_COMM_LAST	// 分隔符，代表最后一个
 };
 
@@ -170,5 +165,7 @@ struct AdapterObject{
 
 BOOL __CONSTRUCT(Adapter)(AdapterObject *object, const char *desc);
 void __DESTORY(Adapter)(AdapterObject *object);
+
+const char *adapter_Transport2Str(enum transportType type);
 
 #endif /* SRC_DEBUGGER_ADAPTER_H_ */

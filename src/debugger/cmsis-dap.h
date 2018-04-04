@@ -8,6 +8,7 @@
 #ifndef SRC_DEBUGGER_CMSIS_DAP_H_
 #define SRC_DEBUGGER_CMSIS_DAP_H_
 
+#include "smart_ocd.h"
 #include "debugger/adapter.h"
 
 // CMSIS-DAP Command IDs

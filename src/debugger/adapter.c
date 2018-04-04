@@ -11,7 +11,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "smart_ocd.h"
+
 #include "misc/log.h"
 #include "debugger/adapter.h"
 
@@ -71,4 +71,15 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 	(void)adapterObj; (void)operate;
 	log_warn("Tried to call undefined function: operate.");
 	return FALSE;
+}
+
+/**
+ * 获得Transport协议字符串
+ */
+const char *adapter_Transport2Str(enum transportType type){
+#define X(_s) if (type == _s) return #_s
+	X(JTAG);
+	X(SWD);
+#undef X
+	return "UNKOWN_TRANSPORT";
 }

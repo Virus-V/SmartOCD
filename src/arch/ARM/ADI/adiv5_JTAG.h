@@ -8,7 +8,8 @@
 #ifndef SRC_ARCH_ARM_ADI_ADIV5_JTAG_H_
 #define SRC_ARCH_ARM_ADI_ADIV5_JTAG_H_
 
-#include "arch/common/JTAG.h"
+#include <target/JTAG.h>
+#include "smart_ocd.h"
 #include "arch/ARM/ADI/DAP.h"
 
 

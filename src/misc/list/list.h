@@ -1,4 +1,3 @@
-
 //
 // list.h
 //
@@ -33,8 +32,7 @@ extern "C" {
  */
 
 typedef enum {
-    LIST_HEAD
-  , LIST_TAIL
+	LIST_HEAD, LIST_TAIL
 } list_direction_t;
 
 /*
@@ -42,9 +40,9 @@ typedef enum {
  */
 
 typedef struct list_node {
-  struct list_node *prev;
-  struct list_node *next;
-  void *val;
+	struct list_node *prev;
+	struct list_node *next;
+	void *val;
 } list_node_t;
 
 /*
@@ -52,11 +50,11 @@ typedef struct list_node {
  */
 
 typedef struct {
-  list_node_t *head;
-  list_node_t *tail;
-  unsigned int len;
-  void (*free)(void *val);
-  int (*match)(void *a, void *b);
+	unsigned int len;
+	list_node_t *head;
+	list_node_t *tail;
+	void (*free)(void *val);
+	int (*match)(void *a, void *b);
 } list_t;
 
 /*
@@ -64,8 +62,8 @@ typedef struct {
  */
 
 typedef struct {
-  list_node_t *next;
-  list_direction_t direction;
+	list_node_t *next, *origin;
+	list_direction_t direction;
 } list_iterator_t;
 
 // Node prototypes.
@@ -109,6 +107,9 @@ list_iterator_new(list_t *list, list_direction_t direction);
 
 list_iterator_t *
 list_iterator_new_from_node(list_node_t *node, list_direction_t direction);
+
+list_iterator_t *
+list_iterator_reset(list_iterator_t *self);
 
 list_node_t *
 list_iterator_next(list_iterator_t *self);
