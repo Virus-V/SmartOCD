@@ -18,7 +18,7 @@ BOOL target_JTAG_TAP_Reset(TargetObject *targetObj, BOOL hard, uint32_t pinWait)
 // 在销毁Target对象时释放TAP对象
 static void free_tap(struct JTAG_TAP *tapObj){
 	// 释放tap的指令列表
-	list_destroy(tapObj->JTAG_Instr);
+	list_destroy(tapObj->instructQueue);
 	free(tapObj);
 }
 /**
@@ -26,6 +26,7 @@ static void free_tap(struct JTAG_TAP *tapObj){
  */
 BOOL __CONSTRUCT(Target)(TargetObject *targetObj, AdapterObject *adapterObj){
 	assert(targetObj != NULL && adapterObj != NULL);
+	// 创建TAP列表表头
 	targetObj->taps = list_new();
 	if(targetObj->taps == NULL){
 		log_warn("Init TAP list failed.");
@@ -34,6 +35,13 @@ BOOL __CONSTRUCT(Target)(TargetObject *targetObj, AdapterObject *adapterObj){
 	// 初始化链表的匹配和元素释放函数
 	targetObj->taps->free = (void (*)(void *))free_tap;
 	//targetObj->taps->match = ;
+	// 创建指令队列表头
+	targetObj->jtagInstrQueue = list_new();
+	if(targetObj->jtagInstrQueue == NULL){
+		log_warn("Init JTAG Instruction queue failed.");
+		list_destroy(targetObj->taps);
+		return FALSE;
+	}
 
 	targetObj->adapterObj = adapterObj;
 	targetObj->currentStatus = JTAG_TAP_RESET;
@@ -54,8 +62,9 @@ void __DESTORY(Target)(TargetObject *targetObj){
 	assert(targetObj != NULL && targetObj->adapterObj != NULL);
 	// 关闭Adapter
 	targetObj->adapterObj->Deinit(targetObj->adapterObj);
-	// 释放TAP链表
+	// 释放TAP链表和指令队列
 	list_destroy(targetObj->taps);
+	list_destroy(targetObj->jtagInstrQueue);
 }
 
 /**
@@ -118,19 +127,19 @@ int target_JTAG_Add_TAP(TargetObject *targetObj, uint16_t irLen){
 	// 该TAP指令寄存器长度
 	tap->IR_Len = irLen;
 	// 初始化JTAG TAP对象
-	tap->JTAG_Instr = list_new();
-	if(tap->JTAG_Instr == NULL){
+	tap->instructQueue = list_new();
+	if(tap->instructQueue == NULL){
 		free(tap);
 		return -1;
 	}
 	// 初始化instr链表对象
-	tap->JTAG_Instr->free = free;	// 销毁指令对象函数
+	tap->instructQueue->free = free;	// 销毁指令对象函数
 	// 新建node对象
 	list_node_t *node = list_node_new(tap);
 	if(node == NULL){
 		log_warn("Failed to create a new node.");
 		free(tap);
-		list_destroy(tap->JTAG_Instr);
+		list_destroy(tap->instructQueue);
 		return FALSE;
 	}
 	list_rpush(targetObj->taps, node);
@@ -191,9 +200,10 @@ static BOOL target_JTAG_TAP_AddInstruction(struct JTAG_TAP *tap, enum JTAG_TAP_S
 		return FALSE;
 	}
 	// 插入到该TAP的指令队列尾部
-	list_lpush(tap->JTAG_Instr, instr_node);
+	list_lpush(tap->instructQueue, instr_node);
 	// 装填指令对象
 	instruct->Status = toStatus;
+	instruct->TAP = tap;
 	instruct->data.ctrl = seqinfo;
 	instruct->data.tdiData = data;
 	return TRUE;
@@ -279,7 +289,7 @@ REPROC:
 	 */
 	for(; tap_node; tap_node = list_iterator_next(tapIterator)){
 		struct JTAG_TAP *tap = tap_node->val;
-		list_node_t * instr_node = list_at(tap->JTAG_Instr, 0);	// 获得第一个指令
+		list_node_t * instr_node = list_at(tap->instructQueue, 0);	// 获得第一个指令
 		struct JTAG_Instr *jtag_instr = instr_node->val;	// 指令对象
 		instrStatusCount[jtag_instr->Status] ++;	//统计当前
 		// 同时计算当前TAP状态和指令需要的状态之间的长度
