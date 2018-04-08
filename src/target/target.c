@@ -327,6 +327,7 @@ BOOL target_JTAG_Set_TAP_Info(TargetObject *targetObj, uint16_t tapCount, uint16
  * Fortunately, each time the TAP controller goes into Test-Logic-Reset, it goes into IDCODE mode (and loads the IDCODE into DR).
  *
  * emmm...然并卵。
+ * 调试了一上午。emmm，原来是芯片出问题了。这个方法是可行的。
  */
 BOOL target_JTAG_Get_IDCODE(TargetObject *targetObj, uint32_t *idCode){
 	assert(targetObj != NULL && targetObj->adapterObj != NULL);

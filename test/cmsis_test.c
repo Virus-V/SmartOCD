@@ -21,6 +21,7 @@ extern int print_bulk(char *data, int length, int rowLen);
 uint16_t vids[] = {0xc251, 0};
 uint16_t pids[] = {0xf001, 0};
 
+/*
 static void printAPInfo(uint32_t APIDR){
 	AP_IDRParse parse;
 	parse.regData = APIDR;
@@ -46,6 +47,7 @@ static void printAPInfo(uint32_t APIDR){
 			parse.regInfo.Variant);
 
 }
+
 static uint32_t readMem(AdapterObject *adapterObj, uint32_t addr){
 	uint32_t tmp;
 	adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, 0x0);	// 选择AP bank0
@@ -53,6 +55,7 @@ static uint32_t readMem(AdapterObject *adapterObj, uint32_t addr){
 	adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &tmp);
 	return tmp;
 }
+
 static void printComponentInfo(AdapterObject *adapterObj, uint32_t startAddr){
 	uint32_t addr, tmp, size;
 	addr = (startAddr & ~0xfff) | 0xFF4;
@@ -92,6 +95,7 @@ static void printComponentInfo(AdapterObject *adapterObj, uint32_t startAddr){
 	size = pow(2, tmp);
 	printf(",occupies %d blocks.\n", size);
 }
+*/
 
 // 测试入口点
 int main(){
@@ -131,14 +135,18 @@ int main(){
 	adapterObj->Operate(adapterObj, CMDAP_WRITE_ABORT, 0, STKCMPCLR | STKERRCLR | WDERRCLR | ORUNERRCLR);
 #else
 	// 设置SWJ频率，最大30MHz
-	adapterObj->Operate(adapterObj, AINS_SET_CLOCK, 10000000u);
+	adapterObj->Operate(adapterObj, AINS_SET_CLOCK, 1000u);
 	// 切换到JTAG模式
 	adapterObj->SelectTrans(adapterObj, JTAG);
 	irLen[1] = 5;
-	adapterObj->Operate(adapterObj, CMDAP_JTAG_CONFIGURE, 1, irLen);
-	adapterObj->Operate(adapterObj, CMDAP_JTAG_IDCODE, 0, &idcode);
-	log_info("JTAG-DP with ID:0x%08X.", idcode);
+	adapterObj->Operate(adapterObj, CMDAP_JTAG_CONFIGURE, 2, irLen);
+
+	while(1) {
+		adapterObj->Operate(adapterObj, CMDAP_JTAG_IDCODE, 0, &idcode);
+		log_info("JTAG-DP with ID:0x%08X.", idcode);
+	}
 #endif
+	/*
 	// 确保DPBANKSEL = 0，选中CTRL/STAT寄存器
 	adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, 0);
 	// 上电
@@ -229,6 +237,7 @@ int main(){
 		t_end = time(NULL);
 		printf("time: %.0f s\n", difftime(t_end,t_start));
 	}while(0);
+	*/
 EXIT:
 	adapterObj->Deinit(adapterObj);
 	FreeCMSIS_DAP(cmsis_dapObj);
