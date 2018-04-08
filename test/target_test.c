@@ -28,50 +28,41 @@ int main(){
 	cmsis_dapObj = NewCMSIS_DAP();
 	if(cmsis_dapObj == NULL){
 		log_fatal("failed to new cmsis dap.");
-		goto EXIT_FAIL_CMSIS_DAP_INIT;
+		goto EXIT_STEP_0;
 	}
 	// 连接CMSIS-DAP
 	if(ConnectCMSIS_DAP(cmsis_dapObj, vids, pids, NULL) == FALSE){
 		log_fatal("failed to connect.");
-		goto EXIT_FAIL_CMSIS_DAP_INIT;
+		goto EXIT_STEP_1;
 	}
 	if(__CONSTRUCT(Target)(targetObj, GET_ADAPTER(cmsis_dapObj)) == FALSE){
 		log_fatal("Target initialization failed.");
-		goto EXIT_ADAPTER_INIT_FAIL;
+		goto EXIT_STEP_1;
 	}
 	// 设置SWJ频率，最大30MHz
 	target_SetClock(targetObj, 10000000u);
-
 	// 切换到JTAG模式
 	target_SelectTrasnport(targetObj, JTAG);
-
-	// 增加tap
-	log_debug("TAP index:%d.", target_JTAG_Add_TAP(targetObj, 4));
-	log_debug("TAP index:%d.", target_JTAG_Add_TAP(targetObj, 5));
-
-	list_iterator_t * tapIterator = list_iterator_new(targetObj->taps, LIST_HEAD);
-	list_node_t *node = list_iterator_next(tapIterator);
-	for(; node; node = list_iterator_next(tapIterator)){
-		struct JTAG_TAP *tapObj = node->val;
-		log_info("irLen %d.", tapObj->irLen);
-	}
-	list_iterator_destroy(tapIterator);
-
-	// 增加JTAG指令
-
-	// 执行JTAG指令
-
-	// 删除tap
-	target_JTAG_Remove_TAP(targetObj, 1);
-	target_JTAG_Remove_TAP(targetObj, 0);
-
+	// 复位TAP，这句可能没必要
+	target_JTAG_TAP_Reset(targetObj, FALSE, 0);
+	// 声明TAP
+	uint16_t irLens[] = {4, 5};
+	log_debug("target_JTAG_Set_TAP_Info:%d.", target_JTAG_Set_TAP_Info(targetObj, 2, irLens));
+	uint32_t idCode[2];
+	//target_JTAG_Get_IDCODE(targetObj, idCode);
+	//log_debug("0x%08X, 0x%08X.", idCode[0], idCode[1]);
+	// 读取idcode
+	log_debug("target_JTAG_IR_Write:%d.", target_JTAG_IR_Write(targetObj, 0, 0xe));
+	//log_debug("target_JTAG_IR_Write:%d.", target_JTAG_IR_Write(targetObj, 1, 0x55));
+	log_debug("target_JTAG_DR_Exchange:%d.", target_JTAG_DR_Exchange(targetObj, 0, 32, CAST(uint8_t *, &idCode[0])));
+	log_debug("target_JTAG_Execute:%d.", target_JTAG_Execute(targetObj));
+	log_debug("0x%08X, 0x%08X.", idCode[0], idCode[1]);
+EXIT_STEP_2:
 	// 释放对象
 	__DESTORY(Target)(targetObj);
-EXIT_ADAPTER_INIT_FAIL:
+EXIT_STEP_1:
 	FreeCMSIS_DAP(cmsis_dapObj);
-EXIT_FAIL_CMSIS_DAP_INIT:
+EXIT_STEP_0:
 	free(targetObj);
-	return 1;
-EXIT_OK:
 	return 0;
 }

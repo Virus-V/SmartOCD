@@ -1,0 +1,156 @@
+==15438== Memcheck, a memory error detector
+==15438== Copyright (C) 2002-2015, and GNU GPL'd, by Julian Seward et al.
+==15438== Using Valgrind-3.11.0 and LibVEX; rerun with -h for copyright info
+==15438== Command: ./test/target_test
+==15438== Parent PID: 15437
+==15438== 
+==15438== Syscall param ioctl(USBDEVFS_SUBMITURB).buffer points to uninitialised byte(s)
+==15438==    at 0x514EF47: ioctl (syscall-template.S:84)
+==15438==    by 0x4E461CB: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==15438==    by 0x4E4238C: libusb_submit_transfer (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==15438==    by 0x4E44658: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==15438==    by 0x4E44A4E: libusb_interrupt_transfer (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==15438==    by 0x405DA4: USBInterruptTransfer (usb.c:220)
+==15438==    by 0x405CDE: interruptWrite (usb.c:205)
+==15438==    by 0x402249: DAPWrite (cmsis-dap.c:153)
+==15438==    by 0x403CB0: DAP_JTAG_Sequence (cmsis-dap.c:637)
+==15438==    by 0x40470A: operate (cmsis-dap.c:768)
+==15438==    by 0x4082A9: target_JTAG_Execute (target.c:537)
+==15438==    by 0x40BFD7: main (target_test.c:58)
+==15438==  Address 0x5a4db12 is 18 bytes inside a block of size 1,024 alloc'd
+==15438==    at 0x4C2DB8F: malloc (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
+==15438==    by 0x403AF3: DAP_JTAG_Sequence (cmsis-dap.c:594)
+==15438==    by 0x40470A: operate (cmsis-dap.c:768)
+==15438==    by 0x4082A9: target_JTAG_Execute (target.c:537)
+==15438==    by 0x40BFD7: main (target_test.c:58)
+==15438== 
+==15438== Use of uninitialised value of size 8
+==15438==    at 0x509C711: _itoa_word (_itoa.c:180)
+==15438==    by 0x50A012C: vfprintf (vfprintf.c:1631)
+==15438==    by 0x50A7898: printf (printf.c:33)
+==15438==    by 0x40BB96: misc_PrintBulk (misc.c:60)
+==15438==    by 0x403D17: DAP_JTAG_Sequence (cmsis-dap.c:639)
+==15438==    by 0x40470A: operate (cmsis-dap.c:768)
+==15438==    by 0x4082A9: target_JTAG_Execute (target.c:537)
+==15438==    by 0x40BFD7: main (target_test.c:58)
+==15438== 
+==15438== Conditional jump or move depends on uninitialised value(s)
+==15438==    at 0x509C718: _itoa_word (_itoa.c:180)
+==15438==    by 0x50A012C: vfprintf (vfprintf.c:1631)
+==15438==    by 0x50A7898: printf (printf.c:33)
+==15438==    by 0x40BB96: misc_PrintBulk (misc.c:60)
+==15438==    by 0x403D17: DAP_JTAG_Sequence (cmsis-dap.c:639)
+==15438==    by 0x40470A: operate (cmsis-dap.c:768)
+==15438==    by 0x4082A9: target_JTAG_Execute (target.c:537)
+==15438==    by 0x40BFD7: main (target_test.c:58)
+==15438== 
+==15438== Conditional jump or move depends on uninitialised value(s)
+==15438==    at 0x50A01AF: vfprintf (vfprintf.c:1631)
+==15438==    by 0x50A7898: printf (printf.c:33)
+==15438==    by 0x40BB96: misc_PrintBulk (misc.c:60)
+==15438==    by 0x403D17: DAP_JTAG_Sequence (cmsis-dap.c:639)
+==15438==    by 0x40470A: operate (cmsis-dap.c:768)
+==15438==    by 0x4082A9: target_JTAG_Execute (target.c:537)
+==15438==    by 0x40BFD7: main (target_test.c:58)
+==15438== 
+==15438== Conditional jump or move depends on uninitialised value(s)
+==15438==    at 0x509FC59: vfprintf (vfprintf.c:1631)
+==15438==    by 0x50A7898: printf (printf.c:33)
+==15438==    by 0x40BB96: misc_PrintBulk (misc.c:60)
+==15438==    by 0x403D17: DAP_JTAG_Sequence (cmsis-dap.c:639)
+==15438==    by 0x40470A: operate (cmsis-dap.c:768)
+==15438==    by 0x4082A9: target_JTAG_Execute (target.c:537)
+==15438==    by 0x40BFD7: main (target_test.c:58)
+==15438== 
+==15438== Conditional jump or move depends on uninitialised value(s)
+==15438==    at 0x509FCE2: vfprintf (vfprintf.c:1631)
+==15438==    by 0x50A7898: printf (printf.c:33)
+==15438==    by 0x40BB96: misc_PrintBulk (misc.c:60)
+==15438==    by 0x403D17: DAP_JTAG_Sequence (cmsis-dap.c:639)
+==15438==    by 0x40470A: operate (cmsis-dap.c:768)
+==15438==    by 0x4082A9: target_JTAG_Execute (target.c:537)
+==15438==    by 0x40BFD7: main (target_test.c:58)
+==15438== 
+==15438== Use of uninitialised value of size 8
+==15438==    at 0x509C711: _itoa_word (_itoa.c:180)
+==15438==    by 0x50A012C: vfprintf (vfprintf.c:1631)
+==15438==    by 0x50A1EF0: buffered_vfprintf (vfprintf.c:2320)
+==15438==    by 0x509F32C: vfprintf (vfprintf.c:1293)
+==15438==    by 0x409129: log_log (log.c:114)
+==15438==    by 0x40C049: main (target_test.c:59)
+==15438== 
+==15438== Conditional jump or move depends on uninitialised value(s)
+==15438==    at 0x509C718: _itoa_word (_itoa.c:180)
+==15438==    by 0x50A012C: vfprintf (vfprintf.c:1631)
+==15438==    by 0x50A1EF0: buffered_vfprintf (vfprintf.c:2320)
+==15438==    by 0x509F32C: vfprintf (vfprintf.c:1293)
+==15438==    by 0x409129: log_log (log.c:114)
+==15438==    by 0x40C049: main (target_test.c:59)
+==15438== 
+==15438== Conditional jump or move depends on uninitialised value(s)
+==15438==    at 0x50A01AF: vfprintf (vfprintf.c:1631)
+==15438==    by 0x50A1EF0: buffered_vfprintf (vfprintf.c:2320)
+==15438==    by 0x509F32C: vfprintf (vfprintf.c:1293)
+==15438==    by 0x409129: log_log (log.c:114)
+==15438==    by 0x40C049: main (target_test.c:59)
+==15438== 
+==15438== Conditional jump or move depends on uninitialised value(s)
+==15438==    at 0x509FC59: vfprintf (vfprintf.c:1631)
+==15438==    by 0x50A1EF0: buffered_vfprintf (vfprintf.c:2320)
+==15438==    by 0x509F32C: vfprintf (vfprintf.c:1293)
+==15438==    by 0x409129: log_log (log.c:114)
+==15438==    by 0x40C049: main (target_test.c:59)
+==15438== 
+==15438== Conditional jump or move depends on uninitialised value(s)
+==15438==    at 0x509FCE2: vfprintf (vfprintf.c:1631)
+==15438==    by 0x50A1EF0: buffered_vfprintf (vfprintf.c:2320)
+==15438==    by 0x509F32C: vfprintf (vfprintf.c:1293)
+==15438==    by 0x409129: log_log (log.c:114)
+==15438==    by 0x40C049: main (target_test.c:59)
+==15438== 
+==15438== 
+==15438== HEAP SUMMARY:
+==15438==     in use at exit: 8,194 bytes in 3 blocks
+==15438==   total heap usage: 3,167 allocs, 3,164 frees, 1,928,108 bytes allocated
+==15438== 
+==15438== 2 bytes in 1 blocks are definitely lost in loss record 1 of 3
+==15438==    at 0x4C2DB8F: malloc (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
+==15438==    by 0x406E47: build_IR_InstrData (target.c:110)
+==15438==    by 0x408077: target_JTAG_Execute (target.c:496)
+==15438==    by 0x40BFD7: main (target_test.c:58)
+==15438== 
+==15438== 4,096 bytes in 1 blocks are still reachable in loss record 2 of 3
+==15438==    at 0x4C2DB8F: malloc (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
+==15438==    by 0x4057FAF: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15438==    by 0x4058D10: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15438==    by 0x4E49B1C: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==15438==    by 0x4E476E0: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==15438==    by 0x4E3FB1C: libusb_init (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==15438==    by 0x405446: __construct_USBObject (usb.c:39)
+==15438==    by 0x401D28: NewCMSIS_DAP (cmsis-dap.c:64)
+==15438==    by 0x40BDB4: main (target_test.c:28)
+==15438== 
+==15438== 4,096 bytes in 1 blocks are still reachable in loss record 3 of 3
+==15438==    at 0x4C2DB8F: malloc (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
+==15438==    by 0x4057FAF: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15438==    by 0x404DA8B: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15438==    by 0x40590D3: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15438==    by 0x405966E: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15438==    by 0x40551FF: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15438==    by 0x40555E6: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15438==    by 0x404B5AB: udev_enumerate_scan_devices (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15438==    by 0x4E49B24: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==15438==    by 0x4E476E0: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==15438==    by 0x4E3FB1C: libusb_init (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==15438==    by 0x405446: __construct_USBObject (usb.c:39)
+==15438== 
+==15438== LEAK SUMMARY:
+==15438==    definitely lost: 2 bytes in 1 blocks
+==15438==    indirectly lost: 0 bytes in 0 blocks
+==15438==      possibly lost: 0 bytes in 0 blocks
+==15438==    still reachable: 8,192 bytes in 2 blocks
+==15438==         suppressed: 0 bytes in 0 blocks
+==15438== 
+==15438== For counts of detected and suppressed errors, rerun with: -v
+==15438== Use --track-origins=yes to see where uninitialised values come from
+==15438== ERROR SUMMARY: 29 errors from 12 contexts (suppressed: 0 from 0)

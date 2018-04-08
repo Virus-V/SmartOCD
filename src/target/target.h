@@ -15,32 +15,27 @@
 #include "target/JTAG.h"
 #include "arch/ARM/ADI/adiv5_SWD.h"
 
+enum JTAG_instructions{
+	/**
+	 * 写入IR寄存器
+	 */
+	JTAG_INS_WRITE_IR,
+	JTAG_INS_EXCHANGE_DR,
+};
+
 /**
  * JTAG 命令对象
  */
 struct JTAG_Instr{
-	enum JTAG_TAP_Status Status;	// 要切换到的状态
-	struct JTAG_TAP *TAP;
-	struct {
-		uint8_t *tdiData;	// 指向TDI将要输出的数据，LSB
-		uint8_t ctrl;	// 记录TDI要传输的数据个数，最大不超过64个k[5:0]，0代表64，最高位为TDO capture
-	} data;
-};
-
-/**
- * JTAG TAP对象
- */
-struct JTAG_TAP{
-	uint32_t IDCODE;	// 该TAP的IDCODE
-	uint16_t IR_Len;		// IR 寄存器长度
-	uint8_t NeedClockNum;	// 从当前状态切换到该TAP所需要的状态需要的时钟周期数
-	list_t *instructQueue;	// 该TAP待执行的指令
-};
-
-// JTAG指令队列
-struct JTAG_InstrQueueEle{
-	enum JTAG_TAP_Status Status;	// 要切换到的状态
-	list_t *instructQueue;	// jtag指令：对象
+	enum JTAG_instructions type;	// 指令类型
+	uint16_t TAP_Index;
+	union {
+		uint32_t IR_Data;	// ir数据
+		struct {
+			uint8_t *data;	// 指向TDI将要输出的数据，LSB
+			uint8_t bitCount;
+		} DR;
+	} info;
 };
 
 /**
@@ -51,9 +46,16 @@ typedef struct TargetObject TargetObject;
 struct TargetObject {
 	AdapterObject *adapterObj;	// Adapter对象
 	enum JTAG_TAP_Status currentStatus;	// TAP状态机当前状态
-	list_t *taps;	// jtag扫描链中的TAP对象
-	list_t *jtagInstrQueue;	// JTAG指令队列，元素对象：struct JTAG_InstrQueueEle
-	list_node_t *nextToProc;	// 下一个将要处理的指令
+	/**
+	 * TAP_actived:当前激活的TAP
+	 * TAP_Count:JTAG扫描链上有多少个TAP
+	 * TAP_Info:所有TAP的信息和辅助信息
+	 */
+	int TAP_actived;
+	uint16_t TAP_Count, *TAP_Info;
+	list_t *jtagInstrQueue;	// JTAG指令队列，元素类型：struct JTAG_Instr
+	list_node_t *currProcessing;	// 下一个将要处理的指令
+	int JTAG_SequenceCount;	// 一共有多少个Sequence
 	// TODO SWD部分
 
 };
@@ -62,24 +64,13 @@ struct TargetObject {
 BOOL __CONSTRUCT(Target)(TargetObject *targetObj, AdapterObject *adapterObj);
 void __DESTORY(Target)(TargetObject *targetObj);
 
-/**
- * 设置仿真器通信频率（Hz）
- */
 BOOL target_SetClock(TargetObject *targetObj, uint32_t clockHz);
-
-/**
- * 切换仿真模式
- * SWD和JTAG等等
- */
 BOOL target_SelectTrasnport(TargetObject *targetObj, enum transportType type);
-
-int target_JTAG_Add_TAP(TargetObject *targetObj, uint16_t irLen);
-void target_JTAG_Remove_TAP(TargetObject *targetObj, int index);
-
-BOOL target_JTAG_TAP_ToStatus(TargetObject *targetObj, int index, enum JTAG_TAP_Status toStatus);
-BOOL target_JTAG_TAP_IRWrite(TargetObject *targetObj, int index, uint8_t *dataEx);
-BOOL target_JTAG_TAP_DRExchange(TargetObject *targetObj, int index, uint8_t DRLen, uint8_t *dataEx);
-BOOL target_JTAG_TAP_Exchange(TargetObject *targetObj, int index, enum JTAG_TAP_Status toStatus, uint8_t ctrl, uint8_t *dataEx);
+BOOL target_JTAG_TAP_Reset(TargetObject *targetObj, BOOL hard, uint32_t pinWait);
+BOOL target_JTAG_Set_TAP_Info(TargetObject *targetObj, uint16_t tapCount, uint16_t *IR_Len);
+BOOL target_JTAG_Get_IDCODE(TargetObject *targetObj, uint32_t *idCode);
+BOOL target_JTAG_IR_Write(TargetObject *targetObj, uint16_t index, uint32_t ir);
+BOOL target_JTAG_DR_Exchange(TargetObject *targetObj, uint16_t index, uint8_t count, uint8_t *data);
 BOOL target_JTAG_Execute(TargetObject *targetObj);
 
 #endif /* SRC_TARGET_TARGET_H_ */

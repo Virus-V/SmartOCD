@@ -13,6 +13,8 @@
 #include "debugger/cmsis-dap.h"
 #include "arch/ARM/ADI/DAP.h"
 
+#include "misc/misc.h"
+
 /**
  * 这个宏是用来作为与cmsis-dap通信函数的外包部分
  * 该宏实现自动申请cmsis-dap返回包缓冲空间并且带函数执行结束后
@@ -588,32 +590,32 @@ static BOOL DAP_JTAG_Sequence(uint8_t *respBuff, AdapterObject *adapterObj, int 
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
 	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	assert(cmsis_dapObj->PacketSize != 0);
-#define CEIL_FACTOR(x,n) (((x) + (n)-1) / (n))
 	// 发送包缓冲区
 	uint8_t *sendPackBuff = malloc(cmsis_dapObj->PacketSize);
 	if(sendPackBuff == NULL){
 		log_warn("Unable to allocate send packet buffer, the heap may be full.");
 		return FALSE;
 	}
-	int inputIdx = 0,outputIdx = 0, seqIdx = 0;	// 输入数据的指针，sequence信息指针，缓冲区指针
-	int readPayloadLen, sendPayloadLen;	// 要发送和接收的总字节
+	int inputIdx = 0,outputIdx = 0, seqIdx = 0;	// data数据索引，response数据索引，sequence索引
+	int readPayloadLen, sendPayloadLen;	// 要发送和接收的载荷总字节，不包括头部
 	uint8_t seqCount;	// 统计当前有多少个seq
 	sendPackBuff[0] = ID_DAP_JTAG_Sequence;	// 指令头部 0
+
 MAKE_PACKT:
 	seqCount = 0;
 	readPayloadLen = 0;
 	sendPayloadLen = 0;
 	// 计算空间长度
 	for(; seqIdx < sequenceCount; seqIdx++){
-		// GNU编译器下面可以直接这样用：uint8_t tckCount = data[idx] & 0x1f ? : 64;
-		uint8_t tckCount = data[inputIdx] & 0x1f;
+		// GNU编译器下面可以直接这样用：uint8_t tckCount = data[idx] & 0x3f ? : 64;
+		uint8_t tckCount = data[inputIdx] & 0x3f;
 		tckCount = tckCount ? tckCount : 64;
-		uint8_t tdiByte = CEIL_FACTOR(tckCount, 8);	// 将TCK个数圆整到字节，表示后面跟几个byte的tdi数据
-
-		// 如果当前数据长度加上tdiByte之后大于包长度
-		if(sendPayloadLen + tdiByte + 2 > cmsis_dapObj->PacketSize){
+		uint8_t tdiByte = (tckCount + 7) >> 3;	// 将TCK个数圆整到字节，表示后面跟几个byte的tdi数据
+		log_debug("SeqInfo:0x%02x, tckCount:%d, tdiByte:%d.", data[inputIdx], tckCount, tdiByte);
+		// 如果当前数据长度加上tdiByte之后大于包长度，+3的意思是两个指令头部和SeqInfo字节
+		if(sendPayloadLen + tdiByte + 3 > cmsis_dapObj->PacketSize){
 			break;
-		}else sendPayloadLen += tdiByte;
+		}else sendPayloadLen += tdiByte + 1;	// FIX:+1是要计算头部
 		//如果TDO Capture标志置位，则从TDO接收tdiByte字节的数据
 		if((data[inputIdx] & 0x80)){
 			readPayloadLen += tdiByte;	// readByteCount 一定会比sendByteCount少，所以上面检查过sendByteCount不超过最大包长度，readByteCount必不会超过
@@ -624,10 +626,18 @@ MAKE_PACKT:
 			break;
 		}
 	}
+	/**
+	 * 到达这儿，有三种情况：
+	 * 1、seqIdx == sequenceCount
+	 * 2、发送的总数据马上要大于包长度
+	 * 3、seqCount == 255
+	 */
 	sendPackBuff[1] = seqCount;	// sequence count
 	memcpy(sendPackBuff + 2, data, sendPayloadLen);
 	DAP_EXCHANGE_DATA(adapterObj, sendPackBuff,  sendPayloadLen + 2, respBuff);
 	log_debug("Trasmission load: Send %d bytes, receive %d bytes.", sendPayloadLen, readPayloadLen);
+	misc_PrintBulk(sendPackBuff, sendPayloadLen + 2, 8);
+	misc_PrintBulk(respBuff, readPayloadLen + 2, 8);
 	if(respBuff[1] == DAP_OK){
 		// 拷贝数据
 		if(response){
@@ -642,7 +652,6 @@ MAKE_PACKT:
 		free(sendPackBuff);
 		return FALSE;
 	}
-#undef CEIL_FACTOR
 }
 
 /**

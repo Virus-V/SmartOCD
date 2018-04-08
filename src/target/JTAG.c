@@ -17,7 +17,7 @@
  * 返回值：sequence 高8位为时序信息，低八位为时序个数
  * 时序信息是最低位在前。比如 0101 1111，则发送顺序是 1111 1010
  */
-uint16_t JTAG_getTMSSequence(enum JTAG_TAP_Status fromStatus, enum JTAG_TAP_Status toStatus) {
+uint16_t JTAG_Get_TMS_Sequence(enum JTAG_TAP_Status fromStatus, enum JTAG_TAP_Status toStatus) {
 	int sequence, idx;
 #define _SET_BIT_(x) (sequence |= ((x) << idx))
 	for (sequence = 0, idx = 8; fromStatus != toStatus; sequence++, idx++) {
@@ -153,4 +153,44 @@ uint16_t JTAG_getTMSSequence(enum JTAG_TAP_Status fromStatus, enum JTAG_TAP_Stat
 	}
 #undef _SET_BIT_
 	return sequence & 0xFFFF;
+}
+
+/**
+ * 计算多少个TMS信号有多少个电平状态
+ * TMS:TMS信号，LSB
+ * count：TMS信号位数
+ * 比如：1001110，count=7，有四个电平状态：1周期的低电平，3周期的高电平，2周期的低电平，1周期的高电平
+ */
+int JTAG_Cal_TMS_LevelStatus(uint32_t tms, int count){
+	int n=0,i;
+	uint32_t tms_s = (tms << 1) | (tms & 0x1);
+	uint32_t diff = tms_s ^ tms;
+	if(count == 0) return 0;
+	for(i=0; i< count;i++){
+		if(diff & 0x1) n++;
+		diff >>= 1;
+	}
+	return n+1;
+}
+
+const char *JTAG_state2str(enum JTAG_TAP_Status tap_state) {
+#define X(_s) if (tap_state == _s) return #_s;
+	X(JTAG_TAP_RESET)
+	X(JTAG_TAP_IDLE)
+	X(JTAG_TAP_DRSELECT)
+	X(JTAG_TAP_DRCAPTURE)
+	X(JTAG_TAP_DRSHIFT)
+	X(JTAG_TAP_DREXIT1)
+	X(JTAG_TAP_DRPAUSE)
+	X(JTAG_TAP_DREXIT2)
+	X(JTAG_TAP_DRUPDATE)
+	X(JTAG_TAP_IRSELECT)
+	X(JTAG_TAP_IRCAPTURE)
+	X(JTAG_TAP_IRSHIFT)
+	X(JTAG_TAP_IREXIT1)
+	X(JTAG_TAP_IRPAUSE)
+	X(JTAG_TAP_IREXIT2)
+	X(JTAG_TAP_IRUPDATE)
+#undef X
+	return "UNKOWN_STATE";
 }

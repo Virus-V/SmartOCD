@@ -31,9 +31,10 @@ enum JTAG_TAP_Status {
 	JTAG_TAP_IRPAUSE,
 	JTAG_TAP_IREXIT2,
 	JTAG_TAP_IRUPDATE,
-	JTAG_TAP_STATUS_NUM,	// JTAG所有状态个数
 };
 
-uint16_t JTAG_getTMSSequence(enum JTAG_TAP_Status fromStatus, enum JTAG_TAP_Status toStatus);
+uint16_t JTAG_Get_TMS_Sequence(enum JTAG_TAP_Status fromStatus, enum JTAG_TAP_Status toStatus);
+int JTAG_Cal_TMS_LevelStatus(uint32_t tms, int count);
+const char *JTAG_state2str(enum JTAG_TAP_Status tap_state);
 
 #endif /* SRC_TARGET_JTAG_H_ */
