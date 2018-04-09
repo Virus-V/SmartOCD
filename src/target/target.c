@@ -5,6 +5,11 @@
  *      Author: virusv
  */
 
+/**
+ * TODO
+ * 这些内存操作只在小端模式下可用，兼容大端字节序有待实现
+ */
+
 #include <stdlib.h>
 #include <string.h>
 #include "target/target.h"
@@ -228,7 +233,7 @@ static int build_DR_InstrData(TargetObject *targetObj, uint8_t *buff, struct JTA
 			n = 0;
 		}
 	}
-	// XXX 重新修改最后一个数据
+	// 重新修改最后一个数据
 	uint8_t cnt = (*seqInfo_ptr) & 0x3f;
 	if(cnt == 1){ // 如果最后一个时序控制字是输出1个字节，那么直接修改这个控制字，将TMS置高，跳出SHIFT-DR状态
 		*seqInfo_ptr |= 0x40;
@@ -237,6 +242,7 @@ static int build_DR_InstrData(TargetObject *targetObj, uint8_t *buff, struct JTA
 		targetObj->JTAG_SequenceCount ++;
 		if(*seqInfo_ptr & 0x80){
 			instr->info.DR.segment = 1;	// 表示这个指令的数据被切分
+			instr->info.DR.segment_pos = cnt - 1;	//最后一位的位置
 			*buff++ = 0xc1;	// TDO Capture， TMS=1，TDI Count=1
 			*buff++ = GET_N_BIT_LAST_ONE(seqInfo_ptr + 1, cnt) & 0xff;
 		}else{
@@ -626,9 +632,16 @@ BOOL target_JTAG_Execute(TargetObject *targetObj){
 		struct JTAG_Instr *instr = CAST(struct JTAG_Instr *, node->val);
 		// 跳过IR类型的指令
 		if(instr->type == JTAG_INS_WRITE_IR) continue;
-		// TODO 处理分片
+		// 指向当前node
+		targetObj->currProcessing = node;
+		// TODO 处理分片，待测试
 		int byteCnt = (instr->info.DR.bitCount + 7) >> 3;	// 转换成字节
 		memcpy(instr->info.DR.data, resultBuff_tmp, byteCnt);
+		// 如果分片，小端模式下
+		if(instr->info.DR.segment){
+			*(instr->info.DR.data + byteCnt - 1) |= *(resultBuff_tmp + byteCnt) << instr->info.DR.segment_pos;
+			resultBuff_tmp++;	// 因为分片了，所以多出一个数据位
+		}
 		resultBuff_tmp += byteCnt;
 	}
 	// 销毁执行完毕的指令
@@ -638,6 +651,7 @@ BOOL target_JTAG_Execute(TargetObject *targetObj){
 	for(; node; node = list_iterator_next(iterator)){
 		list_remove(targetObj->jtagInstrQueue, node);
 	}
+
 	result = TRUE;
 EXIT_STEP_3:
 	free(resultBuffer);

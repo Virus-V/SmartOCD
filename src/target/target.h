@@ -35,6 +35,7 @@ struct JTAG_Instr{
 			uint8_t *data;	// 指向TDI将要输出的数据，LSB
 			uint8_t bitCount:7;
 			uint8_t segment:1;
+			uint8_t segment_pos;	// 切分的位原本的位置
 		} DR;
 	} info;
 };
