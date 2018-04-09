@@ -48,15 +48,17 @@ int main(){
 	// 声明TAP
 	uint16_t irLens[] = {4, 5};
 	log_debug("target_JTAG_Set_TAP_Info:%d.", target_JTAG_Set_TAP_Info(targetObj, 2, irLens));
-	uint32_t idCode[2];
-	target_JTAG_Get_IDCODE(targetObj, idCode);
-	log_debug("0x%08X, 0x%08X.", idCode[0], idCode[1]);
-	// 读取idcode
-	//log_debug("target_JTAG_IR_Write:%d.", target_JTAG_IR_Write(targetObj, 0, 0xe));
-	//log_debug("target_JTAG_IR_Write:%d.", target_JTAG_IR_Write(targetObj, 1, 0x55));
-	//log_debug("target_JTAG_DR_Exchange:%d.", target_JTAG_DR_Exchange(targetObj, 0, 32, CAST(uint8_t *, &idCode[0])));
-	//log_debug("target_JTAG_Execute:%d.", target_JTAG_Execute(targetObj));
+	uint32_t idCode[2] = {0,0};
+	//target_JTAG_Get_IDCODE(targetObj, idCode);
 	//log_debug("0x%08X, 0x%08X.", idCode[0], idCode[1]);
+//	target_JTAG_Get_IDCODE(targetObj, idCode);
+//	log_debug("0x%08X, 0x%08X.", idCode[0], idCode[1]);
+	// 读取idcode
+	log_debug("target_JTAG_IR_Write:%d.", target_JTAG_IR_Write(targetObj, 0, 0xe));
+	//log_debug("target_JTAG_IR_Write:%d.", target_JTAG_IR_Write(targetObj, 1, 0x55));
+	log_debug("target_JTAG_DR_Exchange:%d.", target_JTAG_DR_Exchange(targetObj, 0, 32, CAST(uint8_t *, &idCode[0])));
+	log_debug("target_JTAG_Execute:%d.", target_JTAG_Execute(targetObj));
+	log_debug("0x%08X, 0x%08X.", idCode[0], idCode[1]);
 EXIT_STEP_2:
 	// 释放对象
 	__DESTORY(Target)(targetObj);

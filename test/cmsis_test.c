@@ -21,6 +21,7 @@ extern int print_bulk(char *data, int length, int rowLen);
 uint16_t vids[] = {0xc251, 0};
 uint16_t pids[] = {0xf001, 0};
 
+
 /*
 static void printAPInfo(uint32_t APIDR){
 	AP_IDRParse parse;
@@ -139,12 +140,25 @@ int main(){
 	// 切换到JTAG模式
 	adapterObj->SelectTrans(adapterObj, JTAG);
 	irLen[1] = 5;
-	adapterObj->Operate(adapterObj, CMDAP_JTAG_CONFIGURE, 2, irLen);
+	//adapterObj->Operate(adapterObj, CMDAP_JTAG_CONFIGURE, 2, irLen);
+	//adapterObj->Operate(adapterObj, CMDAP_JTAG_IDCODE, 0, &idcode);
+	//log_info("JTAG-DP with ID:0x%08X.", idcode);
+	uint8_t datas[] = {
+			0x45, 0x00,	//复位TAP
+			0x01, 0x00, // run-test/idle
+			0x42, 0x00, 0x02, 0x00,	// select-ir, shift-ir
+			0x08, 0xFE, // 1111 1110 lsb first tms=0,
+			0x41, 0x01, // 1 lsb first,tms=1 跳到IR exit1
+			0x42, 0x00, // update ir select dr
+			// 41 00 多了个41 00 是什么情况
+			0x02, 0x00, // capture dr shift dr
+			0xA0, 0x00, 0x00, 0x00, 0x00,
+			0x41 ,0x00, // tms=1, 跳到exit1-dr
+			0x42, 0x00	// update dr
+	}, result[32];
+	adapterObj->Operate(adapterObj, AINS_JTAG_SEQUENCE, 0x0B, datas, result);
+	print_bulk(result, sizeof(result), 8);
 
-	while(1) {
-		adapterObj->Operate(adapterObj, CMDAP_JTAG_IDCODE, 0, &idcode);
-		log_info("JTAG-DP with ID:0x%08X.", idcode);
-	}
 #endif
 	/*
 	// 确保DPBANKSEL = 0，选中CTRL/STAT寄存器

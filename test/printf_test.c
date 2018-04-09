@@ -12,13 +12,12 @@
 #include "smart_ocd.h"
 #include "target/JTAG.h"
 
-uint32_t bit_reverse(uint32_t n){
-	n = ((n >>  1) & 0x55555555u) | ((n <<  1) & 0xaaaaaaaau);
-	n = ((n >>  2) & 0x33333333u) | ((n <<  2) & 0xccccccccu);
-	n = ((n >>  4) & 0x0f0f0f0fu) | ((n <<  4) & 0xf0f0f0f0u);
-	n = ((n >>  8) & 0x00ff00ffu) | ((n <<  8) & 0xff00ff00u);
-	n = ((n >> 16) & 0x0000ffffu) | ((n << 16) & 0xffff0000u);
-	return n;
+#define GET_N_BIT_LAST_ONE(pos,n) ((*(CAST(uint8_t *, (pos)) + (((n)-1)>>3)) >> (((n)-1) & 0x7)) & 0x1)
+
+int get_last_bit(uint8_t *data, int n){
+	uint8_t x = data[n >> 3];
+	uint8_t y = n & 0x7;
+	return (x >> (y)) & 0x1;
 }
 
 char* itoa(int num, char *str, int radix) {
@@ -55,9 +54,11 @@ char* itoa(int num, char *str, int radix) {
 int main(){
 	uint32_t tms_seq;
 	char str[64];
-	tms_seq = 0xff000f0fu;
+	tms_seq = 0xa5000f0fu;
 	printf("%s\n", itoa(tms_seq, str, 2));
-	tms_seq = bit_reverse(tms_seq);
-	printf("%s\n", itoa(tms_seq, str, 2));
+	for(int n=32; n>0; n--){
+		printf("%d", GET_N_BIT_LAST_ONE(&tms_seq, n));
+	}
+	printf("\n");
 	return 0;
 }

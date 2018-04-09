@@ -18,6 +18,14 @@
 // 检测Transport是否匹配
 #define TRANSPORT_MATCH(tp,type) ((tp)->adapterObj->currTrans == (type))
 #define CEIL_FACTOR(x,n) (((x) + (n)-1) / (n))
+/**
+ * 获得n个连续bit位最后一位，
+ * lsb，
+ * pos:数据位存放的位置
+ * n:bit总数。n=32，也就是第31位是最后一位，
+ * 将返回第31位
+ */
+#define GET_N_BIT_LAST_ONE(pos,n) ((*(CAST(uint8_t *, (pos)) + (((n)-1)>>3)) >> (((n)-1) & 0x7)) & 0x1)
 
 BOOL target_JTAG_TAP_Reset(TargetObject *targetObj, BOOL hard, uint32_t pinWait);
 
@@ -134,8 +142,8 @@ static int build_IR_InstrData(TargetObject *targetObj, uint8_t *buff, uint16_t i
 	memcpy(tmp_buff + seekLen, &IR_Padded, (all_IR_Bytes - seekLen  > 4 ? 4 : all_IR_Bytes - seekLen));
 	// 写入buff
 	int writeCnt = 0;
-	// 这儿应该是根据所有IR寄存器长度来计算，不是字节数
-	for(int n=all_IR_Bits,readCnt=0; n>0;){
+	// -1 是不发送最后一位数据，因为最后一位发送的同时也同时退出SHIFT-IR状态
+	for(int n=all_IR_Bits - 1,readCnt=0; n>0;){
 		if(n >= 64){	// 当生成的时序字节小于8个
 			*buff++ = 0x0;	// TMS=0;TDO Capture=FALSE; 64Bit
 			targetObj->JTAG_SequenceCount ++;
@@ -144,7 +152,7 @@ static int build_IR_InstrData(TargetObject *targetObj, uint8_t *buff, uint16_t i
 			writeCnt += 9;	// 数据加上一个头部
 		}else{
 			int bytesCnt = (n + 7) >> 3;
-			*buff++ = n;	// TMS=0;TDO Capture=FALSE; 8*n Bit
+			*buff++ = n;
 			targetObj->JTAG_SequenceCount ++;
 			memcpy(buff, tmp_buff+readCnt, bytesCnt);
 			buff+=bytesCnt; readCnt+=bytesCnt;
@@ -152,6 +160,14 @@ static int build_IR_InstrData(TargetObject *targetObj, uint8_t *buff, uint16_t i
 			n=0;
 		}
 	}
+	// 发送最后一位同时退出SHIFT-IR状态
+	*buff++ = 0x41;
+	*buff++ = GET_N_BIT_LAST_ONE(tmp_buff, all_IR_Bits) & 0xff;
+	writeCnt += 2;
+	targetObj->JTAG_SequenceCount ++;
+	// 退出SHIFT-IR状态
+	targetObj->currentStatus = JTAG_TAP_IREXIT1;
+	free(tmp_buff);
 	return writeCnt;
 }
 
@@ -161,6 +177,7 @@ static int build_IR_InstrData(TargetObject *targetObj, uint8_t *buff, uint16_t i
 static int build_DR_InstrData(TargetObject *targetObj, uint8_t *buff, struct JTAG_Instr *instr){
 	assert(targetObj != NULL && buff != NULL && instr != NULL);
 	int writeCnt = 0, byteCnt = 0, n;
+
 	// 前面的tap
 	for(n=instr->TAP_Index; n > 0;){
 		if(n >= 64){
@@ -180,6 +197,8 @@ static int build_DR_InstrData(TargetObject *targetObj, uint8_t *buff, struct JTA
 			n = 0;
 		}
 	}
+	// 记录最后一个seqInfo的控制字节
+	uint8_t *seqInfo_ptr = buff;
 	// info.DR.bitCount 不会大于64
 	*buff++ = instr->info.DR.bitCount == 64 ? 0x80 : (0x80 + instr->info.DR.bitCount);
 	targetObj->JTAG_SequenceCount ++;
@@ -191,6 +210,7 @@ static int build_DR_InstrData(TargetObject *targetObj, uint8_t *buff, struct JTA
 	//后面的tap
 	for(n= targetObj->TAP_Count - instr->TAP_Index - 1; n > 0;){
 		if(n >= 64){
+			seqInfo_ptr = buff;
 			*buff++ = 0x0;	// TDO Capture=FALSE, TMS=0,Count=64
 			targetObj->JTAG_SequenceCount ++;
 			memset(buff, 0x0, 8);
@@ -198,6 +218,7 @@ static int build_DR_InstrData(TargetObject *targetObj, uint8_t *buff, struct JTA
 			buff+=8;
 			n-=64;
 		}else{
+			seqInfo_ptr = buff;
 			*buff++ = n;	// TDO Capture=FALSE, TMS=0,Count = instr->TAP_Index
 			targetObj->JTAG_SequenceCount ++;
 			byteCnt = (n + 7) >> 3;
@@ -206,6 +227,23 @@ static int build_DR_InstrData(TargetObject *targetObj, uint8_t *buff, struct JTA
 			writeCnt += byteCnt + 1;
 			n = 0;
 		}
+	}
+	// XXX 重新修改最后一个数据
+	uint8_t cnt = (*seqInfo_ptr) & 0x3f;
+	if(cnt == 1){ // 如果最后一个时序控制字是输出1个字节，那么直接修改这个控制字，将TMS置高，跳出SHIFT-DR状态
+		*seqInfo_ptr |= 0x40;
+	}else{	// 如果最后一个控制字输出多个二进制位，则将二进制位总数减1，并获得最后的一个二进制位，再附加一个跳出SHIFT-DR状态的控制字
+		(*seqInfo_ptr)--;	// 长度减1
+		targetObj->JTAG_SequenceCount ++;
+		if(*seqInfo_ptr & 0x80){
+			instr->info.DR.segment = 1;	// 表示这个指令的数据被切分
+			*buff++ = 0xc1;	// TDO Capture， TMS=1，TDI Count=1
+			*buff++ = GET_N_BIT_LAST_ONE(seqInfo_ptr + 1, cnt) & 0xff;
+		}else{
+			*buff++ = 0x41;	// TMS=1，TDI Count=1
+			*buff++ = GET_N_BIT_LAST_ONE(seqInfo_ptr + 1, cnt) & 0xff;
+		}
+		writeCnt += 2;
 	}
 	return writeCnt;
 }
@@ -331,14 +369,16 @@ BOOL target_JTAG_Set_TAP_Info(TargetObject *targetObj, uint16_t tapCount, uint16
  */
 BOOL target_JTAG_Get_IDCODE(TargetObject *targetObj, uint32_t *idCode){
 	assert(targetObj != NULL && targetObj->adapterObj != NULL);
-	int byteCount, bitCount = 0;
+	int byteCount;
 	uint16_t seqInfo[2];
-	// 从当前状态跳到
+	// 从当前状态跳到RESET状态
 	seqInfo[0] = JTAG_Get_TMS_Sequence(targetObj->currentStatus, JTAG_TAP_RESET);
 	byteCount  = JTAG_Cal_TMS_LevelStatus(seqInfo[0] >> 8, seqInfo[0] & 0xff) << 1;
 	// 跳到SHIFT-DR状态
 	seqInfo[1] = JTAG_Get_TMS_Sequence(JTAG_TAP_RESET, JTAG_TAP_DRSHIFT);
 	byteCount += JTAG_Cal_TMS_LevelStatus(seqInfo[1] >> 8, seqInfo[1] & 0xff) << 1;
+	// 将Target当前状态换成JTAG_TAP_DRSHIFT
+	targetObj->currentStatus = JTAG_TAP_DRSHIFT;
 	// 计算IDCODE的空间大小
 	byteCount += targetObj->TAP_Count * 5;	//
 	// 这儿，获得了从当前TAP先到复位再到SELECT-DR状态的TMS时序
@@ -351,13 +391,13 @@ BOOL target_JTAG_Get_IDCODE(TargetObject *targetObj, uint32_t *idCode){
 	targetObj->JTAG_SequenceCount = targetObj->TAP_Count;
 	seqInfoBuff_tmp += parseTMS(targetObj, seqInfoBuff_tmp, seqInfo[0]);
 	seqInfoBuff_tmp += parseTMS(targetObj, seqInfoBuff_tmp, seqInfo[1]);
-	//
+
 	for(int n = 0; n < targetObj->TAP_Count; n++){
 		*seqInfoBuff_tmp = 0xA0;
 		seqInfoBuff_tmp += 5;
 	}
 	if(targetObj->adapterObj->Operate(targetObj->adapterObj, AINS_JTAG_SEQUENCE, targetObj->JTAG_SequenceCount, seqInfoBuff, CAST(uint8_t *, idCode)) == FALSE){
-		log_warn("Unable to execute instruction sequence.");
+		log_warn("Unable to execute get IDCODE instruction sequence.");
 		free(seqInfoBuff);
 		return FALSE;
 	}
@@ -390,6 +430,10 @@ BOOL target_JTAG_DR_Exchange(TargetObject *targetObj, uint16_t index, uint8_t co
 		log_warn("TDI data is too long.");
 		return FALSE;
 	}
+	if(count == 0){
+		log_warn("TDI data is zero length.");
+		return FALSE;
+	}
 	list_node_t *node = JTAG_NewInstruction(targetObj);
 	if(node == NULL){
 		return FALSE;
@@ -412,7 +456,7 @@ BOOL target_JTAG_Execute(TargetObject *targetObj){
 	BOOL result = FALSE;	// 函数结果
 	// 当前指令队列上面所有指令经过解析之后需要的空间大小
 	uint8_t *instrBuffer, *resultBuffer;
-	int instrBufferLen = 0, resultBufferLen = 0, instrCnt = 0;
+	int instrBufferLen = 0, resultBufferLen = 0;
 	// 创建迭代器
 	list_iterator_t *iterator = list_iterator_new(targetObj->jtagInstrQueue, LIST_HEAD);
 	if(iterator == NULL){
@@ -420,40 +464,77 @@ BOOL target_JTAG_Execute(TargetObject *targetObj){
 		goto EXIT_STEP_0;
 	}
 	list_node_t *node = list_iterator_next(iterator);
+	// 计算所有TAP的IR寄存器位数总和
+	int All_IR_Bits = 0, IR_InstrBytes = 0;
+	for(int n=0; n<targetObj->TAP_Count;n++){
+		All_IR_Bits += ACCESS_TAP_INFO_ARRAY(targetObj, TAP_INFO_IR_LEN, n);
+	}
+	// 计算一共有多少个8字节
+	int IR_LengthByte = All_IR_Bits >> 6;
+	// 算上头部和所有8个字节的数据
+	IR_InstrBytes += IR_LengthByte + (IR_LengthByte << 3);
+	// 取得剩余多少个位
+	IR_LengthByte = All_IR_Bits & 0x3f;
+	// 最终每一个IR指令的长度
+	IR_InstrBytes += ((IR_LengthByte + 7) >> 3) + 1;
+	// 当前target的TAP状态
+	enum JTAG_TAP_Status lastStatus = targetObj->currentStatus;
+
 	/**
-	 * 计算指令解析之后的长度
-	 * 每条指令只从SELECT-xR开始算，到UPDATE-xR状态时一共有多少byte的数据，因为指令执行之后都会停留在UPDATE-xR
-	 * 状态，从UPDATE-xR状态转换到SELECT-xR需要TMS输出1或者11，都可以用0x41(0x42) 0x00
-	 * 来表示。
-	 * SELECT-xR => SHIFT-xR TMS需要输出00，SHIFT-xR => UPDATE-xR TMS需要输出11
-	 * 需要0x02 0x00 0x42 0x00
+	 * FIXME  看！
+	 * go to Shift IR
+	 * go to Shift IR - 0
+	 * go to Shift IR - 1
+	 * go to Shift IR - 0
+	 * go to Exit IR  - 0
+	 * go to Update IR
 	 */
 
-	// 先计算从当前状态到SELECT-IR状态需要的时序
-	uint16_t seqInfoToSEL_DR = JTAG_Get_TMS_Sequence(targetObj->currentStatus, JTAG_TAP_IRSELECT);
-	instrBufferLen = JTAG_Cal_TMS_LevelStatus(seqInfoToSEL_DR >> 8, seqInfoToSEL_DR & 0xFF) << 1;
-	// FIXME 这里计算空间部分有问题，计算出来的空间不够，实际会产生溢出
 	for(; node; node = list_iterator_next(iterator)){
 		struct JTAG_Instr *instr = CAST(struct JTAG_Instr *, node->val);
-		// FIXME
-		instrBufferLen += 6 << 1;	// 从SELECT-xR 转一圈再到这个状态，需要的控制字节数
-		// 计算SHIFT状态有多少字节
+		uint16_t seqInfo;
+		/**
+		 * 两种指令都需要从Select-xR 到 Shift-xR
+		 * 再到 Update-xR，所以这两个变换需要4字节
+		 */
+		instrBufferLen += 4;
 		if(instr->type == JTAG_INS_EXCHANGE_DR){
+			seqInfo = JTAG_Get_TMS_Sequence(lastStatus, JTAG_TAP_DRSELECT);
+			instrBufferLen += JTAG_Cal_TMS_LevelStatus(seqInfo >> 8, seqInfo & 0xFF) << 1;
+			// 更新当前TAP状态为UPDATE-DR
+			lastStatus = JTAG_TAP_DRUPDATE;
+			// 这里不会超过64个数据位，所以只会存在一个数据头，将数据位总数圆整到字节
 			int dataByte = (instr->info.DR.bitCount + 7) >> 3;
-			resultBufferLen += dataByte;	// 计算 结果缓冲区的大小
 			instrBufferLen += dataByte + 1;	// 一个头部加数据
+			resultBufferLen += dataByte + 1;	// 计算 结果缓冲区的大小,+1 可能的数据分片
+
+			// 计算跳过前后bypass TAP的空间
+			int TAP_BypassBefore = instr->TAP_Index >> 6;
+			// 算上头部和所有8个字节的数据
+			instrBufferLen += TAP_BypassBefore + (TAP_BypassBefore << 3);
+			// 取得剩余多少个位
+			TAP_BypassBefore = instr->TAP_Index & 0x3f;
+			instrBufferLen += TAP_BypassBefore ? ((TAP_BypassBefore + 7) >> 3) + 1 : 0;
+
+			int TAP_BypassAfter = (targetObj->TAP_Count - instr->TAP_Index - 1) >> 6;
+			// 算上头部和所有8个字节的数据
+			instrBufferLen += TAP_BypassAfter + (TAP_BypassAfter << 3);
+			// 取得剩余多少个位
+			TAP_BypassAfter = (targetObj->TAP_Count - instr->TAP_Index - 1) & 0x3f;
+			instrBufferLen += TAP_BypassAfter ? ((TAP_BypassAfter + 7) >> 3) + 1 : 0;
+			// 一个跳出SHIFT-DR的控制字
+			instrBufferLen += 2;
 		}else{	// 写入IR寄存器，不管写入哪个，长度都是固定的
-			// 计算所有TAP的IR寄存器一共有多少位
-			int IR_LengthByte = 0;
-			for(int n=0; n<targetObj->TAP_Count;n++){
-				IR_LengthByte += ACCESS_TAP_INFO_ARRAY(targetObj, TAP_INFO_IR_LEN, n);
-			}
-			IR_LengthByte = (IR_LengthByte + 7) >> 3;	// ((all_IR_Length + 7) / 8) IR数据的字节数
-			instrBufferLen += IR_LengthByte + (IR_LengthByte + 7) >> 3;	// 字节数加上头部， 这儿没有错，一个头部最多可以发送64个byte，所以就是8字节
+			seqInfo = JTAG_Get_TMS_Sequence(lastStatus, JTAG_TAP_IRSELECT);
+			instrBufferLen += JTAG_Cal_TMS_LevelStatus(seqInfo >> 8, seqInfo & 0xFF) << 1;
+			// 更新当前TAP状态为UPDATE-IR
+			lastStatus = JTAG_TAP_IRUPDATE;
+			instrBufferLen += IR_InstrBytes + 2;	// 跳出控制字
 		}
 	}
 	// 开辟缓冲区空间
 	log_debug("Instruction buffer size: %d; Result buffer size: %d.", instrBufferLen, resultBufferLen);
+	//goto EXIT_STEP_1;
 	instrBuffer = malloc(instrBufferLen);
 	if(instrBuffer == NULL){
 		log_warn("Unable to create instruction buffer.");
@@ -464,26 +545,23 @@ BOOL target_JTAG_Execute(TargetObject *targetObj){
 		log_warn("Unable to create result buffer.");
 		goto EXIT_STEP_2;
 	}
+
+	uint8_t *currInstr = instrBuffer;
+	// 清空Sequence Counter
+	targetObj->JTAG_SequenceCount = 0;
 	// 开始下一轮迭代之前要复位迭代器
 	list_iterator_reset(iterator);
 	// 解析指令
 	node = list_iterator_next(iterator);
-	uint8_t *currInstr = instrBuffer;
-	// 清空Sequence Counter
-	targetObj->JTAG_SequenceCount = 0;
-	// 写入状态切换时序信息
-	uint16_t seqInfo = JTAG_Get_TMS_Sequence(targetObj->currentStatus, JTAG_TAP_IRSELECT);
-	currInstr += parseTMS(targetObj, currInstr, seqInfo);
-	targetObj->currentStatus = JTAG_TAP_IRSELECT;
-	log_debug("%d.", targetObj->JTAG_SequenceCount);
+	log_debug("curr status :%s.", JTAG_state2str(targetObj->currentStatus));
 	for(; node; node = list_iterator_next(iterator)){
 		struct JTAG_Instr *instr = CAST(struct JTAG_Instr *, node->val);
+		uint16_t seqInfo;
 		targetObj->currProcessing = node;	// 设置当前处理的node
 		if(instr->type == JTAG_INS_WRITE_IR){
-			log_debug("proc Write IR.");
-			uint16_t seqInfo = JTAG_Get_TMS_Sequence(targetObj->currentStatus, JTAG_TAP_IRSELECT);
+			// 写入状态切换时序信息
+			seqInfo = JTAG_Get_TMS_Sequence(targetObj->currentStatus, JTAG_TAP_IRSELECT);
 			currInstr += parseTMS(targetObj, currInstr, seqInfo);
-			log_debug("%d.", targetObj->JTAG_SequenceCount);
 			/* 现在TAP状态为SELECT-IR，转换到SHIFT-IR，TMS => 00
 			 * 所以需要填入 0x02 0x00
 			 */
@@ -503,7 +581,7 @@ BOOL target_JTAG_Execute(TargetObject *targetObj){
 			/*
 			 * 跳到UPDATE-IR状态，TMS => 11
 			 */
-			*currInstr++ = 0x42;
+			*currInstr++ = 0x41;
 			*currInstr++ = 0x00;
 			targetObj->JTAG_SequenceCount ++;
 			// 修改当前活动的TAP的状态
@@ -514,7 +592,7 @@ BOOL target_JTAG_Execute(TargetObject *targetObj){
 				log_info("Missing active TAP or currently activated TAP does not match the instruction.");
 				goto EXIT_STEP_3;
 			}
-			uint16_t seqInfo = JTAG_Get_TMS_Sequence(targetObj->currentStatus, JTAG_TAP_DRSELECT);
+			seqInfo = JTAG_Get_TMS_Sequence(targetObj->currentStatus, JTAG_TAP_DRSELECT);
 			currInstr += parseTMS(targetObj, currInstr, seqInfo);
 			/**
 			 * 现在TAP状态是SELECT-DR，转换到SHIFT-DR
@@ -527,7 +605,7 @@ BOOL target_JTAG_Execute(TargetObject *targetObj){
 			/**
 			 * 跳到UPDATE-DR
 			 */
-			*currInstr++ = 0x42;
+			*currInstr++ = 0x41;
 			*currInstr++ = 0x00;
 			targetObj->JTAG_SequenceCount ++;
 			// 修改当前状态
@@ -548,6 +626,7 @@ BOOL target_JTAG_Execute(TargetObject *targetObj){
 		struct JTAG_Instr *instr = CAST(struct JTAG_Instr *, node->val);
 		// 跳过IR类型的指令
 		if(instr->type == JTAG_INS_WRITE_IR) continue;
+		// TODO 处理分片
 		int byteCnt = (instr->info.DR.bitCount + 7) >> 3;	// 转换成字节
 		memcpy(instr->info.DR.data, resultBuff_tmp, byteCnt);
 		resultBuff_tmp += byteCnt;
@@ -559,6 +638,7 @@ BOOL target_JTAG_Execute(TargetObject *targetObj){
 	for(; node; node = list_iterator_next(iterator)){
 		list_remove(targetObj->jtagInstrQueue, node);
 	}
+	result = TRUE;
 EXIT_STEP_3:
 	free(resultBuffer);
 EXIT_STEP_2:

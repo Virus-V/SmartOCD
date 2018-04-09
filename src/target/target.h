@@ -33,7 +33,8 @@ struct JTAG_Instr{
 		uint32_t IR_Data;	// ir数据
 		struct {
 			uint8_t *data;	// 指向TDI将要输出的数据，LSB
-			uint8_t bitCount;
+			uint8_t bitCount:7;
+			uint8_t segment:1;
 		} DR;
 	} info;
 };
