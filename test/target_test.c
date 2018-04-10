@@ -56,6 +56,7 @@ int main(){
 	// 读取idcode
 	log_debug("target_JTAG_IR_Write:%d.", target_JTAG_IR_Write(targetObj, 0, 0xe));
 	//log_debug("target_JTAG_IR_Write:%d.", target_JTAG_IR_Write(targetObj, 1, 0x55));
+
 	log_debug("target_JTAG_DR_Exchange:%d.", target_JTAG_DR_Exchange(targetObj, 0, 32, CAST(uint8_t *, &idCode[0])));
 	log_debug("target_JTAG_Execute:%d.", target_JTAG_Execute(targetObj));
 	log_debug("0x%08X, 0x%08X.", idCode[0], idCode[1]);

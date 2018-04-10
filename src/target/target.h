@@ -32,6 +32,7 @@ struct JTAG_Instr{
 	union {
 		uint32_t IR_Data;	// ir数据
 		struct {
+			int length;	// 数据进行编码后的长度
 			uint8_t *data;	// 指向TDI将要输出的数据，LSB
 			uint8_t bitCount:7;
 			uint8_t segment:1;
@@ -48,12 +49,8 @@ typedef struct TargetObject TargetObject;
 struct TargetObject {
 	AdapterObject *adapterObj;	// Adapter对象
 	enum JTAG_TAP_Status currentStatus;	// TAP状态机当前状态
-	/**
-	 * TAP_actived:当前激活的TAP
-	 * TAP_Count:JTAG扫描链上有多少个TAP
-	 * TAP_Info:所有TAP的信息和辅助信息
-	 */
 	int TAP_actived;
+	int IR_Bytes;	// IR固定字节
 	uint16_t TAP_Count, *TAP_Info;
 	list_t *jtagInstrQueue;	// JTAG指令队列，元素类型：struct JTAG_Instr
 	list_node_t *currProcessing;	// 下一个将要处理的指令

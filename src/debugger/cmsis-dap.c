@@ -585,7 +585,7 @@ static BOOL DAP_SWJ_Clock (uint8_t *respBuff, AdapterObject *adapterObj, uint32_
  * data ：时序表示数据
  * response：TDO返回数据
  */
-// TODO 对数据包进行分片，并测试，检查是否是jtag状态
+// XXX 对数据包进行分片，并测试，检查是否是jtag状态
 static BOOL DAP_JTAG_Sequence(uint8_t *respBuff, AdapterObject *adapterObj, int sequenceCount, uint8_t *data, uint8_t *response){
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
 	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
@@ -611,7 +611,7 @@ MAKE_PACKT:
 		uint8_t tckCount = data[inputIdx] & 0x3f;
 		tckCount = tckCount ? tckCount : 64;
 		uint8_t tdiByte = (tckCount + 7) >> 3;	// 将TCK个数圆整到字节，表示后面跟几个byte的tdi数据
-		log_debug("SeqInfo:0x%02x, tckCount:%d, tdiByte:%d.", data[inputIdx], tckCount, tdiByte);
+		//log_debug("SeqInfo:0x%02x, tckCount:%d, tdiByte:%d.", data[inputIdx], tckCount, tdiByte);
 		// 如果当前数据长度加上tdiByte之后大于包长度，+3的意思是两个指令头部和SeqInfo字节
 		if(sendPayloadLen + tdiByte + 3 > cmsis_dapObj->PacketSize){
 			break;
@@ -636,8 +636,8 @@ MAKE_PACKT:
 	memcpy(sendPackBuff + 2, data, sendPayloadLen);
 	DAP_EXCHANGE_DATA(adapterObj, sendPackBuff,  sendPayloadLen + 2, respBuff);
 	log_debug("Trasmission load: Send %d bytes, receive %d bytes.", sendPayloadLen, readPayloadLen);
-	misc_PrintBulk(sendPackBuff, sendPayloadLen + 2, 8);
-	misc_PrintBulk(respBuff, readPayloadLen + 2, 8);
+	//misc_PrintBulk(sendPackBuff, sendPayloadLen + 2, 8);
+	//misc_PrintBulk(respBuff, readPayloadLen + 2, 8);
 	if(respBuff[1] == DAP_OK){
 		// 拷贝数据
 		if(response){

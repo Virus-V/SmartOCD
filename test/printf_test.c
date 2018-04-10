@@ -12,7 +12,7 @@
 #include "smart_ocd.h"
 #include "target/JTAG.h"
 
-#define GET_N_BIT_LAST_ONE(pos,n) ((*(CAST(uint8_t *, (pos)) + (((n)-1)>>3)) >> (((n)-1) & 0x7)) & 0x1)
+#define GET_Nth_BIT(pos,n) ((*(CAST(uint8_t *, (pos)) + (((n)-1)>>3)) >> (((n)-1) & 0x7)) & 0x1)
 
 int get_last_bit(uint8_t *data, int n){
 	uint8_t x = data[n >> 3];
@@ -52,12 +52,12 @@ char* itoa(int num, char *str, int radix) {
 }
 
 int main(){
-	uint32_t tms_seq;
+	uint8_t tms_seq[6] = {0xab,0xcd,0xef,0xad,0xec,0xdd};
 	char str[64];
-	tms_seq = 0xa5000f0fu;
-	printf("%s\n", itoa(tms_seq, str, 2));
-	for(int n=32; n>0; n--){
-		printf("%d", GET_N_BIT_LAST_ONE(&tms_seq, n));
+	//printf("%s\n", itoa(tms_seq, str, 2));
+	for(int n=1; n<=48; n++){
+		printf("%d", GET_Nth_BIT(&tms_seq, n));
+		if(n % 4 == 0)printf(" ");
 	}
 	printf("\n");
 	return 0;
