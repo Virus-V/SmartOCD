@@ -441,56 +441,6 @@ static BOOL DAPRegister(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t in
 }
 
 /**
- * JTAG ID Code
- * 获得Scan Chain里面索引为index设备的ID Code
- * 注意：使用该函数之前要先调用JTAG_IDCODE_Configure
- */
-static BOOL JTAG_IDcode(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t index, uint32_t *reg_inout){
-	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
-	// 使状态机进入RUN-TEST/IDLE状态
-	uint8_t DAPTransferPack[] = {ID_DAP_JTAG_Sequence, 2,
-			0x45, 0x00, 0x01, 0x00
-	};
-	DAP_EXCHANGE_DATA(adapterObj, DAPTransferPack, sizeof(DAPTransferPack), respBuff);
-	// 获得IDCODE
-	DAPTransferPack[0] = ID_DAP_JTAG_IDCODE;
-	DAPTransferPack[1] = index;
-	DAP_EXCHANGE_DATA(adapterObj, DAPTransferPack, 2, respBuff);
-	// 检查返回值
-	if(respBuff[1] == DAP_OK){
-		*reg_inout = *CAST(uint32_t *, respBuff+2);
-		return TRUE;
-	}else{
-		log_warn("Get index %d JTAG ID Code Failed.", index);
-		return FALSE;
-	}
-}
-
-/**
- * 设置scanchain中设备数量和对应设备的IR Length信息
- * 注意：在调用JTAG_IDcode之前要先调用该函数
- */
-static BOOL JTAG_IDCODE_Configure(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t count, uint8_t *irLen){
-	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
-	uint8_t DAPTransferPack[10] = {ID_DAP_JTAG_Configure, 0};	// 2 + 8 一般jtag scan chain最大有8个
-	if(count > 8){
-		log_warn("Devices count more than 8!");
-		return FALSE;
-	}
-	DAPTransferPack[1] = count;
-	// 复制irlen data
-	memcpy(DAPTransferPack+2, irLen, count);
-	DAP_EXCHANGE_DATA(adapterObj, DAPTransferPack, count + 2, respBuff);
-	// 检查返回值
-	if(respBuff[1] == DAP_OK){
-		return TRUE;
-	}else{
-		log_warn("Set IR Length Failed.");
-		return FALSE;
-	}
-}
-
-/**
  * DAP_WriteAbort写入ABORT寄存器
  * index：在JTAG模式下，写入index索引的ABORT寄存器，SWD模式下无效
  * abort：32位的Abort值
@@ -534,19 +484,19 @@ static BOOL DAP_HostStatus(uint8_t *respBuff, AdapterObject *adapterObj, int sta
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
 	uint8_t DAP_HostStatusPack[] = {ID_DAP_HostStatus, 0, 0};
 	switch(status){
-	case DAP_STATUS_CONNECTED:
+	case ADAPTER_STATUS_CONNECTED:
 		DAP_HostStatusPack[1] = 0;
 		DAP_HostStatusPack[2] = 1;
 		break;
-	case DAP_STATUS_DISCONNECT:
+	case ADAPTER_STATUS_DISCONNECT:
 		DAP_HostStatusPack[1] = 0;
 		DAP_HostStatusPack[2] = 0;
 		break;
-	case DAP_STATUS_RUNING:
+	case ADAPTER_STATUS_RUNING:
 		DAP_HostStatusPack[1] = 1;
 		DAP_HostStatusPack[2] = 1;
 		break;
-	case DAP_STATUS_IDLE:
+	case ADAPTER_STATUS_IDLE:
 		DAP_HostStatusPack[1] = 1;
 		DAP_HostStatusPack[2] = 0;
 		break;
@@ -588,6 +538,8 @@ static BOOL DAP_SWJ_Clock (uint8_t *respBuff, AdapterObject *adapterObj, uint32_
 // XXX 对数据包进行分片，并测试，检查是否是jtag状态
 static BOOL DAP_JTAG_Sequence(uint8_t *respBuff, AdapterObject *adapterObj, int sequenceCount, uint8_t *data, uint8_t *response){
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
+	// 判断当前是否是JTAG模式
+	if(adapterObj->currTrans != JTAG) return FALSE;
 	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	assert(cmsis_dapObj->PacketSize != 0);
 	// 发送包缓冲区
@@ -738,7 +690,6 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
 	va_list parames;
 	BOOL result = FALSE;
-	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	va_start(parames, operate);	// 确定可变参数起始位置
 	// 根据指令选择操作
 	switch(operate){
@@ -866,24 +817,6 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 			uint8_t index = (uint8_t)va_arg(parames, int);
 			uint32_t abort = (uint32_t)va_arg(parames, int);
 			result = CMDAP_FUN_WARP(adapterObj, DAP_WriteAbort, adapterObj, index, abort);
-		}while(0);
-		break;
-
-	case CMDAP_JTAG_IDCODE:
-		log_trace("Execution command: JTAG IDCODE.");
-		do{
-			uint8_t dap_index = (uint8_t)va_arg(parames, int);
-			uint32_t *idCode = va_arg(parames, uint32_t *);
-			result = CMDAP_FUN_WARP(adapterObj, JTAG_IDcode, adapterObj, dap_index, idCode);
-		}while(0);
-		break;
-
-	case CMDAP_JTAG_CONFIGURE:
-		log_trace("Execution command: JTAG CONFIGURE.");
-		do{
-			uint8_t count = (uint8_t)va_arg(parames, int);
-			uint8_t *irLen = va_arg(parames, uint8_t *);
-			result = CMDAP_FUN_WARP(adapterObj, JTAG_IDCODE_Configure, adapterObj, count, irLen);
 		}while(0);
 		break;
 	default:

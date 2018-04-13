@@ -131,6 +131,14 @@ enum connType {
 	SERIAL_PORT	// 串行口
 };
 
+// CMSIS-DAP Status灯
+enum adapterStatus {
+	ADAPTER_STATUS_CONNECTED,	// Adapter已连接
+	ADAPTER_STATUS_DISCONNECT,	// Adapter已断开
+	ADAPTER_STATUS_RUNING,		// Adapter正在运行
+	ADAPTER_STATUS_IDLE,		// Adapter空闲
+};
+
 // 仿真器的连接方式，比如使用USB、以太网、串口等等
 // 此处先实现使用usb协议的仿真器类型
 struct adapterConnector{

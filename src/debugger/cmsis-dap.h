@@ -135,14 +135,6 @@
 // 判断CMSIS-DAP是否支持某功能
 #define CMSIS_DAP_HAS_CAPALITY(pc,cap) (((pc)->capablityFlag & (cap)) == (cap))
 
-// CMSIS-DAP Status灯
-enum cmsis_dapStatus {
-	DAP_STATUS_CONNECTED,	// DAP已连接
-	DAP_STATUS_DISCONNECT,	// DAP已断开
-	DAP_STATUS_RUNING,		// DAP正在运行
-	DAP_STATUS_IDLE,		// DAP空闲
-};
-
 // CMSIS-DAP操作指令
 enum cmsis_dapInstr {
 	CMDAP_TRANSFER_CONFIG = AINS_COMM_LAST,	// 接着公共指令排列

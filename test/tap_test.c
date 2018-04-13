@@ -46,23 +46,19 @@ int main(){
 	// 复位TAP，这句可能没必要
 	TAP_Reset(tapObj, FALSE, 0);
 	// 声明TAP
-	// TODO 测试irlen长度为9会怎么样
-	uint16_t irLens[] = {9, 9, 4, 9};
-	log_debug("target_JTAG_Set_TAP_Info:%d.", TAP_Set_Info(tapObj, 4, irLens));
+	// 测试irlen长度为9会怎么样？ 正常
+	uint16_t irLens[] = {4, 5};
+	log_debug("target_JTAG_Set_TAP_Info:%d.", TAP_Set_Info(tapObj, 2, irLens));
 	uint32_t idCode[4] = {0, 0, 0, 0};
 	TAP_Get_IDCODE(tapObj, idCode);
-	//log_debug("0x%08X, 0x%08X, 0x%08X, 0x%08X.", idCode[0], idCode[1], idCode[2], idCode[3]);
+	log_debug("0x%08X, 0x%08X.", idCode[0], idCode[1]);
 	// 读取idcode
-	for(int t = 0; t < 4; t++){
-		for(int l=7;l<26;l++){
-			idCode[0] = 0;
-			log_debug("target_JTAG_IR_Write:%d.", TAP_IR_Write(tapObj, t, 0x0));
-			// DR长度如果为9则会出现错误
-			log_debug("target_JTAG_DR_Exchange:%d.", TAP_DR_Exchange(tapObj, t, l, CAST(uint8_t *, &idCode[0])));
-			log_debug("target_JTAG_Execute:%d.", TAP_Execute(tapObj));
-			log_debug("0x%08X.", idCode[0]);
-		}
-	}
+	idCode[0] = 0;
+	log_debug("target_JTAG_IR_Write:%d.", TAP_IR_Write(tapObj, 0, 0xe));
+	// DR长度如果为9则会出现错误
+	log_debug("target_JTAG_DR_Exchange:%d.", TAP_DR_Exchange(tapObj, 0, 32, CAST(uint8_t *, &idCode[0])));
+	log_debug("target_JTAG_Execute:%d.", TAP_Execute(tapObj));
+	log_debug("0x%08X.", idCode[0]);
 EXIT_STEP_2:
 	// 释放对象
 	__DESTORY(TAP)(tapObj);

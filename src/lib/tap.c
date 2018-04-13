@@ -429,6 +429,7 @@ BOOL TAP_Get_IDCODE(TAPObject *tapObj, uint32_t *idCode){
 	// 返回RESET状态
 	*seqInfoBuff_tmp++ = 0x45;
 	*seqInfoBuff_tmp++ = 0x0;
+	tapObj->JTAG_SequenceCount++;
 	if(tapObj->adapterObj->Operate(tapObj->adapterObj, AINS_JTAG_SEQUENCE, tapObj->JTAG_SequenceCount, seqInfoBuff, CAST(uint8_t *, idCode)) == FALSE){
 		log_warn("Unable to execute get IDCODE instruction sequence.");
 		free(seqInfoBuff);

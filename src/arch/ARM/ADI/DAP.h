@@ -11,7 +11,7 @@
 #include "smart_ocd.h"
 #include "misc/list/list.h"
 #include "debugger/adapter.h"
-#include "lib/JTAG.h"
+#include "lib/tap.h"
 
 /*
  * Copyright (c) 2013-2016 ARM Limited. All rights reserved.
@@ -207,11 +207,10 @@ struct adiv5_AP{
 // DAP对象
 typedef struct DAPObject DAPObject;
 struct DAPObject{
-	//TargetObject targetObj;
+	TAPObject tapObj;	// 继承与TAP
 	uint8_t Version;	// DAP版本号
 	uint32_t CTRL_STAT_Reg;	// 当前CTRL/STAT寄存器
 	uint32_t SelectReg;	// 当前Select寄存器
-
 };
 
 // DP IDR Register 解析
