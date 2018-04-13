@@ -60,7 +60,7 @@ clean:
 	
 # 重置项目，删除所有动态生成的文件
 reset:
-	$(RM) $(subst .c,.d,$(ALL_SRC_FILES) $(ENTRY_SRC_FILE) $(TEST_SRC_FILES))
+	$(RM) $(subst .c,.d,$(SMARTOCD_SRC_FILES) $(SMARTOCD_ENTRY_SRC_FILE) $(TEST_SRC_FILES))
 
 -include ${patsubst %.c,%.d,$(SMARTOCD_ENTRY_SRC_FILE) $(SMARTOCD_SRC_FILES) $(TEST_SRC_FILES)}
 

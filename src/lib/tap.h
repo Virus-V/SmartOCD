@@ -1,17 +1,17 @@
 /*
- * target.h
+ * tap.h
  *
  *  Created on: 2018-3-29
  *      Author: virusv
  */
 
-#ifndef SRC_TARGET_TARGET_H_
-#define SRC_TARGET_TARGET_H_
+#ifndef SRC_LIB_TAP_H_
+#define SRC_LIB_TAP_H_
 
 #include "smart_ocd.h"
 #include "misc/list/list.h"
 #include "debugger/adapter.h"
-#include "target/JTAG.h"
+#include "lib/JTAG.h"
 
 enum JTAG_instructions{
 	/**
@@ -40,11 +40,11 @@ struct JTAG_Instr{
 };
 
 /**
- * Target对象
- * 对外开放jTAG和SWD通用接口
+ * TAP对象
+ * 提供jTAG通用接口
  */
-typedef struct TargetObject TargetObject;
-struct TargetObject {
+typedef struct TAPObject TAPObject;
+struct TAPObject {
 	AdapterObject *adapterObj;	// Adapter对象
 	enum JTAG_TAP_Status currentStatus;	// TAP状态机当前状态
 	int TAP_actived;
@@ -55,17 +55,17 @@ struct TargetObject {
 	int JTAG_SequenceCount;	// 一共有多少个Sequence
 };
 
-// Target对象构造函数和析构函数
-BOOL __CONSTRUCT(Target)(TargetObject *targetObj, AdapterObject *adapterObj);
-void __DESTORY(Target)(TargetObject *targetObj);
+// TAP对象构造函数和析构函数
+BOOL __CONSTRUCT(TAP)(TAPObject *tapObj, AdapterObject *adapterObj);
+void __DESTORY(TAP)(TAPObject *tapObj);
 
-BOOL target_SetClock(TargetObject *targetObj, uint32_t clockHz);
-BOOL target_SelectTrasnport(TargetObject *targetObj, enum transportType type);
-BOOL target_JTAG_TAP_Reset(TargetObject *targetObj, BOOL hard, uint32_t pinWait);
-BOOL target_JTAG_Set_TAP_Info(TargetObject *targetObj, uint16_t tapCount, uint16_t *IR_Len);
-BOOL target_JTAG_Get_IDCODE(TargetObject *targetObj, uint32_t *idCode);
-BOOL target_JTAG_IR_Write(TargetObject *targetObj, uint16_t index, uint32_t ir);
-BOOL target_JTAG_DR_Exchange(TargetObject *targetObj, uint16_t index, uint8_t count, uint8_t *data);
-BOOL target_JTAG_Execute(TargetObject *targetObj);
+BOOL TAP_SetClock(TAPObject *tapObj, uint32_t clockHz);
+BOOL TAP_SelectTrasnport(TAPObject *tapObj, enum transportType type);
+BOOL TAP_Reset(TAPObject *tapObj, BOOL hard, uint32_t pinWait);
+BOOL TAP_Set_Info(TAPObject *tapObj, uint16_t tapCount, uint16_t *IR_Len);
+BOOL TAP_Get_IDCODE(TAPObject *tapObj, uint32_t *idCode);
+BOOL TAP_IR_Write(TAPObject *tapObj, uint16_t index, uint32_t ir);
+BOOL TAP_DR_Exchange(TAPObject *tapObj, uint16_t index, uint8_t count, uint8_t *data);
+BOOL TAP_Execute(TAPObject *tapObj);
 
-#endif /* SRC_TARGET_TARGET_H_ */
+#endif /* SRC_LIB_TAP_H_ */

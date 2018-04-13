@@ -9,7 +9,6 @@
 #define SRC_TARGET_JTAG_H_
 
 #include "smart_ocd.h"
-#include "misc/list/list.h"
 
 enum JTAG_TAP_Status {
 	/* 特殊状态 */

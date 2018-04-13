@@ -11,7 +11,7 @@
 #include "smart_ocd.h"
 #include "misc/list/list.h"
 #include "debugger/adapter.h"
-#include "target/JTAG.h"
+#include "lib/JTAG.h"
 
 /*
  * Copyright (c) 2013-2016 ARM Limited. All rights reserved.

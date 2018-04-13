@@ -5,7 +5,7 @@
  *      Author: virusv
  */
 
-#include "target/JTAG.h"
+#include "lib/JTAG.h"
 #include "misc/log.h"
 
 // 判断一个状态是不是在某个阶段中
