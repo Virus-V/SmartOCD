@@ -88,12 +88,10 @@ static int parseTMS(TargetObject *targetObj, uint8_t *buff, uint16_t seqInfo){
 	// sequence 个数+1
 	targetObj->JTAG_SequenceCount ++;
 	while(bitCount--){
-		// *buff |= (TMS_Seq & 0x1) << 6;
 		(*buff)++;
 		TMS_Seq >>= 1;
 		if( bitCount && (((TMS_Seq & 0x1) << 6) ^ (*buff & 0x40))){
 			*++buff = 0;
-			//*++buff = 0;	// Sequence
 			*++buff = (TMS_Seq & 0x1) << 6;
 			targetObj->JTAG_SequenceCount ++;
 			writeCount += 2;
@@ -111,7 +109,6 @@ static int parseTMS(TargetObject *targetObj, uint8_t *buff, uint16_t seqInfo){
  * 返回：写入buff的长度，失败-1
  * 此函数会将TAP改变成EXIT1-IR状态
  */
-// TODO 此函数需要测试
 static int build_IR_InstrData(TargetObject *targetObj, uint8_t *buff, uint16_t index, uint32_t IR_Data){
 	assert(targetObj != NULL && buff != NULL);
 	int all_IR_Bytes, all_IR_Bits = 0;
@@ -143,12 +140,12 @@ static int build_IR_InstrData(TargetObject *targetObj, uint8_t *buff, uint16_t i
 	// 将最低填充位置1
 	// 1111 1101 1111 1111
 	IR_Padded |= (0x1 << padLen) - 1;
-	// XXX 如果出问题，这儿可能性最大
+	// 写入数据，同时避免内存越界
 	memcpy(tmp_buff + seekLen, &IR_Padded, (all_IR_Bytes - seekLen  > 4 ? 4 : all_IR_Bytes - seekLen));
 	// 写入buff
 	int writeCnt = 0;
 	// -1 是不发送最后一位数据，因为最后一位发送的同时也同时退出SHIFT-IR状态
-	// XXX 如果all_IR_Bits = 65的时候呢.. 测试通过
+	// ISSUE: 如果all_IR_Bits = 65的时候呢.. 测试通过
 	for(int n=all_IR_Bits - 1,readCnt=0; n>0;){
 		if(n >= 64){	// 当生成的时序字节小于8个
 			*buff++ = 0x0;	// TMS=0;TDO Capture=FALSE; 64Bit
@@ -202,6 +199,7 @@ static int build_DR_InstrData(TargetObject *targetObj, uint8_t *buff, struct JTA
 			n = 0;
 		}
 	}
+
 	// 记录最后一个seqInfo的控制字节
 	uint8_t *seqInfo_ptr = buff;
 	// info.DR.bitCount 不会大于64
@@ -233,21 +231,36 @@ static int build_DR_InstrData(TargetObject *targetObj, uint8_t *buff, struct JTA
 			n = 0;
 		}
 	}
+	/**
+	 * ISSUE:
+	 * 当bitCount=9,17,25,33... 8*n+1时，将会多一个数据
+	 * 例如：当等于9时，生成：
+	 * 03 00 88 00 00 C1 00
+	 * 应该生成：
+	 * 03 00 88 00 C1 00
+	 * 而且该问题只会出现在读取索引为最后一个TAP的DR时
+	 */
 	// 重新修改最后一个数据
 	uint8_t cnt = (*seqInfo_ptr) & 0x3f;
 	if(cnt == 1){ // 如果最后一个时序控制字是输出1个字节，那么直接修改这个控制字，将TMS置高，跳出SHIFT-DR状态
 		*seqInfo_ptr |= 0x40;
 	}else{	// 如果最后一个控制字输出多个二进制位，则将二进制位总数减1，并获得最后的一个二进制位，再附加一个跳出SHIFT-DR状态的控制字
-		(*seqInfo_ptr)--;	// 长度减1
 		targetObj->JTAG_SequenceCount ++;
+		(*seqInfo_ptr)--;	// 长度减1
+		// 先获得最后一个二进制位，因为后面可能会将最后一个字节覆盖
+		uint8_t last_bit = GET_Nth_BIT(seqInfo_ptr + 1, cnt) & 0xff;
+		if((cnt & 0x7) == 1){	// 当bitCount=9,17,25,33... 8*n+1时，将会多一个数据
+			buff--; // 将多的那个数据覆盖掉
+			writeCnt--;	// 写入数据长度减一
+		}
 		if(*seqInfo_ptr & 0x80){
 			instr->info.DR.segment = 1;	// 表示这个指令的数据被切分
 			instr->info.DR.segment_pos = cnt - 1;	//最后一位的位置，从0开始索引
 			*buff++ = 0xc1;	// TDO Capture， TMS=1，TDI Count=1
-			*buff++ = GET_Nth_BIT(seqInfo_ptr + 1, cnt) & 0xff;
+			*buff++ = last_bit;
 		}else{
 			*buff++ = 0x41;	// TMS=1，TDI Count=1
-			*buff++ = GET_Nth_BIT(seqInfo_ptr + 1, cnt) & 0xff;
+			*buff++ = last_bit;
 		}
 		writeCnt += 2;
 	}
@@ -609,6 +622,7 @@ BOOL target_JTAG_Execute(TargetObject *targetObj){
 			*currInstr++ = 0x02;
 			*currInstr++ = 0x00;
 			targetObj->JTAG_SequenceCount ++;
+
 			// TAP状态SHIFT-DR
 			currInstr += build_DR_InstrData(targetObj, currInstr, instr);
 			// 修改当前状态位EXIT1-DR状态
@@ -631,11 +645,14 @@ BOOL target_JTAG_Execute(TargetObject *targetObj){
 		if(instr->type == JTAG_INS_WRITE_IR) continue;
 		int byteCnt = (instr->info.DR.bitCount + 7) >> 3;
 		memcpy(instr->info.DR.data, resultBuff_tmp, byteCnt);
-		// 如果分片，大端字节序下面将不可用
-		if(instr->info.DR.segment){
-			// MSB
-			*(instr->info.DR.data + byteCnt - 1) |= *(resultBuff_tmp + byteCnt) << (instr->info.DR.segment_pos & 0x7);
-			resultBuff_tmp++;	// 因为分片了，所以多出一个数据位
+		// 如果bitCount不等于8*n+1时就要处理分片
+		if((instr->info.DR.bitCount & 0x7) != 1){
+			// 如果分片，大端字节序下面将不可用
+			if(instr->info.DR.segment){
+				// MSB
+				*(instr->info.DR.data + byteCnt - 1) |= *(resultBuff_tmp + byteCnt) << (instr->info.DR.segment_pos & 0x7);
+				resultBuff_tmp++;	// 因为分片了，所以多出一个数据位
+			}
 		}
 		resultBuff_tmp += byteCnt;
 	}

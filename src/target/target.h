@@ -8,12 +8,10 @@
 #ifndef SRC_TARGET_TARGET_H_
 #define SRC_TARGET_TARGET_H_
 
-
 #include "smart_ocd.h"
 #include "misc/list/list.h"
 #include "debugger/adapter.h"
 #include "target/JTAG.h"
-#include "arch/ARM/ADI/adiv5_SWD.h"
 
 enum JTAG_instructions{
 	/**
@@ -55,8 +53,6 @@ struct TargetObject {
 	list_t *jtagInstrQueue;	// JTAG指令队列，元素类型：struct JTAG_Instr
 	list_node_t *currProcessing;	// 下一个将要处理的指令
 	int JTAG_SequenceCount;	// 一共有多少个Sequence
-	// TODO SWD部分
-
 };
 
 // Target对象构造函数和析构函数
