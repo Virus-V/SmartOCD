@@ -536,7 +536,7 @@ BOOL TAP_Execute(TAPObject *tapObj){
 		}
 	}
 	// 开辟缓冲区空间
-	log_debug("Instr buffer size: %d; Result buffer size: %d.", instrBufferLen, resultBufferLen);
+	log_trace("Instr buffer size: %d; Result buffer size: %d.", instrBufferLen, resultBufferLen);
 	//goto EXIT_STEP_1;
 	instrBuffer = malloc(instrBufferLen);
 	if(instrBuffer == NULL){

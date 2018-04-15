@@ -585,7 +585,7 @@ MAKE_PACKT:
 	sendPackBuff[1] = seqCount;	// sequence count
 	memcpy(sendPackBuff + 2, data, sendPayloadLen);
 	DAP_EXCHANGE_DATA(adapterObj, sendPackBuff,  sendPayloadLen + 2, respBuff);
-	log_debug("Trasmission load: Send %d bytes, receive %d bytes.", sendPayloadLen, readPayloadLen);
+	log_trace("Trasmission load: Send %d bytes, receive %d bytes.", sendPayloadLen, readPayloadLen);
 	//misc_PrintBulk(sendPackBuff, sendPayloadLen + 2, 8);
 	//misc_PrintBulk(respBuff, readPayloadLen + 2, 8);
 	if(respBuff[1] == DAP_OK){

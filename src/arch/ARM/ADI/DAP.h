@@ -290,18 +290,21 @@ struct DAPObject{
 			uint32_t AP_Sel : 8;
 		} info;
 	}SelectReg;	// 当前Select寄存器
+	int retry;	// 接收到WAIT时重试次数
+	// TODO 错误处理的回调函数
+	// WDATAERR,STICKYERR, STICKYCMP, STICKYORUN
+
 };
 
 // 构造和析构函数
 BOOL __CONSTRUCT(DAP)(DAPObject *dapObj, AdapterObject *adapterObj);
 void __DESTORY(DAP)(DAPObject *dapObj);
 
-uint32_t DAP_DP_Read(DAPObject *dapObj, uint16_t index, uint8_t reg);
+BOOL DAP_DP_Read(DAPObject *dapObj, uint16_t index, uint8_t reg, uint32_t *data_out);
 BOOL DAP_DP_Write(DAPObject *dapObj, uint16_t index, uint8_t reg, uint32_t data);
-uint32_t DAP_AP_Read(DAPObject *dapObj);
-BOOL DAP_AP_Write(DAPObject *dapObj);
-// 选择AP
-BOOL DAP_AP_Select(DAPObject *dapObj);
+BOOL DAP_AP_Read(DAPObject *dapObj, uint16_t index, uint8_t reg, uint32_t *data_out);
+BOOL DAP_AP_Write(DAPObject *dapObj, uint16_t index, uint8_t reg, uint32_t data);
+BOOL DAP_AP_Select(DAPObject *dapObj, uint16_t index, uint8_t apIdx);
 
 // 队列操作
 BOOL DAP_Queue_DP_Read(DAPObject *dapObj);
