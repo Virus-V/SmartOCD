@@ -10,15 +10,7 @@
 #include <stdint.h>
 
 #include "smart_ocd.h"
-#include "target/JTAG.h"
-
-#define GET_Nth_BIT(pos,n) ((*(CAST(uint8_t *, (pos)) + (((n)-1)>>3)) >> (((n)-1) & 0x7)) & 0x1)
-
-int get_last_bit(uint8_t *data, int n){
-	uint8_t x = data[n >> 3];
-	uint8_t y = n & 0x7;
-	return (x >> (y)) & 0x1;
-}
+#include "misc/misc.h"
 
 char* itoa(int num, char *str, int radix) {
 	/*索引表*/
@@ -51,14 +43,47 @@ char* itoa(int num, char *str, int radix) {
 	return str;
 }
 
-int main(){
-	uint8_t tms_seq[6] = {0xab,0xcd,0xef,0xad,0xec,0xdd};
-	char str[64];
-	//printf("%s\n", itoa(tms_seq, str, 2));
-	for(int n=1; n<=48; n++){
-		printf("%d", GET_Nth_BIT(&tms_seq, n));
-		if(n % 4 == 0)printf(" ");
+#define MAKE_nPACC_CHAIN_DATA(buff,data,ctrl) {	\
+	uint32_t data_t = data;					\
+	uint8_t msb3 = ((data_t) & 0xe0) >> 5;	\
+	uint8_t lsb3 = (ctrl) & 0x7;			\
+	int n;									\
+	for(n=0; n<4; n++){						\
+		*(CAST(uint8_t *,(buff)) + n) = (((data_t) & 0xff) << 3) | lsb3;	\
+		(data_t) >>= 8;						\
+		lsb3 = msb3;						\
+		msb3 = ((data_t) & 0xe0) >> 5;		\
+	}										\
+	*(CAST(uint8_t *,(buff)) + n) = lsb3;	\
+}
+
+#define GET_nPACC_CHAIN_DATA(buff) ({	\
+	uint8_t *data_t = CAST(uint8_t *, (buff)), lsb3;	\
+	uint32_t tmp = 0;	\
+	for(int n=0;n<4;n++){	\
+		lsb3 = (data_t[n+1] & 0x7) << 5;	\
+		tmp |= ((data_t[n] >> 3) | lsb3) << (n << 3);	\
+	}	\
+	tmp;	\
+})
+
+uint32_t getdata(uint8_t *data){
+	uint8_t *data_t = CAST(uint8_t *, data);
+	uint8_t lsb3;
+	uint32_t tmp = 0;
+	for(int n=0;n<4;n++){
+		lsb3 = (data_t[n+1] & 0x7) << 5;
+		tmp |= ((data_t[n] >> 3) | lsb3) << (n << 3);
 	}
-	printf("\n");
+	return tmp;
+}
+
+int main(){
+	uint8_t data[5];
+	uint32_t tmp;
+	MAKE_nPACC_CHAIN_DATA(data, 0xdeadbeefu, 0x6);
+	tmp = GET_nPACC_CHAIN_DATA(data);
+	misc_PrintBulk(data, 5, 5);
+	printf("0x%x\n", tmp);
 	return 0;
 }

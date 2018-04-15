@@ -1,14 +1,15 @@
 /*
- * target_test.c
+ * dap_test.c
  *
- *  Created on: 2018-3-30
+ *  Created on: 2018-4-14
  *      Author: virusv
  */
+
 
 #include <stdio.h>
 #include "misc/log.h"
 #include "debugger/cmsis-dap.h"
-#include "lib/TAP.h"
+#include "arch/ARM/ADI/DAP.h"
 
 extern int print_bulk(char *data, int length, int rowLen);
 
@@ -16,12 +17,12 @@ uint16_t vids[] = {0xc251, 0};
 uint16_t pids[] = {0xf001, 0};
 
 int main(){
-	TAPObject *tapObj;
+	DAPObject *dapObj;
 	struct cmsis_dap *cmsis_dapObj;
 	log_set_level(LOG_DEBUG);
-	tapObj = calloc(1, sizeof(TAPObject));
-	if(tapObj == NULL){
-		log_fatal("failed to new target.");
+	dapObj = calloc(1, sizeof(DAPObject));
+	if(dapObj == NULL){
+		log_fatal("failed to new dap object.");
 		return 1;
 	}
 	cmsis_dapObj = NewCMSIS_DAP();
@@ -35,7 +36,7 @@ int main(){
 		goto EXIT_STEP_1;
 	}
 	// 同时对cmsis-dap进行初始化
-	if(__CONSTRUCT(TAP)(tapObj, GET_ADAPTER(cmsis_dapObj)) == FALSE){
+	if(__CONSTRUCT(DAP)(dapObj, GET_ADAPTER(cmsis_dapObj)) == FALSE){
 		log_fatal("Target initialization failed.");
 		goto EXIT_STEP_1;
 	}
@@ -44,28 +45,34 @@ int main(){
 	// 切换到JTAG模式
 	adapter_SelectTransmission(GET_ADAPTER(cmsis_dapObj), JTAG);
 
-	// 复位TAP，这句可能没必要
-	TAP_Reset(tapObj, FALSE, 0);
+	// 复位TAP
+	// TAP_Reset(dapObj, FALSE, 0);
 	// 声明TAP
-	// 测试irlen长度为9会怎么样？ 正常
 	uint16_t irLens[] = {4, 5};
-	log_debug("target_JTAG_Set_TAP_Info:%d.", TAP_SetInfo(tapObj, 2, irLens));
-	uint32_t idCode[4] = {0, 0, 0, 0};
-	TAP_Get_IDCODE(tapObj, idCode);
-	log_debug("0x%08X, 0x%08X.", idCode[0], idCode[1]);
-	// 读取idcode
-	idCode[0] = 0;
-	log_debug("target_JTAG_IR_Write:%d.", TAP_IR_Write(tapObj, 0, 0xe));
-	// DR长度如果为9则会出现错误
-	log_debug("target_JTAG_DR_Exchange:%d.", TAP_DR_Exchange(tapObj, 0, 32, CAST(uint8_t *, &idCode[0])));
-	log_debug("target_JTAG_Execute:%d.", TAP_Execute(tapObj));
-	log_debug("0x%08X.", idCode[0]);
+	log_debug("target_JTAG_Set_TAP_Info:%d.", TAP_SetInfo(&dapObj->tapObj, 2, irLens));
+	DAP_DP_Write(dapObj, 0, DP_SELECT, 0);
+	// 上电
+	DAP_DP_Write(dapObj, 0, DP_CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ);
+	// 等待上电完成
+	uint32_t tmp;
+	do {
+		tmp = DAP_DP_Read(dapObj, 0, DP_CTRL_STAT);
+		if(tmp == 0){
+			log_fatal("Read CTRL_STAT Failed.");
+			goto EXIT_STEP_2;
+		}
+	} while((tmp & (DP_STAT_CDBGPWRUPACK | DP_STAT_CSYSPWRUPACK)) != (DP_STAT_CDBGPWRUPACK | DP_STAT_CSYSPWRUPACK));
+	log_info("Power up.");
+	log_debug("CTRL/STAT: 0x%08X.", tmp);
+	//DAP_DP_Read(dapObj, 0, DP_SELECT);
+	//DAP_DP_Read(dapObj, 0, DP_CTRL_STAT);
+
 EXIT_STEP_2:
 	// 释放对象
-	__DESTORY(TAP)(tapObj);
+	__DESTORY(DAP)(dapObj);
 EXIT_STEP_1:
 	FreeCMSIS_DAP(cmsis_dapObj);
 EXIT_STEP_0:
-	free(tapObj);
+	free(dapObj);
 	return 0;
 }

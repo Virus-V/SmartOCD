@@ -1,5 +1,5 @@
 /*
- * tap.h
+ * TAP.h
  *
  *  Created on: 2018-3-29
  *      Author: virusv
@@ -59,10 +59,8 @@ struct TAPObject {
 BOOL __CONSTRUCT(TAP)(TAPObject *tapObj, AdapterObject *adapterObj);
 void __DESTORY(TAP)(TAPObject *tapObj);
 
-BOOL TAP_SetClock(TAPObject *tapObj, uint32_t clockHz);
-BOOL TAP_SelectTrasnport(TAPObject *tapObj, enum transportType type);
 BOOL TAP_Reset(TAPObject *tapObj, BOOL hard, uint32_t pinWait);
-BOOL TAP_Set_Info(TAPObject *tapObj, uint16_t tapCount, uint16_t *IR_Len);
+BOOL TAP_SetInfo(TAPObject *tapObj, uint16_t tapCount, uint16_t *IR_Len);
 BOOL TAP_Get_IDCODE(TAPObject *tapObj, uint32_t *idCode);
 BOOL TAP_IR_Write(TAPObject *tapObj, uint16_t index, uint32_t ir);
 BOOL TAP_DR_Exchange(TAPObject *tapObj, uint16_t index, uint8_t count, uint8_t *data);

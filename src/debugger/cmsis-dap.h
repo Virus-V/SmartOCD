@@ -122,18 +122,15 @@
 #define DAP_SWO_STREAM_ERROR            (1U<<6)
 #define DAP_SWO_BUFFER_OVERRUN          (1U<<7)
 
-// Capablities Flags
-#define CAP_FLAG_SWD					0x1 << 0
-#define CAP_FLAG_JTAG					0x1 << 1
-#define CAP_FLAG_SWO_UART				0x1 << 2
-#define CAP_FLAG_SWO_MANCHESTER			0x1 << 3
-#define CAP_FLAG_ATOMIC					0x1 << 4
-#define CAP_FLAG_SWD_SEQUENCE			0x1 << 5
-#define CAP_FLAG_TEST_DOMAIN_TIMER		0x1 << 6
-#define CAP_FLAG_TRACE_DATA_MANAGE		0x1 << 7
-
-// 判断CMSIS-DAP是否支持某功能
-#define CMSIS_DAP_HAS_CAPALITY(pc,cap) (((pc)->capablityFlag & (cap)) == (cap))
+// CMSIS功能标志位
+#define CMDAP_CAP_SWD					0x1 << 0
+#define CMDAP_CAP_JTAG					0x1 << 1
+#define CMDAP_CAP_SWO_UART				0x1 << 2
+#define CMDAP_CAP_SWO_MANCHESTER		0x1 << 3
+#define CMDAP_CAP_ATOMIC				0x1 << 4
+#define CMDAP_CAP_SWD_SEQUENCE			0x1 << 5
+#define CMDAP_CAP_TEST_DOMAIN_TIMER		0x1 << 6
+#define CMDAP_CAP_TRACE_DATA_MANAGE		0x1 << 7
 
 // CMSIS-DAP操作指令
 enum cmsis_dapInstr {

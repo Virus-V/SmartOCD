@@ -367,7 +367,6 @@ BOOL USBClaimInterface(USBObject *usbObj, int IFClass, int IFSubclass, int IFPro
 				usbObj->writeEPMaxPackSize = epDesc->wMaxPacketSize & 0x7ff;
 				log_debug("usb end point 'out' 0x%02x, max packet size %d bytes.", epNum, usbObj->writeEPMaxPackSize);
 			}
-			// TODO 获取最大数据包大小
 
 			// XXX 这里没有考虑端点0
 			if (usbObj->readEP && usbObj->writeEP) {

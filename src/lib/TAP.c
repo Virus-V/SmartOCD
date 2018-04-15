@@ -1,5 +1,5 @@
 /*
- * tap.c
+ * TAP.c
  *
  *  Created on: 2018-3-29
  *      Author: virusv
@@ -12,16 +12,14 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "lib/tap.h"
 #include "misc/log.h"
 #include "misc/misc.h"
+#include "lib/TAP.h"
 
 #define TAP_INFO_IR_LEN		0
 #define TAP_INFO_IR_BEFORE	1
 #define TAP_INFO_IR_AFTER	2
 #define ACCESS_TAP_INFO_ARRAY(pt,x,y) (*((pt)->TAP_Info + (pt)->TAP_Count*(x) + (y)))
-// 检测Transport是否匹配
-#define TRANSPORT_MATCH(tp,type) ((tp)->adapterObj->currTrans == (type))
 
 /**
  * 在一串数据中获得第n个二进制位，n从1开始
@@ -293,31 +291,6 @@ static list_node_t * JTAG_NewInstruction(TAPObject *tapObj){
 }
 
 /**
- * 设置仿真器通信频率（Hz）
- */
-BOOL TAP_SetClock(TAPObject *tapObj, uint32_t clockHz){
-	assert(tapObj != NULL && tapObj->adapterObj != NULL);
-	if(tapObj->adapterObj->Operate(tapObj->adapterObj, AINS_SET_CLOCK, clockHz) == FALSE){
-		log_warn("Failed to set adapter frequency.");
-		return FALSE;
-	}
-	return TRUE;
-}
-
-/**
- * 切换仿真模式
- * SWD和JTAG等等
- */
-BOOL TAP_SelectTrasnport(TAPObject *tapObj, enum transportType type){
-	assert(tapObj != NULL && tapObj->adapterObj != NULL);
-	if(tapObj->adapterObj->SelectTrans(tapObj->adapterObj, type) == FALSE){
-		log_error("%s select %s Mode Failed.", tapObj->adapterObj->DeviceDesc, adapter_Transport2Str(type));
-		return FALSE;
-	}
-	return TRUE;
-}
-
-/**
  * TAP复位
  * hard:TRUE：使用TRST引脚进行TAP复位；FALSE：使用连续5个脉冲宽度的TMS高电平进行TAP复位
  * pinWait：死区时间，只有在hard参数为TRUE时有效
@@ -325,7 +298,7 @@ BOOL TAP_SelectTrasnport(TAPObject *tapObj, enum transportType type){
 BOOL TAP_Reset(TAPObject *tapObj, BOOL hard, uint32_t pinWait){
 	assert(tapObj != NULL);
 	// 检查状态
-	if(!TRANSPORT_MATCH(tapObj, JTAG)){
+	if(ADAPTER_CURR_TRANS(tapObj->adapterObj) != JTAG){
 		log_warn("Currently not a JTAG transmission method, current is %s.", adapter_Transport2Str(tapObj->adapterObj->currTrans));
 		return FALSE;
 	}
@@ -347,7 +320,7 @@ BOOL TAP_Reset(TAPObject *tapObj, BOOL hard, uint32_t pinWait){
  * tapCount：TAP的个数
  * 注意：离TDO最近的那个TAP是第0个。
  */
-BOOL TAP_Set_Info(TAPObject *tapObj, uint16_t tapCount, uint16_t *IR_Len){
+BOOL TAP_SetInfo(TAPObject *tapObj, uint16_t tapCount, uint16_t *IR_Len){
 	assert(tapObj != NULL);
 	int idx,bits = 0;
 	// 释放
@@ -395,7 +368,7 @@ BOOL TAP_Set_Info(TAPObject *tapObj, uint16_t tapCount, uint16_t *IR_Len){
  */
 BOOL TAP_Get_IDCODE(TAPObject *tapObj, uint32_t *idCode){
 	assert(tapObj != NULL && tapObj->adapterObj != NULL);
-	if(!TRANSPORT_MATCH(tapObj, JTAG)){
+	if(ADAPTER_CURR_TRANS(tapObj->adapterObj) != JTAG){
 		log_warn("Currently not a JTAG transmission method, current is %s.", adapter_Transport2Str(tapObj->adapterObj->currTrans));
 		return FALSE;
 	}
@@ -521,7 +494,7 @@ BOOL TAP_Execute(TAPObject *tapObj){
 	uint8_t *instrBuffer, *resultBuffer;
 	int instrBufferLen = 0, resultBufferLen = 0;
 	// 当前是否是JTAG模式
-	if(!TRANSPORT_MATCH(tapObj, JTAG)){
+	if(ADAPTER_CURR_TRANS(tapObj->adapterObj) != JTAG){
 		log_warn("Currently not a JTAG transmission method, current is %s.", adapter_Transport2Str(tapObj->adapterObj->currTrans));
 		return FALSE;
 	}
@@ -563,7 +536,7 @@ BOOL TAP_Execute(TAPObject *tapObj){
 		}
 	}
 	// 开辟缓冲区空间
-	log_debug("Instruction buffer size: %d; Result buffer size: %d.", instrBufferLen, resultBufferLen);
+	log_debug("Instr buffer size: %d; Result buffer size: %d.", instrBufferLen, resultBufferLen);
 	//goto EXIT_STEP_1;
 	instrBuffer = malloc(instrBufferLen);
 	if(instrBuffer == NULL){

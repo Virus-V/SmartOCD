@@ -11,7 +11,7 @@
 #include "smart_ocd.h"
 #include "misc/list/list.h"
 #include "debugger/adapter.h"
-#include "lib/tap.h"
+#include "lib/TAP.h"
 
 /*
  * Copyright (c) 2013-2016 ARM Limited. All rights reserved.
@@ -53,14 +53,33 @@
 #define DAP_TRANSFER_A2                 (1U<<2)
 #define DAP_TRANSFER_A3                 (1U<<3)
 
-// Debug Port Register Addresses
+// DP寄存器地址
+// DPv0只有JTAG模式，所以没有Abort寄存器，也没有IDCODE/DPIDR寄存器，都有一个单独的扫描链
+// DPv0下有如下寄存器
+#define DP_CTRL_STAT                    0x04U   // Control & Status
+#define DP_SELECT                       0x08U   // Select Register (JTAG R/W & SW W)
+#define DP_RDBUFF                       0x0CU   // Read Buffer (Read Only)
+// DPv1增加下列寄存器
 #define DP_IDCODE                       0x00U   // IDCODE Register (SW Read only)
 #define DP_ABORT                        0x00U   // Abort Register (SW Write only)
-#define DP_CTRL_STAT                    0x04U   // Control & Status
-#define DP_WCR                          0x04U   // Wire Control Register (SW Only)
-#define DP_SELECT                       0x08U   // Select Register (JTAG R/W & SW W)
-#define DP_RESEND                       0x08U   // Resend (SW Read Only)
-#define DP_RDBUFF                       0x0CU   // Read Buffer (Read Only)
+#define DP_DLCR							0x14U	// Data Link Control Register(SW Only RW)
+#define DP_RESEND						0x08U	// Read Resend Register (SW Read Only)
+// DPv2增加下列寄存器
+#define DP_TARGETID						0x24U	// Target Identification register (RO)
+#define DP_DLPIDR						0x34U	// Data Link Protocol Identification Register (SW RO)
+#define DP_EVENTSTAT					0x44U	// Event Status register (RO)
+#define DP_TARGETSEL					0x0CU	// Target Selection register (SW WO, SWD Protocol v2才存在)
+
+// JTAG IR Codes
+#define JTAG_ABORT                      0x08U
+#define JTAG_DPACC                      0x0AU
+#define JTAG_APACC                      0x0BU
+#define JTAG_IDCODE                     0x0EU
+#define JTAG_BYPASS                     0x0FU
+
+// JTAG Response
+#define JTAG_RESP_OK_FAULT				0x02	// OK/FAULT
+#define JTAG_RESP_WAIT					0x01	// WAIT
 
 // Abort Register definitions
 #define DP_ABORT_DAPABORT       0x00000001  // DAP Abort
@@ -144,10 +163,10 @@
 #define DBG_EMCR_OFS   0x0C        // Debug Exception & Monitor Control Register
 
 // Core Debug Register Addresses
-#define DBG_HCSR       (DBG_Addr + DBG_HCSR_OFS)
-#define DBG_CRSR       (DBG_Addr + DBG_CRSR_OFS)
-#define DBG_CRDR       (DBG_Addr + DBG_CRDR_OFS)
-#define DBG_EMCR       (DBG_Addr + DBG_EMCR_OFS)
+//#define DBG_HCSR       (DBG_Addr + DBG_HCSR_OFS)
+//#define DBG_CRSR       (DBG_Addr + DBG_CRSR_OFS)
+//#define DBG_CRDR       (DBG_Addr + DBG_CRDR_OFS)
+//#define DBG_EMCR       (DBG_Addr + DBG_EMCR_OFS)
 
 // Debug Halting Control and Status Register definitions
 #define C_DEBUGEN      0x00000001  // Debug Enable
@@ -178,40 +197,10 @@
 #define MON_REQ        0x00080000  // Monitor Request
 #define TRCENA         0x01000000  // Trace Enable (DWT, ITM, ETM, TPIU)
 
-// JTAG IR Codes
-#define JTAG_ABORT                      0x08U
-#define JTAG_DPACC                      0x0AU
-#define JTAG_APACC                      0x0BU
-#define JTAG_IDCODE                     0x0EU
-#define JTAG_BYPASS                     0x0FU
-
-// JTAG Sequence Info
-#define JTAG_SEQUENCE_TCK               0x3FU   // TCK count	0b0011 1111
-#define JTAG_SEQUENCE_TMS               0x40U   // TMS value	0b0100 0000
-#define JTAG_SEQUENCE_TDO               0x80U   // TDO capture	0b1000 0000
-
 #define DP_SELECT_APSEL 0xFF000000
 #define DP_SELECT_APBANK 0x000000F0
 #define DP_SELECT_DPBANK 0x0000000F
 #define DP_SELECT_INVALID 0x00FFFF00 /* Reserved bits one */
-
-/**
- *
- */
-struct adiv5_AP{
-	uint8_t APSEL;	// SELECT 的APSEL值
-	uint32_t IDR;
-	struct adiv5_AP *next;	// 指向下一个AP
-};
-
-// DAP对象
-typedef struct DAPObject DAPObject;
-struct DAPObject{
-	TAPObject tapObj;	// 继承与TAP
-	uint8_t Version;	// DAP版本号
-	uint32_t CTRL_STAT_Reg;	// 当前CTRL/STAT寄存器
-	uint32_t SelectReg;	// 当前Select寄存器
-};
 
 // DP IDR Register 解析
 typedef union {
@@ -275,5 +264,50 @@ typedef union {
 									// DbgSwEnable must be ignored and treated as one if DeviceEn is set to 0.
 	} regInfo;
 } MEM_AP_CSWParse;
+
+/**
+ *
+ */
+struct adiv5_AP{
+	uint8_t APSEL;	// SELECT 的APSEL值
+	uint32_t IDR;
+	struct adiv5_AP *next;	// 指向下一个AP
+};
+
+// DAP对象
+typedef struct DAPObject DAPObject;
+struct DAPObject{
+	TAPObject tapObj;	// 继承与TAP
+	uint8_t DP_Version;	// DP版本号
+	uint32_t CTRL_STAT_Reg;	// 当前CTRL/STAT寄存器
+	uint32_t ir;	// 当前ir寄存器
+	union {
+		uint32_t data;
+		struct {
+			uint32_t DP_BankSel : 4;
+			uint32_t AP_BankSel : 4;
+			uint32_t : 16;
+			uint32_t AP_Sel : 8;
+		} info;
+	}SelectReg;	// 当前Select寄存器
+};
+
+// 构造和析构函数
+BOOL __CONSTRUCT(DAP)(DAPObject *dapObj, AdapterObject *adapterObj);
+void __DESTORY(DAP)(DAPObject *dapObj);
+
+uint32_t DAP_DP_Read(DAPObject *dapObj, uint16_t index, uint8_t reg);
+BOOL DAP_DP_Write(DAPObject *dapObj, uint16_t index, uint8_t reg, uint32_t data);
+uint32_t DAP_AP_Read(DAPObject *dapObj);
+BOOL DAP_AP_Write(DAPObject *dapObj);
+// 选择AP
+BOOL DAP_AP_Select(DAPObject *dapObj);
+
+// 队列操作
+BOOL DAP_Queue_DP_Read(DAPObject *dapObj);
+BOOL DAP_Queue_DP_Write(DAPObject *dapObj);
+BOOL DAP_Queue_AP_Read(DAPObject *dapObj);
+BOOL DAP_Queue_AP_Write(DAPObject *dapObj);
+BOOL DAP_Queue_Execute(DAPObject *dapObj);
 
 #endif /* SRC_ARCH_CORESIGHT_DAP_H_ */

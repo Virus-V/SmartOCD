@@ -35,7 +35,7 @@
 })
 
 // CMSIS-DAP支持的仿真传输协议类型
-static const enum transportType supportTrans[] = {JTAG, SWD, UNKNOW_NULL};
+static const enum transportType supportTrans[] = {JTAG, SWD, UNKNOW_NULL};	// 必须以UNKNOW_NULL结尾
 static BOOL init(AdapterObject *adapterObj);
 static BOOL deinit(AdapterObject *adapterObj);
 static BOOL selectTrans(AdapterObject *adapterObj, enum transportType type);
@@ -217,32 +217,29 @@ static BOOL init(AdapterObject *adapterObj){
 	command[1] = DAP_ID_CAPABILITIES;
 	DAP_EXCHANGE_DATA(adapterObj, command, 2, resp);
 
-#define SET_CAP(pc,ca,bit,flag) \
-	if( ((ca) & (0x1 << (bit))) != 0) (pc)->capablityFlag |= (flag);
-
 	// XXX Version改成了整数，乘以100
 	switch(cmsis_dapObj->Version){
 	case 110: // 1.1f
 		// 获得info0
 		capablity = *CAST(uint8_t *, resp+2);
-		SET_CAP(cmsis_dapObj, capablity, 2, CAP_FLAG_SWO_UART);
-		SET_CAP(cmsis_dapObj, capablity, 3, CAP_FLAG_SWO_MANCHESTER);
-		SET_CAP(cmsis_dapObj, capablity, 4, CAP_FLAG_ATOMIC);
-		SET_CAP(cmsis_dapObj, capablity, 5, CAP_FLAG_SWD_SEQUENCE);
-		SET_CAP(cmsis_dapObj, capablity, 6, CAP_FLAG_TEST_DOMAIN_TIMER);
+		ADAPTER_SET_CAP(cmsis_dapObj, capablity, 2, CMDAP_CAP_SWO_UART);
+		ADAPTER_SET_CAP(cmsis_dapObj, capablity, 3, CMDAP_CAP_SWO_MANCHESTER);
+		ADAPTER_SET_CAP(cmsis_dapObj, capablity, 4, CMDAP_CAP_ATOMIC);
+		ADAPTER_SET_CAP(cmsis_dapObj, capablity, 5, CMDAP_CAP_SWD_SEQUENCE);
+		ADAPTER_SET_CAP(cmsis_dapObj, capablity, 6, CMDAP_CAP_TEST_DOMAIN_TIMER);
 
 		if(*CAST(uint8_t *, resp+1) == 2){	// 是否存在info1
 			// 获得info1
 			capablity = *CAST(uint8_t *, resp+3);
-			SET_CAP(cmsis_dapObj, capablity, 0, CAP_FLAG_TRACE_DATA_MANAGE);
+			ADAPTER_SET_CAP(cmsis_dapObj, capablity, 0, CMDAP_CAP_TRACE_DATA_MANAGE);
 		}
 		/* no break */
 
 	case 100: // 1.0f
 		// 获得info0
 		capablity = *CAST(uint8_t *, resp+2);
-		SET_CAP(cmsis_dapObj, capablity, 0, CAP_FLAG_SWD);
-		SET_CAP(cmsis_dapObj, capablity, 1, CAP_FLAG_JTAG);
+		ADAPTER_SET_CAP(cmsis_dapObj, capablity, 0, CMDAP_CAP_SWD);
+		ADAPTER_SET_CAP(cmsis_dapObj, capablity, 1, CMDAP_CAP_JTAG);
 		break;
 
 	default: break;
@@ -317,53 +314,54 @@ static BOOL selectTrans(AdapterObject *adapterObj, enum transportType type){
 	uint8_t command[2] = {ID_DAP_Connect, DAP_PORT_AUTODETECT}, *resp;	// 命令存储缓冲和返回值缓冲区
 	if(type == UNKNOW_NULL) return FALSE;
 	if(adapterObj->currTrans == type) return TRUE;
+	// 如果不支持该协议
+	if(adapter_HaveTransmission(adapterObj, type) == FALSE) return FALSE;
+
 	if((resp = calloc(cmsis_dapObj->PacketSize, sizeof(uint8_t))) == NULL){
 		log_error("Failed to calloc receive buffer space.");
 		return FALSE;
 	}
-	for(idx=0; adapterObj->supportedTrans[idx] != UNKNOW_NULL; idx++){
-		// 如果支持指定的协议
-		if(adapterObj->supportedTrans[idx] == type){
-			switch(type){
-			case SWD:
-				if(!CMSIS_DAP_HAS_CAPALITY(cmsis_dapObj, CAP_FLAG_SWD)){
-					goto EXIT_FAILED;
-				}
-				// 切换到SWD模式
-				command[1] = DAP_PORT_SWD;
-				DAP_EXCHANGE_DATA(adapterObj, command, 2, resp);
-				if(*CAST(uint8_t *, resp+1) != DAP_PORT_SWD){
-					log_warn("Switching SWD mode failed.");
-					goto EXIT_FAILED;
-				}else{
-					// 发送切换swd序列
-					CMDAP_FUN_WARP(adapterObj, SWJ_JTAG2SWD, adapterObj);
-					adapterObj->currTrans = SWD;
-					log_info("Switch to SWD mode.");
-					goto EXIT_TRUE;
-				}
-				break;
-
-			case JTAG:
-				if(!CMSIS_DAP_HAS_CAPALITY(cmsis_dapObj, CAP_FLAG_JTAG)){
-					goto EXIT_FAILED;
-				}
-				// 切换到JTAG模式
-				command[1] = DAP_PORT_JTAG;
-				DAP_EXCHANGE_DATA(adapterObj, command, 2, resp);
-				if(*CAST(uint8_t *, resp+1) != DAP_PORT_JTAG){
-					log_warn("Switching JTAG mode failed.");
-					goto EXIT_FAILED;
-				}else{
-					// 发送切换JTAG序列
-					CMDAP_FUN_WARP(adapterObj, SWJ_SWD2JTAG, adapterObj);
-					adapterObj->currTrans = JTAG;
-					log_info("Switch to JTAG mode.");
-					goto EXIT_TRUE;
-				}
-				break;
-			}
+	// 切换协议
+	switch(type){
+	case SWD:
+		if(!ADAPTER_HAS_CAPALITY(cmsis_dapObj, CMDAP_CAP_SWD)){
+			goto EXIT_FAILED;
 		}
+		// 切换到SWD模式
+		command[1] = DAP_PORT_SWD;
+		DAP_EXCHANGE_DATA(adapterObj, command, 2, resp);
+		if(*CAST(uint8_t *, resp+1) != DAP_PORT_SWD){
+			log_warn("Switching SWD mode failed.");
+			goto EXIT_FAILED;
+		}else{
+			// 发送切换swd序列
+			CMDAP_FUN_WARP(adapterObj, SWJ_JTAG2SWD, adapterObj);
+			adapterObj->currTrans = SWD;
+			log_info("Switch to SWD mode.");
+			goto EXIT_TRUE;
+		}
+		break;
+
+	case JTAG:
+		if(!ADAPTER_HAS_CAPALITY(cmsis_dapObj, CMDAP_CAP_JTAG)){
+			goto EXIT_FAILED;
+		}
+		// 切换到JTAG模式
+		command[1] = DAP_PORT_JTAG;
+		DAP_EXCHANGE_DATA(adapterObj, command, 2, resp);
+		if(*CAST(uint8_t *, resp+1) != DAP_PORT_JTAG){
+			log_warn("Switching JTAG mode failed.");
+			goto EXIT_FAILED;
+		}else{
+			// 发送切换JTAG序列
+			CMDAP_FUN_WARP(adapterObj, SWJ_SWD2JTAG, adapterObj);
+			adapterObj->currTrans = JTAG;
+			log_info("Switch to JTAG mode.");
+			goto EXIT_TRUE;
+		}
+		break;
+	default :
+		goto EXIT_FAILED;
 	}
 
 EXIT_FAILED:
@@ -467,7 +465,7 @@ static BOOL DAP_SWD_Sequence(uint8_t *respBuff, AdapterObject *adapterObj, uint8
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
 	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	assert(cmsis_dapObj->PacketSize != 0);
-	if(cmsis_dapObj->Version < 110 || !CMSIS_DAP_HAS_CAPALITY(cmsis_dapObj, CAP_FLAG_SWD_SEQUENCE)){
+	if(cmsis_dapObj->Version < 110 || !ADAPTER_HAS_CAPALITY(cmsis_dapObj, CMDAP_CAP_SWD_SEQUENCE)){
 		// 不支持发送SWD时序
 		return FALSE;
 	}

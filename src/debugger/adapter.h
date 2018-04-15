@@ -15,7 +15,7 @@
 
 // 仿真通信方式
 enum transportType {
-	UNKNOW_NULL = 0,	// 未知协议，由仿真器指定
+	UNKNOW_NULL = 0,	// 未知协议，由仿真器默认指定
 	JTAG,
 	SWD
 };
@@ -30,7 +30,7 @@ enum supportedAdapter{
 };
 
 // 仿真器的公共操作命令
-// FIXME 提取出来公共操作，每个仿真器都必须实现这些
+// XXX 提取出来公共操作，每个仿真器都必须实现这些
 enum commonInstr {
 	/**
 	 * 设置仿真器状态
@@ -95,7 +95,7 @@ enum commonInstr {
 	 */
 	AINS_JTAG_PINS,
 	/**
-	 * 发送一个或多个DAP协议时序，DAP协议专用，SWD和JTAG
+	 * 发送一个或多个DAP协议时序，仿真器支持SWD模式时（ADAPTER_CAP_SWD置位）必须实现该方法
 	 * 参数：uint8_t index, uint8_t transferCount, uint8_t *data, uint8_t *response
 	 * 其中各参数：
 	 * index: 从0开始算起JTAG扫描链中设备的索引值。在SWD模式下该值被忽略。
@@ -148,6 +148,18 @@ struct adapterConnector{
 		USBObject usbObj;
 	} object;
 };
+
+// 判断是否支持某些功能
+#define ADAPTER_HAS_CAPALITY(p,flags) (((p)->capablityFlag & (flags)) == (flags))
+
+// 设置标志位
+// 如果ca的第bit位为1，则执行p->capablityFlag |= flag
+#define ADAPTER_SET_CAP(p,ca,bit,flag) \
+	if( ((ca) & (0x1 << (bit))) != 0) (p)->capablityFlag |= (flag);
+
+// 返回仿真器激活的传输类型
+#define ADAPTER_CURR_TRANS(p) ((p)->currTrans)
+
 //仿真器对象
 typedef struct AdapterObject AdapterObject;
 /**
@@ -173,7 +185,13 @@ struct AdapterObject{
 
 BOOL __CONSTRUCT(Adapter)(AdapterObject *object, const char *desc);
 void __DESTORY(Adapter)(AdapterObject *object);
-
+// 设置仿真器JTAG的CLK频率
+BOOL adapter_SetClock(AdapterObject *adapterObj, uint32_t clockHz);
+// 设置仿真器的传输方式
+BOOL adapter_SelectTransmission(AdapterObject *adapterObj, enum transportType type);
+// 判断是否支持某一个传输方式
+BOOL adapter_HaveTransmission(AdapterObject *adapterObj, enum transportType type);
+// 返回传输方式的字符串形式
 const char *adapter_Transport2Str(enum transportType type);
 
 #endif /* SRC_DEBUGGER_ADAPTER_H_ */

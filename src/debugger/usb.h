@@ -34,7 +34,7 @@ struct USBObject{
 
 };
 
-// TODO USB对象不管分配内存，只管对对象所在的内存进行初始化
+// USB对象的构造和析构函数
 BOOL __CONSTRUCT(USB)(USBObject *obj);
 void __DESTORY(USB)(USBObject *obj);
 BOOL USBOpen(USBObject *usbObj, const uint16_t vid, const uint16_t pid, const char *serial);
