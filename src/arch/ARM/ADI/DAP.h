@@ -60,7 +60,7 @@
 #define DP_SELECT                       0x08U   // Select Register (JTAG R/W & SW W)
 #define DP_RDBUFF                       0x0CU   // Read Buffer (Read Only)
 // DPv1增加下列寄存器
-#define DP_IDCODE                       0x00U   // IDCODE Register (SW Read only)
+#define DP_DPIDR                        0x00U   // IDCODE Register (SW Read only)
 #define DP_ABORT                        0x00U   // Abort Register (SW Write only)
 #define DP_DLCR							0x14U	// Data Link Control Register(SW Only RW)
 #define DP_RESEND						0x08U	// Read Resend Register (SW Read Only)
@@ -265,20 +265,12 @@ typedef union {
 	} regInfo;
 } MEM_AP_CSWParse;
 
-/**
- *
- */
-struct adiv5_AP{
-	uint8_t APSEL;	// SELECT 的APSEL值
-	uint32_t IDR;
-	struct adiv5_AP *next;	// 指向下一个AP
-};
-
 // DAP对象
 typedef struct DAPObject DAPObject;
 struct DAPObject{
 	TAPObject tapObj;	// 继承与TAP
 	uint8_t DP_Version;	// DP版本号
+	uint16_t TAP_index;	// TAP在JTAG中的索引，SWD模式下忽略该参数
 	uint32_t CTRL_STAT_Reg;	// 当前CTRL/STAT寄存器
 	uint32_t ir;	// 当前ir寄存器
 	union {
@@ -291,26 +283,35 @@ struct DAPObject{
 		} info;
 	}SelectReg;	// 当前Select寄存器
 	int retry;	// 接收到WAIT时重试次数
-	// TODO 错误处理的回调函数
-	// WDATAERR,STICKYERR, STICKYCMP, STICKYORUN
+	// 错误处理的回调函数列表
+	// WDATAERR, STICKYERR, STICKYCMP, STICKYORUN
+	void (*stickyErrHandle)(DAPObject *dapObj, uint32_t status);
 
 };
 
 // 构造和析构函数
 BOOL __CONSTRUCT(DAP)(DAPObject *dapObj, AdapterObject *adapterObj);
 void __DESTORY(DAP)(DAPObject *dapObj);
+// 设置DAP的TAP索引位置
+#define DAP_Set_TAP_Index(p,idx) ((p)->TAP_index = (idx))
+// 设置DAP的WAIT重试次数
+#define DAP_SetRetry(p,cnt) ((p)->retry = (cnt))
 
-BOOL DAP_DP_Read(DAPObject *dapObj, uint16_t index, uint8_t reg, uint32_t *data_out);
-BOOL DAP_DP_Write(DAPObject *dapObj, uint16_t index, uint8_t reg, uint32_t data);
-BOOL DAP_AP_Read(DAPObject *dapObj, uint16_t index, uint8_t reg, uint32_t *data_out);
-BOOL DAP_AP_Write(DAPObject *dapObj, uint16_t index, uint8_t reg, uint32_t data);
-BOOL DAP_AP_Select(DAPObject *dapObj, uint16_t index, uint8_t apIdx);
-
-// 队列操作
-BOOL DAP_Queue_DP_Read(DAPObject *dapObj);
-BOOL DAP_Queue_DP_Write(DAPObject *dapObj);
-BOOL DAP_Queue_AP_Read(DAPObject *dapObj);
-BOOL DAP_Queue_AP_Write(DAPObject *dapObj);
-BOOL DAP_Queue_Execute(DAPObject *dapObj);
+BOOL DAP_DP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out);
+BOOL DAP_DP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data);
+BOOL DAP_AP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out);
+BOOL DAP_AP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data);
+BOOL DAP_AP_Select(DAPObject *dapObj, uint8_t apIdx);
+// 写入Abort寄存器
+BOOL DAP_WriteAbort(DAPObject *dapObj, uint32_t abort);
+// 检查状态标志
+BOOL DAP_CheckStatus(DAPObject *dapObj, BOOL updateOnly);
+// 清除粘性标志
+// 队列操作，只在SWD模式下可用
+BOOL DAP_SWD_Queue_DP_Read(DAPObject *dapObj);
+BOOL DAP_SWD_Queue_DP_Write(DAPObject *dapObj);
+BOOL DAP_SWD_Queue_AP_Read(DAPObject *dapObj);
+BOOL DAP_SWD_Queue_AP_Write(DAPObject *dapObj);
+BOOL DAP_SWD_Queue_Execute(DAPObject *dapObj);
 
 #endif /* SRC_ARCH_CORESIGHT_DAP_H_ */

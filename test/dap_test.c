@@ -70,29 +70,42 @@ int main(){
 		goto EXIT_STEP_1;
 	}
 	// 设置SWJ频率，最大30MHz
-	adapter_SetClock(GET_ADAPTER(cmsis_dapObj), 100000u);
+	adapter_SetClock(GET_ADAPTER(cmsis_dapObj), 1000000u);
 	// 切换到JTAG模式
 	adapter_SelectTransmission(GET_ADAPTER(cmsis_dapObj), JTAG);
-
+	// 设置DAP在JTAG扫描链的索引值
+	DAP_Set_TAP_Index(dapObj, 0);
+	// 设置DAP WAIT响应的重试次数
+	DAP_SetRetry(dapObj, 10);
 	// 复位TAP
 	// TAP_Reset(dapObj, FALSE, 0);
 	// 声明TAP
 	uint16_t irLens[] = {4, 5};
 	log_debug("target_JTAG_Set_TAP_Info:%d.", TAP_SetInfo(&dapObj->tapObj, 2, irLens));
-	DAP_DP_Write(dapObj, 0, DP_SELECT, 0);
+	DAP_DP_Write(dapObj, DP_SELECT, 0);
 	// 上电
-	DAP_DP_Write(dapObj, 0, DP_CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ);
+	DAP_DP_Write(dapObj, DP_CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ);
 	// 等待上电完成
 	do {
-		if(DAP_DP_Read(dapObj, 0, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg) == FALSE){
+		if(DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg) == FALSE){
 			log_fatal("Read CTRL_STAT Failed.");
 			goto EXIT_STEP_2;
 		}
 	} while((dapObj->CTRL_STAT_Reg & (DP_STAT_CDBGPWRUPACK | DP_STAT_CSYSPWRUPACK)) != (DP_STAT_CDBGPWRUPACK | DP_STAT_CSYSPWRUPACK));
 	log_info("Power up.");
 	log_debug("CTRL/STAT: 0x%08X.", dapObj->CTRL_STAT_Reg);
+	// 读取DPIDR寄存器
+	uint32_t dpidr = 0;
+	DAP_DP_Read(dapObj, DP_DPIDR, &dpidr);
+	log_debug("IDR: 0x%08X.", dpidr);
+	DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg);
+	log_debug("CTRL/STAT: 0x%08X.", dapObj->CTRL_STAT_Reg);
+	//直接退出
+	goto EXIT_STEP_2;
+
+	log_debug("CTRL/STAT: 0x%08X.", dapObj->CTRL_STAT_Reg);
 	// 写入初始化数据
-	DAP_DP_Write(dapObj, 0, DP_CTRL_STAT, dapObj->CTRL_STAT_Reg | DP_CTRL_TRNNORMAL | DP_CTRL_MASKLANEMSK | DP_CTRL_ORUNDETECT);
+	DAP_DP_Write(dapObj,  DP_CTRL_STAT, dapObj->CTRL_STAT_Reg | DP_CTRL_TRNNORMAL | DP_CTRL_MASKLANEMSK | DP_CTRL_ORUNDETECT);
 
 	// 读取AP的IDR
 	do{
@@ -107,15 +120,15 @@ int main(){
 		for(;apsel < 255; apsel ++){
 
 			// 修改select选中ap
-			if(DAP_AP_Select(dapObj, 0, apsel) == FALSE) {
+			if(DAP_AP_Select(dapObj, apsel) == FALSE) {
 				// write abort;
-				DAP_DP_Read(dapObj, 0, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg);
+				DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg);
 				log_warn("Write SELECT Failed, CTRL : 0x%08X.", dapObj->CTRL_STAT_Reg);
 				break;
 			}
 			// 读取AP的IDR
-			result = DAP_AP_Read(dapObj, 0, AP_REG_IDR, &tmp);
-			DAP_DP_Read(dapObj, 0, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg);
+			result = DAP_AP_Read(dapObj, AP_REG_IDR, &tmp);
+			DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg);
 			log_debug("CTRL : 0x%08X, Select: 0x%08X.", dapObj->CTRL_STAT_Reg, dapObj->SelectReg.data);
 
 			if(tmp != 0){

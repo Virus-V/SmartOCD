@@ -443,20 +443,20 @@ static BOOL DAPRegister(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t in
  * index：在JTAG模式下，写入index索引的ABORT寄存器，SWD模式下无效
  * abort：32位的Abort值
  */
-static BOOL DAP_WriteAbort(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t index, uint32_t abort){
-	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
-	uint8_t DAP_WriteAbortPack[] = {ID_DAP_WriteABORT, 0, 0, 0, 0, 0};
-	DAP_WriteAbortPack[1] = index;
-	DAP_WriteAbortPack[2] = BYTE_IDX(abort, 0);
-	DAP_WriteAbortPack[3] = BYTE_IDX(abort, 1);
-	DAP_WriteAbortPack[4] = BYTE_IDX(abort, 2);
-	DAP_WriteAbortPack[5] = BYTE_IDX(abort, 3);
-	DAP_EXCHANGE_DATA(adapterObj, DAP_WriteAbortPack, sizeof(DAP_WriteAbortPack), respBuff);
-	if(respBuff[1] == DAP_OK){
-		return TRUE;
-	}
-	return FALSE;
-}
+//static BOOL DAP_WriteAbort(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t index, uint32_t abort){
+//	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
+//	uint8_t DAP_WriteAbortPack[] = {ID_DAP_WriteABORT, 0, 0, 0, 0, 0};
+//	DAP_WriteAbortPack[1] = index;
+//	DAP_WriteAbortPack[2] = BYTE_IDX(abort, 0);
+//	DAP_WriteAbortPack[3] = BYTE_IDX(abort, 1);
+//	DAP_WriteAbortPack[4] = BYTE_IDX(abort, 2);
+//	DAP_WriteAbortPack[5] = BYTE_IDX(abort, 3);
+//	DAP_EXCHANGE_DATA(adapterObj, DAP_WriteAbortPack, sizeof(DAP_WriteAbortPack), respBuff);
+//	if(respBuff[1] == DAP_OK){
+//		return TRUE;
+//	}
+//	return FALSE;
+//}
 
 /**
  * 发送一个或多个SWD时序
@@ -809,14 +809,14 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 
 		break;
 
-	case CMDAP_WRITE_ABORT:
-		log_trace("Execution command: DAP Write Abort.");
-		do{
-			uint8_t index = (uint8_t)va_arg(parames, int);
-			uint32_t abort = (uint32_t)va_arg(parames, int);
-			result = CMDAP_FUN_WARP(adapterObj, DAP_WriteAbort, adapterObj, index, abort);
-		}while(0);
-		break;
+//	case CMDAP_WRITE_ABORT:
+//		log_trace("Execution command: DAP Write Abort.");
+//		do{
+//			uint8_t index = (uint8_t)va_arg(parames, int);
+//			uint32_t abort = (uint32_t)va_arg(parames, int);
+//			result = CMDAP_FUN_WARP(adapterObj, DAP_WriteAbort, adapterObj, index, abort);
+//		}while(0);
+//		break;
 	default:
 		log_warn("Unsupported operation: %d.", operate);
 		break;
