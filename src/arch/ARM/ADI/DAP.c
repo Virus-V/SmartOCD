@@ -158,6 +158,7 @@ static BOOL DAP_Read(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t *data_o
 		// TODO SWD模式下
 		return FALSE;
 	}
+	return FALSE;
 }
 
 /**
@@ -225,6 +226,7 @@ static BOOL DAP_Write(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t data_i
 		// TODO SWD模式下
 		return FALSE;
 	}
+	return FALSE;
 }
 
 // 设置AP和DP的寄存器Bank
@@ -322,6 +324,7 @@ BOOL DAP_AP_Select(DAPObject *dapObj, uint8_t apIdx){
 		log_warn("AP Selection Failed.");
 		dapObj->SelectReg.data = selectBak;
 	}
+	// 检查结果
 	return result;
 }
 
@@ -344,7 +347,7 @@ BOOL DAP_CheckStatus(DAPObject *dapObj, BOOL updateOnly){
 	if(updateOnly == FALSE && dapObj->stickyErrHandle != NULL
 			&& (ctrl_status & (DP_STAT_STICKYORUN | DP_STAT_STICKYCMP | DP_STAT_STICKYERR | DP_STAT_WDATAERR)))
 	{
-		dapObj->stickyErrHandle(dapObj, ctrl_status);
+		dapObj->stickyErrHandle(dapObj);
 	}
 	return TRUE;
 }
@@ -401,22 +404,20 @@ BOOL DAP_WriteAbort(DAPObject *dapObj, uint32_t abort){
 		// TODO SWD模式下
 		return FALSE;
 	}
+	return FALSE;
 }
 
 /**
  * 清除粘性错误标志
  * JTAG-DP（所有实现）需要直接写1到CTRL/STATUS相应的位
  * SWD-DP（所有实现）需要写入Abort寄存器，写1清除
+ * 注意：此函数操作的CTRL/STATUS寄存器的值不保证是最新的
  */
 BOOL DAP_ClearStickyFlag(DAPObject *dapObj, uint32_t flags){
 	assert(dapObj != NULL);
 	// 如果当前是JTAG
 	if(ADAPTER_CURR_TRANS(dapObj->tapObj.adapterObj) == JTAG){
 		uint32_t ctrl_status;
-		// 先读取CTRL/STATUS寄存器
-		if(DAP_CheckStatus(dapObj, TRUE) == FALSE){
-			return FALSE;
-		}
 		// 写相应位到CTRL/STAT寄存器中
 		flags &= DP_STAT_STICKYORUN | DP_STAT_STICKYCMP | DP_STAT_STICKYERR | DP_STAT_WDATAERR;
 		ctrl_status = ~(DP_STAT_STICKYORUN | DP_STAT_STICKYCMP | DP_STAT_STICKYERR | DP_STAT_WDATAERR);
@@ -433,5 +434,7 @@ BOOL DAP_ClearStickyFlag(DAPObject *dapObj, uint32_t flags){
 		}
 	}else if(ADAPTER_CURR_TRANS(dapObj->tapObj.adapterObj) == SWD){
 		// swd
+		return FALSE;
 	}
+	return FALSE;
 }

@@ -285,7 +285,7 @@ struct DAPObject{
 	int retry;	// 接收到WAIT时重试次数
 	// 错误处理的回调函数列表
 	// WDATAERR, STICKYERR, STICKYCMP, STICKYORUN
-	void (*stickyErrHandle)(DAPObject *dapObj, uint32_t status);
+	void (*stickyErrHandle)(DAPObject *dapObj);
 
 };
 
@@ -296,6 +296,8 @@ void __DESTORY(DAP)(DAPObject *dapObj);
 #define DAP_Set_TAP_Index(p,idx) ((p)->TAP_index = (idx))
 // 设置DAP的WAIT重试次数
 #define DAP_SetRetry(p,cnt) ((p)->retry = (cnt))
+// 设置错误标志
+#define DAP_SetErrorHandle(p,fun) ((p)->stickyErrHandle = (fun))
 
 BOOL DAP_DP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out);
 BOOL DAP_DP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data);
@@ -307,6 +309,8 @@ BOOL DAP_WriteAbort(DAPObject *dapObj, uint32_t abort);
 // 检查状态标志
 BOOL DAP_CheckStatus(DAPObject *dapObj, BOOL updateOnly);
 // 清除粘性标志
+BOOL DAP_ClearStickyFlag(DAPObject *dapObj, uint32_t flags);
+
 // 队列操作，只在SWD模式下可用
 BOOL DAP_SWD_Queue_DP_Read(DAPObject *dapObj);
 BOOL DAP_SWD_Queue_DP_Write(DAPObject *dapObj);
