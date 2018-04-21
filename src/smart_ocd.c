@@ -14,6 +14,7 @@
 #include "smart_ocd.h"
 #include "misc/log.h"
 #include "misc/linenoise.h"
+#include "layer/load3rd.h"
 
 #include "lua.h"
 #include "lauxlib.h"
@@ -97,10 +98,10 @@ static void completion(const char *buf, linenoiseCompletions *lc) {
 
 // TODO 代码提示
 static char *hints(const char *buf, int *color, int *bold) {
-    if (!strcasecmp(buf,"git remote add")) {
+    if (!strcasecmp(buf,"new_cmsis_dap")) {
         *color = 36;
         *bold = 1;
-        return " <name> <url>";
+        return " -- Create New CMSIS-DAP Object";
     }
     return NULL;
 }
@@ -243,7 +244,7 @@ static int addreturn (lua_State *L) {
 ** Read multiple lines until a complete Lua statement
 */
 static int multiline (lua_State *L) {
-	for (;;) {  /* repeat until gets a complete statement */
+	while (1) {  /* repeat until gets a complete statement */
 		size_t len;
 		const char *line = lua_tolstring(L, 1, &len);  /* get what it has */
 		int status = luaL_loadbuffer(L, line, len, "=stdin");  /* try it */
@@ -296,7 +297,7 @@ static void l_print (lua_State *L) {
 
 // 设置一些全局变量
 static int setGlobal(lua_State *L) {
-	lua_pushfstring(L, "SmartOCD V%s", VERSION);
+	lua_pushfstring(L, "%s", VERSION);
 	lua_setglobal (L, "_SMARTOCD_VERSION");
 	return LUA_OK;
 }
@@ -346,11 +347,17 @@ static int init (lua_State *L) {
 	char **argv = lua_touserdata(L,-1);
 	int opt, logLevel = LOG_WARN;
 	int exitFlag = 0;	// 执行脚本后结束运行
-	// 设置全局变量
+	// 打开标准库
+	luaL_openlibs(L);
+	// 设置全局变量，SmartOCD版本信息
 	if(setGlobal(L) != LUA_OK){
 		lua_pushboolean(L, 0);
 		return 1;
 	}
+	// 加载SmartOCD库
+	load3rd(L);
+	// 打印logo和版本
+	printVersion();
 	// 解析参数
 	while((opt = getopt_long(argc, argv, "f:d:ehl:", long_option, NULL)) != -1) {
 		switch(opt) {
@@ -385,8 +392,7 @@ static int init (lua_State *L) {
 	} else {
 		log_set_level(logLevel);
 	}
-	// 打印logo和版本
-	printVersion();
+
 
 	if(exitFlag) goto EXIT;
 	// line noise初始化
@@ -413,15 +419,13 @@ int main (int argc, char **argv) {
 		log_fatal("cannot create state: not enough memory.");
 		return 1;
 	}
-	// 打开标准库
-	luaL_openlibs(L);
-	// 以保护模式运行初始化函数
+	// 以保护模式运行初始化函数，这些函数不会抛出异常。
 	lua_pushcfunction(L, &init);
-	//lua_insert(L, -3);
-	// 将参数个数压栈
+	// 将参数个数argc压栈
 	lua_pushinteger(L, argc);
-	// 参数指针
+	// 参数指针argv压栈
 	lua_pushlightuserdata(L, argv);
+	// 以保护模式调用函数
 	status = lua_pcall(L, 2, 1, 0);
 	// 打如果错误则打印
 	report(L, status);

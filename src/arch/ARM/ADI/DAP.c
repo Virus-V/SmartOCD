@@ -135,7 +135,7 @@ static BOOL DAP_Read(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t *data_o
 		}while((buff[0] & 0x7) == JTAG_RESP_WAIT && retry--);
 		// 判断是否成功
 		if((buff[0] & 0x7) != JTAG_RESP_OK_FAULT){
-			log_warn("The last JTAG ACK was WAIT.");
+			log_warn("The last JTAG ACK was WAIT. Read Failed.");
 			return FALSE;
 		}
 		retry = dapObj->retry;
@@ -218,7 +218,7 @@ static BOOL DAP_Write(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t data_i
 		}while((buff[0] & 0x7) == JTAG_RESP_WAIT && retry--);
 		// 判断当前命令是否被提交
 		if((buff[0] & 0x7) != JTAG_RESP_OK_FAULT){
-			log_warn("The last JTAG ACK was WAIT. This time the data was discarded.");
+			log_warn("The last JTAG ACK was WAIT. The data to write was discarded.");
 			return FALSE;
 		}
 		return TRUE;
@@ -396,7 +396,7 @@ BOOL DAP_WriteAbort(DAPObject *dapObj, uint32_t abort){
 		}while((buff[0] & 0x7) == JTAG_RESP_WAIT && retry--);
 		// 判断当前命令是否被提交
 		if((buff[0] & 0x7) != JTAG_RESP_OK_FAULT){
-			log_warn("The last JTAG ACK was WAIT. This time the data was discarded.");
+			log_warn("The last JTAG ACK was WAIT. The data to write was discarded.");
 			return FALSE;
 		}
 		return TRUE;

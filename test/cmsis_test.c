@@ -106,8 +106,14 @@ int main(){
 	int32_t int_val, idx;
 	uint8_t irLen[] = {4,4};
 	log_set_level(LOG_DEBUG);
-	cmsis_dapObj = NewCMSIS_DAP();
+	struct cmsis_dap *cmsis_dapObj;	// cmsis_dap对象
+
+	cmsis_dapObj = calloc(1, sizeof(struct cmsis_dap));
 	if(cmsis_dapObj == NULL){
+		log_warn("Failed to create CMSIS-DAP object.");
+		exit(1);
+	}
+	if( NewCMSIS_DAP(cmsis_dapObj) == FALSE){
 		log_fatal("failed to new.");
 		exit(1);
 	}

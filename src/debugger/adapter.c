@@ -112,6 +112,14 @@ BOOL adapter_HaveTransmission(AdapterObject *adapterObj, enum transportType type
 }
 
 /**
+ * 设置Adapter状态灯
+ */
+BOOL adapter_SetStatus(AdapterObject *adapterObj, enum adapterStatus status){
+	assert(adapterObj != NULL);
+	return adapterObj->Operate(adapterObj, AINS_SET_STATUS, status);
+}
+
+/**
  * 获得Transport协议字符串
  */
 const char *adapter_Transport2Str(enum transportType type){

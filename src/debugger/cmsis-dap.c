@@ -44,28 +44,20 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...);
 /**
  * 创建新的CMSIS-DAP仿真器对象
  */
-struct cmsis_dap *NewCMSIS_DAP(){
+BOOL NewCMSIS_DAP(struct cmsis_dap *cmsis_dapObj){
+	assert(cmsis_dapObj != NULL);
 	AdapterObject *adapterObj;
-	struct cmsis_dap *cmsis_dapObj;	// cmsis_dap对象
-
-	cmsis_dapObj = calloc(1, sizeof(struct cmsis_dap));
-	if(cmsis_dapObj == NULL){
-		log_warn("Failed to create CMSIS-DAP object.");
-		return NULL;
-	}
 	adapterObj = CAST(AdapterObject *, cmsis_dapObj);
 	// 构造Adapter对象
 	if(__CONSTRUCT(Adapter)(adapterObj, "ARM CMSIS-DAP") == FALSE){
-		free(cmsis_dapObj);
 		log_warn("Failed to Init AdapterObject.");
-		return NULL;
+		return FALSE;
 	}
 	// 构造USB对象
 	if(__CONSTRUCT(USB)(GET_USBOBJ(adapterObj)) == FALSE){
 		__DESTORY(Adapter)(adapterObj);
-		free(cmsis_dapObj);
 		log_warn("Failed to create USB object.");
-		return NULL;
+		return FALSE;
 	}
 	adapterObj->ConnObject.type = USB;
 	adapterObj->ConnObject.connectFlag = 0;
@@ -79,7 +71,7 @@ struct cmsis_dap *NewCMSIS_DAP(){
 	adapterObj->SelectTrans = selectTrans;
 	adapterObj->Operate = operate;
 
-	return cmsis_dapObj;
+	return TRUE;
 }
 
 // 释放CMSIS-DAP对象
@@ -94,8 +86,6 @@ void FreeCMSIS_DAP(struct cmsis_dap *cmsis_dapObj){
 	}
 	// 释放USB对象
 	__DESTORY(USB)(GET_USBOBJ(CAST(AdapterObject *, cmsis_dapObj)));
-	// 释放CMSIS-DAP对象
-	free(cmsis_dapObj);
 }
 
 // 连接CMSIS-DAP设备，只支持USB
@@ -498,6 +488,8 @@ static BOOL DAP_HostStatus(uint8_t *respBuff, AdapterObject *adapterObj, int sta
 		DAP_HostStatusPack[1] = 1;
 		DAP_HostStatusPack[2] = 0;
 		break;
+	default:
+		return FALSE;
 	}
 	DAP_EXCHANGE_DATA(adapterObj, DAP_HostStatusPack,  3, respBuff);
 	return TRUE;

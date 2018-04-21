@@ -150,7 +150,7 @@ struct cmsis_dap {
 	// TODO 实现更高版本仿真器支持 SWO、
 };
 
-struct cmsis_dap *NewCMSIS_DAP();
+BOOL NewCMSIS_DAP(struct cmsis_dap *cmsis_dapObj);
 void FreeCMSIS_DAP(struct cmsis_dap *cmsis_dapObj);
 BOOL ConnectCMSIS_DAP(struct cmsis_dap *cmsis_dapObj, const uint16_t *vids, const uint16_t *pids, const char *serialNum);
 

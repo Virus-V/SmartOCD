@@ -191,6 +191,8 @@ BOOL adapter_SetClock(AdapterObject *adapterObj, uint32_t clockHz);
 BOOL adapter_SelectTransmission(AdapterObject *adapterObj, enum transportType type);
 // 判断是否支持某一个传输方式
 BOOL adapter_HaveTransmission(AdapterObject *adapterObj, enum transportType type);
+// 设置状态指示灯
+BOOL adapter_SetStatus(AdapterObject *adapterObj, enum adapterStatus status);
 // 返回传输方式的字符串形式
 const char *adapter_Transport2Str(enum transportType type);
 

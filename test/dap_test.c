@@ -147,7 +147,7 @@ int main(){
 		goto EXIT_STEP_1;
 	}
 	// 设置SWJ频率，最大30MHz
-	adapter_SetClock(GET_ADAPTER(cmsis_dapObj), 1000000u);
+	adapter_SetClock(GET_ADAPTER(cmsis_dapObj), 100000u);
 	// 切换到JTAG模式
 	adapter_SelectTransmission(GET_ADAPTER(cmsis_dapObj), JTAG);
 	// 设置DAP在JTAG扫描链的索引值
@@ -159,8 +159,11 @@ int main(){
 	// 复位TAP
 	// TAP_Reset(dapObj, FALSE, 0);
 	// 声明TAP
-	uint16_t irLens[] = {4, 5};
-	log_debug("target_JTAG_Set_TAP_Info:%d.", TAP_SetInfo(&dapObj->tapObj, 2, irLens));
+	uint16_t irLens[] = {4};
+	log_debug("target_JTAG_Set_TAP_Info:%d.", TAP_SetInfo(&dapObj->tapObj, 1, irLens));
+	// 写入Abort寄存器
+	//DAP_WriteAbort(dapObj, 0x1);
+
 	DAP_DP_Write(dapObj, DP_SELECT, 0);
 	// 上电
 	DAP_DP_Write(dapObj, DP_CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ);
@@ -192,66 +195,92 @@ int main(){
 
 	BOOL result;
 	t_start = time(NULL) ;
-	// 修改select选中ap
-	if(DAP_AP_Select(dapObj, 0) == FALSE) {
+	for(int ap=0;ap<3;ap++){
+		// 修改select选中ap
+		if(DAP_AP_Select(dapObj, ap) == FALSE) {
+			// write abort;
+			DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg);
+			log_warn("Write SELECT Failed, CTRL : 0x%08X.", dapObj->CTRL_STAT_Reg);
+			goto EXIT_STEP_2;
+		}
+		// 读取AP的IDR
+		result = DAP_AP_Read(dapObj, AP_REG_IDR, &tmp);
+		DAP_CheckStatus(dapObj, FALSE);
+		if(!run){
+			goto EXIT_STEP_2;
+		}
+		if(tmp != 0){
+			printf("probe AP: 0x%X => 0x%08X\n", ap, tmp);
+			printAPInfo(tmp);
+			printf("---------------------------\n");
+		}
+	}
+
+
+	t_end = time(NULL);
+	printf("time: %.0f s\n", difftime(t_end,t_start));
+
+	/**
+	 *  probe AP: 0x0 => 0x24770004
+		MEM-AP:AMBA AXI3 or AXI4 bus, with optional ACT-Lite support connection to this AP.
+		Revision:0x2, Manufacturer:0x23b, Variant:0x0.
+		---------------------------
+		probe AP: 0x1 => 0x24770002
+		MEM-AP:AMBA APB2 or APB3 bus connection to this AP.
+		Revision:0x2, Manufacturer:0x23b, Variant:0x0.
+		---------------------------
+		probe AP: 0x2 => 0x14760010
+		JTAG-AP:JTAG Connection to this AP
+		Revision:0x1, Manufacturer:0x23b, Variant:0x1.
+		---------------------------
+	 */
+	if(DAP_AP_Select(dapObj, 1) == FALSE) {
 		// write abort;
 		DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg);
 		log_warn("Write SELECT Failed, CTRL : 0x%08X.", dapObj->CTRL_STAT_Reg);
 		goto EXIT_STEP_2;
 	}
-	// 读取AP的IDR
-	result = DAP_AP_Read(dapObj, AP_REG_IDR, &tmp);
-	DAP_CheckStatus(dapObj, FALSE);
-	if(!run){
-		goto EXIT_STEP_2;
-	}
-	if(tmp != 0){
-		printf("probe Address: 0x%08X => 0x%08X\n", dapObj->SelectReg.data, tmp);
-		printAPInfo(tmp);
-
-		// 读取ROM Table的基址
-		DAP_AP_Read(dapObj, AP_REG_ROM_LSB, &romtable);
-		// 读取CFG寄存器
-		DAP_AP_Read(dapObj, AP_REG_CFG, &tmp);
-		log_info("CFG [LD,LA,BE]:%X.", tmp);
-		// 写入CSW。Privileged,Data, TAR not INC
-		DAP_AP_Write(dapObj, AP_REG_CSW, 0x63000040u | AP_CSW_SIZE32);
-		// ROM Table的首地址
-		romtable = romtable & ~0xfff;
-		addr = romtable;
-		log_info("ROM Table Base: 0x%08X.", addr);
-		uint32_t ROM_TableEntry;
-		do{
-			// ROM Table[11:0]不在BaseAddr里面，[1]为1代表该寄存器是ADIv5的类型，[0]代表是否存在DebugEntry
-			// 注意还有Lagacy format要看一下资料
-			DAP_AP_Write(dapObj, AP_REG_TAR_LSB, addr);	// 将ROM TABLE写入到TAR寄存器
-			DAP_AP_Read(dapObj, AP_REG_DRW, &ROM_TableEntry);
-			//log_info("ROM Table Entry:0x%08X.", ROM_TableEntry);
-			// 求出偏移地址
-			componentOffset = 0xfffff000 & ROM_TableEntry;
-			// 计算组件的地址
-			componentAddr = romtable + componentOffset;
-			if(ROM_TableEntry != 0){
-				//log_info("Component Base Addr: 0x%08X.", componentAddr);
-				printComponentInfo(dapObj, componentAddr);
-			}
-			addr += 4;
-		}while(ROM_TableEntry != 0);
-		/*
-		addr = (romtable & ~0xfff) | 0xFCC;
+	// 读取ROM Table的基址
+	DAP_AP_Read(dapObj, AP_REG_ROM_LSB, &romtable);
+	// 读取CFG寄存器
+	DAP_AP_Read(dapObj, AP_REG_CFG, &tmp);
+	log_info("CFG [LD,LA,BE]:%X.", tmp);
+	// 写入CSW。Privileged,Data, TAR not INC
+	//DAP_AP_Write(dapObj, AP_REG_CSW, 0xB0000040u | AP_CSW_SIZE32);
+	// ROM Table的首地址
+	romtable = romtable & ~0xfff;
+	addr = romtable;
+	log_info("ROM Table Base: 0x%08X.", addr);
+	uint32_t ROM_TableEntry;
+	do{
+		// ROM Table[11:0]不在BaseAddr里面，[1]为1代表该寄存器是ADIv5的类型，[0]代表是否存在DebugEntry
+		// 注意还有Lagacy format要看一下资料
+		DAP_AP_Write(dapObj, AP_REG_TAR_LSB, addr);	// 将ROM TABLE写入到TAR寄存器
+		DAP_AP_Read(dapObj, AP_REG_DRW, &ROM_TableEntry);
+		//log_info("ROM Table Entry:0x%08X.", ROM_TableEntry);
+		// 求出偏移地址
+		componentOffset = 0xfffff000 & ROM_TableEntry;
+		// 计算组件的地址
+		componentAddr = romtable + componentOffset;
+		if(ROM_TableEntry != 0){
+			//log_info("Component Base Addr: 0x%08X.", componentAddr);
+			printComponentInfo(dapObj, componentAddr);
+		}
+		addr += 4;
+	}while(ROM_TableEntry != 0);
+	/*
+	addr = (romtable & ~0xfff) | 0xFCC;
+	adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_TAR_LSB, addr);
+	adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &int_val);
+	log_info("Mem Type: %x.", int_val);
+	for(idx=0xFD0; idx < 0xFFF; idx += 4){
+		addr = (romtable & ~0xfff) | idx;
 		adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_TAR_LSB, addr);
 		adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &int_val);
-		log_info("Mem Type: %x.", int_val);
-		for(idx=0xFD0; idx < 0xFFF; idx += 4){
-			addr = (romtable & ~0xfff) | idx;
-			adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_TAR_LSB, addr);
-			adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &int_val);
-			log_info("0x%03X:0x%08X.", idx, int_val);
-		}
-		*/
+		log_info("0x%03X:0x%08X.", idx, int_val);
 	}
-	t_end = time(NULL);
-	printf("time: %.0f s\n", difftime(t_end,t_start));
+	 */
+
 
 EXIT_STEP_2:
 	// 释放对象

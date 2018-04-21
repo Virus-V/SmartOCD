@@ -48,8 +48,8 @@ int main(){
 	TAP_Reset(tapObj, FALSE, 0);
 	// 声明TAP
 	// 测试irlen长度为9会怎么样？ 正常
-	uint16_t irLens[] = {4, 5};
-	log_debug("target_JTAG_Set_TAP_Info:%d.", TAP_SetInfo(tapObj, 2, irLens));
+	uint16_t irLens[] = {4, 4};
+	log_debug("target_JTAG_Set_TAP_Info:%d.", TAP_SetInfo(tapObj, 1, irLens));
 	uint32_t idCode[4] = {0, 0, 0, 0};
 	TAP_Get_IDCODE(tapObj, idCode);
 	log_debug("0x%08X, 0x%08X.", idCode[0], idCode[1]);
