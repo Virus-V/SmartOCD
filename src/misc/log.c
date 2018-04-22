@@ -98,7 +98,6 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
   /* Get current time */
   time_t t = time(NULL);
   struct tm *lt = localtime(&t);
-
   /* Log to stderr */
   if (!L.quiet) {
     va_list args;

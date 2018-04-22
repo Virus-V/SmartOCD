@@ -14,7 +14,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <assert.h>
 
 #include "smart_ocd.h"
 #include "debugger/usb.h"
@@ -22,35 +21,42 @@
 
 // 设备列表
 static libusb_device **devs;
-static int bulkWrite(USBObject *usbObj, char *data, int dataLength, int timeout);
-static int bulkRead(USBObject *usbObj, char *data, int dataLength, int timeout);
-static int interruptWrite(USBObject *usbObj, char *data, int dataLength, int timeout);
-static int interruptRead(USBObject *usbObj, char *data, int dataLength, int timeout);
-static int unsupportRW(USBObject *usbObj, char *data, int dataLength, int timeout);
+static int bulkWrite(USBObject *usbObj, uint8_t *data, int dataLength, int timeout);
+static int bulkRead(USBObject *usbObj, uint8_t *data, int dataLength, int timeout);
+static int interruptWrite(USBObject *usbObj, uint8_t *data, int dataLength, int timeout);
+static int interruptRead(USBObject *usbObj, uint8_t *data, int dataLength, int timeout);
+static int unsupportRW(USBObject *usbObj, uint8_t *data, int dataLength, int timeout);
+static BOOL defaultInitDeinit(USBObject *usbObj);
+static BOOL defaultReset(USBObject *usbObj);
+
 /*
- * 新建Debugger USB对象
+ * USB对象构造函数
  * desc: 设备的描述
  */
-USBObject * NewUSBObject(){
-	USBObject *object = calloc(1, sizeof(USBObject));
-	if(object == NULL){
-		// 内存分配失败
-		log_error("Failed to make USB Object");
-		return NULL;
+BOOL __CONSTRUCT(USB)(USBObject *obj){
+	assert(obj != NULL);
+
+	if (libusb_init(&obj->libusbContext) < 0){
+		log_error("libusb_init() failed.");
+		return FALSE;
 	}
 	// 禁止写入操作
-	object->read = object->write = unsupportRW;
-	object->clamedIFNum = object->currConfVal = -1;
-	return object;
+	obj->Read = obj->Write = unsupportRW;
+	obj->Init = obj->Deinit = defaultInitDeinit;
+	obj->Reset = defaultReset;
+	obj->clamedIFNum = obj->currConfVal = -1;
+	return TRUE;
 }
 
 /*
  * 销毁USB对象
  * object: 要销毁的USB对象
  */
-void FreeUSBObject(USBObject *object){
-	assert(object != NULL);
-	free(object);
+void __DESTORY(USB)(USBObject *obj){
+	assert(obj != NULL
+			&& obj->libusbContext != NULL);
+	libusb_exit(obj->libusbContext);
+	obj->libusbContext = NULL;
 }
 
 /**
@@ -87,11 +93,6 @@ BOOL USBOpen(USBObject *usbObj, const uint16_t vid, const uint16_t pid, const ch
 
 	// 断言usbObj已经初始化
 	assert(usbObj != NULL);
-
-	if (libusb_init(&usbObj->libusbContext) < 0){
-		log_error("libusb_init() failed.");
-		return FALSE;
-	}
 
 	// 获得USB设备总数
 	devCount = libusb_get_device_list(usbObj->libusbContext, &devs);
@@ -134,43 +135,37 @@ BOOL USBOpen(USBObject *usbObj, const uint16_t vid, const uint16_t pid, const ch
 		}
 		// 找到设备，初始化USB对象
 		usbObj->devHandle = devHandle;
-		usbObj->pid = devDesc_tmp.idProduct;
-		usbObj->vid = devDesc_tmp.idVendor;
-		usbObj->serialNum = serial ? strdup(serial) : NULL;
+		usbObj->Pid = devDesc_tmp.idProduct;
+		usbObj->Vid = devDesc_tmp.idVendor;
+		usbObj->SerialNum = serial ? strdup(serial) : NULL;
 
 		// 释放设备列表
 		libusb_free_device_list(devs, 1);
 		return TRUE;
 	}
-	// 关闭libusb context
-	libusb_exit(usbObj->libusbContext);
-	usbObj->libusbContext = NULL;
 	return FALSE;
 }
 
 // 关闭USB
 void USBClose(USBObject *usbObj) {
 	assert(usbObj != NULL
-			&& usbObj->devHandle != NULL
-			&& usbObj->libusbContext != NULL);
+			&& usbObj->devHandle != NULL);
 
 	/* Close device */
 	libusb_close(usbObj->devHandle);
 	usbObj->devHandle = NULL;
-	libusb_exit(usbObj->libusbContext);
-	usbObj->libusbContext = NULL;
 	// 清除配置
 	usbObj->clamedIFNum = -1;
 	usbObj->currConfVal = -1;
 	// 禁止写入
-	usbObj->read = usbObj->write = unsupportRW;
+	usbObj->Read = usbObj->Write = unsupportRW;
 }
 
 /**
  * USB控制传输
  */
 int USBControlTransfer(USBObject *usbObj, uint8_t requestType, uint8_t request, uint16_t wValue,
-	uint16_t wIndex, char *data, uint16_t dataLength, unsigned int timeout)
+	uint16_t wIndex, uint8_t *data, uint16_t dataLength, unsigned int timeout)
 {
 	int retCode;
 	assert(usbObj != NULL && usbObj->devHandle != NULL);
@@ -183,18 +178,18 @@ int USBControlTransfer(USBObject *usbObj, uint8_t requestType, uint8_t request, 
 	return retCode;
 }
 
-static int bulkWrite(USBObject *usbObj, char *data, int dataLength, int timeout){
+static int bulkWrite(USBObject *usbObj, uint8_t *data, int dataLength, int timeout){
 	return USBBulkTransfer(usbObj, usbObj->writeEP, data, dataLength, timeout);
 }
 
-static int bulkRead(USBObject *usbObj, char *data, int dataLength, int timeout){
+static int bulkRead(USBObject *usbObj, uint8_t *data, int dataLength, int timeout){
 	return USBBulkTransfer(usbObj, usbObj->readEP, data, dataLength, timeout);
 }
 
 /**
  * 读/写数据块
  */
-int USBBulkTransfer(USBObject *usbObj, int endpoint, char *data, int dataLength, int timeout) {
+int USBBulkTransfer(USBObject *usbObj, uint8_t endpoint, uint8_t *data, int dataLength, int timeout) {
 	int transferred = 0, retCode;
 
 	assert(usbObj != NULL && usbObj->devHandle != NULL);
@@ -206,18 +201,18 @@ int USBBulkTransfer(USBObject *usbObj, int endpoint, char *data, int dataLength,
 	return transferred;
 }
 
-static int interruptWrite(USBObject *usbObj, char *data, int dataLength, int timeout){
+static int interruptWrite(USBObject *usbObj, uint8_t *data, int dataLength, int timeout){
 	return USBInterruptTransfer(usbObj, usbObj->writeEP, data, dataLength, timeout);
 }
 
-static int interruptRead(USBObject *usbObj, char *data, int dataLength, int timeout){
+static int interruptRead(USBObject *usbObj, uint8_t *data, int dataLength, int timeout){
 	return USBInterruptTransfer(usbObj, usbObj->readEP, data, dataLength, timeout);
 }
 
 /**
  * 中断传输
  */
-int USBInterruptTransfer(USBObject *usbObj, int endpoint, char *data, int dataLength, int timeout) {
+int USBInterruptTransfer(USBObject *usbObj, uint8_t endpoint, uint8_t *data, int dataLength, int timeout) {
 	int transferred = 0, retCode;
 
 	assert(usbObj != NULL && usbObj->devHandle != NULL);
@@ -229,9 +224,15 @@ int USBInterruptTransfer(USBObject *usbObj, int endpoint, char *data, int dataLe
 	return transferred;
 }
 
-static int unsupportRW(USBObject *usbObj, char *data, int dataLength, int timeout){
+static int unsupportRW(USBObject *usbObj, uint8_t *data, int dataLength, int timeout){
+	(void)usbObj; (void)data; (void)dataLength; (void)timeout;
 	log_warn("An endpoint with an unsupported type has been operated or the endpoint has been shut down.");
 	return -1;
+}
+
+static BOOL defaultInitDeinit(USBObject *usbObj){
+	log_warn("Init deinit nothing.");
+	return TRUE;
 }
 
 /**
@@ -288,6 +289,11 @@ BOOL USBSetConfiguration(USBObject *usbObj, int configurationIndex) {
 
 /**
  * 声明interface
+ * IFClass:接口的类别码
+ * IFSubclass：接口子类别码
+ * IFProtocol：接口协议码
+ * transType：传输类型，最低两位表示传输类型：0为控制传输
+ * 			1为等时传输，2为批量传输，3为中断传输
  */
 BOOL USBClaimInterface(USBObject *usbObj, int IFClass, int IFSubclass, int IFProtocol, int transType)
 {
@@ -353,26 +359,30 @@ BOOL USBClaimInterface(USBObject *usbObj, int IFClass, int IFSubclass, int IFPro
 
 			if (epNum & 0x80){
 				usbObj->readEP = epNum;
-				log_debug("usb end point 'in' 0x%02x", epNum);
+				// 获得传输的包大小
+				usbObj->readEPMaxPackSize = epDesc->wMaxPacketSize & 0x7ff;
+				log_debug("usb end point 'in' 0x%02x, max packet size %d bytes.", epNum, usbObj->readEPMaxPackSize);
 			}else{
 				usbObj->writeEP = epNum;
-				log_debug("usb end point 'out' 0x%02x", epNum);
+				usbObj->writeEPMaxPackSize = epDesc->wMaxPacketSize & 0x7ff;
+				log_debug("usb end point 'out' 0x%02x, max packet size %d bytes.", epNum, usbObj->writeEPMaxPackSize);
 			}
+
 			// XXX 这里没有考虑端点0
 			if (usbObj->readEP && usbObj->writeEP) {
 				// 写入回调
 				switch(transType){
 				case 3:	//中断传输
-					usbObj->write = interruptWrite;
-					usbObj->read = interruptRead;
+					usbObj->Write = interruptWrite;
+					usbObj->Read = interruptRead;
 					break;
 
 				case 2:	// 批量传输
-					usbObj->write = bulkWrite;
-					usbObj->read = bulkRead;
+					usbObj->Write = bulkWrite;
+					usbObj->Read = bulkRead;
 					break;
 				default:
-					usbObj->write = usbObj->read = unsupportRW;
+					usbObj->Write = usbObj->Read = unsupportRW;
 					log_info("Unsupported endpoint type.");
 				}
 				usbObj->clamedIFNum = interfaceDesc->bInterfaceNumber;
@@ -389,19 +399,22 @@ BOOL USBClaimInterface(USBObject *usbObj, int IFClass, int IFSubclass, int IFPro
 	return FALSE;
 }
 
-/**
- * 获得PID和VID
- */
-BOOL USBGetPidVid(libusb_device *dev, uint16_t *pid_out, uint16_t *vid_out) {
-	struct libusb_device_descriptor devDesc;
-	if(pid_out == NULL && vid_out == NULL){
-		log_info("Nothing to do.");
-		return TRUE;
-	}
-	if (libusb_get_device_descriptor(dev, &devDesc) == 0) {
-		if(pid_out != NULL) *pid_out = devDesc.idProduct;
-		if(vid_out != NULL) *vid_out = devDesc.idVendor;
-		return TRUE;
-	}
-	return TRUE;
+static BOOL defaultReset(USBObject *usbObj){
+	log_info("nothing reset.");
+	return FALSE;
 }
+
+/**
+ * 复位设备
+ */
+BOOL USBResetDevice(USBObject *usbObj){
+	assert(usbObj != NULL && usbObj->devHandle != NULL);
+	int retCode = libusb_reset_device(usbObj->devHandle);
+	if(retCode == 0){
+		return TRUE;
+	}else{
+		log_warn("libusb_reset_device():%s", libusb_error_name(retCode));
+		return FALSE;
+	}
+}
+
