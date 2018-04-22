@@ -345,8 +345,11 @@ static int init (lua_State *L) {
 	// 取回参数个数和参数数据
 	int argc = (int)lua_tointeger(L, -2);
 	char **argv = lua_touserdata(L,-1);
-	int opt, logLevel = LOG_WARN;
+	int opt, logLevel = LOG_INFO;
 	int exitFlag = 0;	// 执行脚本后结束运行
+	// 设置初始log级别
+	log_set_level(logLevel);
+
 	// 打开标准库
 	luaL_openlibs(L);
 	// 设置全局变量，SmartOCD版本信息
@@ -367,6 +370,11 @@ static int init (lua_State *L) {
 			break;
 		case 'd':	// 日志输出等级 -1 不输出任何日志， 转换失败则会返回0
 			logLevel = atoi(optarg);
+			if(logLevel < 0) {
+				log_set_quiet(1);	// 静默模式
+			}else{
+				log_set_level(logLevel);
+			}
 			break;
 		case 'e':	// 执行脚本后不进入交互模式，直接退出
 			exitFlag = 1;
@@ -385,15 +393,6 @@ static int init (lua_State *L) {
 		default:; // 0 error: label at end of compound statement
 		}
 	}
-
-	if(logLevel < 0) {
-		// 静默模式
-		log_set_quiet(1);
-	} else {
-		log_set_level(logLevel);
-	}
-
-
 	if(exitFlag) goto EXIT;
 	// line noise初始化
 	linenoiseSetMultiLine(1);	// 多行编辑

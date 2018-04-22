@@ -172,10 +172,12 @@ struct AdapterObject{
 	enum supportedAdapter AdapterClass;	// 仿真器类型
 	enum transportType currTrans;	// 当前使用的仿真协议
 	const enum transportType *supportedTrans;	// 支持的仿真协议列表（不能出现UNKNOW）
+	BOOL isInit;	// 是否已经初始化
 	BOOL (*Init)(AdapterObject *adapterObj);	// 执行初始化动作
 	BOOL (*Deinit)(AdapterObject *adapterObj);	// 反初始化（告诉我怎么形容合适）
 	BOOL (*SelectTrans)(AdapterObject *adapterObj, enum transportType type);	// 选择transport类型(当仿真器支持多个transport时)
 	BOOL (*Operate)(AdapterObject *adapterObj, int operate, ...);	// 执行动作
+	void (*Destroy)(AdapterObject *adapterObj);	// 销毁该对象
 };
 
 // 获得USBObject的指针

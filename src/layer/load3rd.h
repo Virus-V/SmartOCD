@@ -13,5 +13,5 @@
 #include "lualib.h"
 
 void load3rd(lua_State *L);
-
+void layer_newTypeMetatable(lua_State *L, const char *tname, lua_CFunction gc, const luaL_Reg *oo);
 #endif /* SRC_LAYER_LOAD3RD_H_ */

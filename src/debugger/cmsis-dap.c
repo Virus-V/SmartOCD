@@ -40,6 +40,7 @@ static BOOL init(AdapterObject *adapterObj);
 static BOOL deinit(AdapterObject *adapterObj);
 static BOOL selectTrans(AdapterObject *adapterObj, enum transportType type);
 static BOOL operate(AdapterObject *adapterObj, int operate, ...);
+static void destroy(struct cmsis_dap *cmsis_dapObj);
 
 /**
  * 创建新的CMSIS-DAP仿真器对象
@@ -70,22 +71,22 @@ BOOL NewCMSIS_DAP(struct cmsis_dap *cmsis_dapObj){
 	adapterObj->Deinit = deinit;
 	adapterObj->SelectTrans = selectTrans;
 	adapterObj->Operate = operate;
-
+	adapterObj->Destroy = destroy;
 	return TRUE;
 }
 
 // 释放CMSIS-DAP对象
-void FreeCMSIS_DAP(struct cmsis_dap *cmsis_dapObj){
+static void destroy(struct cmsis_dap *cmsis_dapObj){
 	assert(cmsis_dapObj != NULL);
-	// 反初始化Adapter对象
-	__DESTORY(Adapter)(CAST(AdapterObject *, cmsis_dapObj));
 	// 关闭USB对象
 	if(GET_ADAPTER(cmsis_dapObj)->ConnObject.connectFlag){
 		USBClose(GET_USBOBJ(CAST(AdapterObject *, cmsis_dapObj)));
 		GET_ADAPTER(cmsis_dapObj)->ConnObject.connectFlag = 0;
 	}
 	// 释放USB对象
-	__DESTORY(USB)(GET_USBOBJ(CAST(AdapterObject *, cmsis_dapObj)));
+	__DESTORY(USB)(GET_USBOBJ(GET_ADAPTER(cmsis_dapObj)));
+	// 反初始化Adapter对象
+	__DESTORY(Adapter)(GET_ADAPTER(cmsis_dapObj));
 }
 
 // 连接CMSIS-DAP设备，只支持USB
@@ -152,6 +153,10 @@ static int DAPWrite(AdapterObject *adapterObj, uint8_t *data, int len){
 // 初始化CMSIS-DAP设备
 static BOOL init(AdapterObject *adapterObj){
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
+	// 判断是否已经执行过初始化
+	if(adapterObj->isInit == TRUE){
+		return TRUE;
+	}
 	char capablity;
 	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	USBObject *usbObj = GET_USBOBJ(adapterObj);
@@ -238,6 +243,8 @@ static BOOL init(AdapterObject *adapterObj){
 	// 在初始化过程中不选择transport
 	adapterObj->currTrans = UNKNOW_NULL;
 	free(resp);
+	// 标记当前Adapter已经执行过初始化
+	adapterObj->isInit = TRUE;
 	return TRUE;
 }
 
@@ -259,8 +266,17 @@ static BOOL DAP_Disconnect(uint8_t *respBuff, AdapterObject *adapterObj){
 // 反初始化
 static BOOL deinit(AdapterObject *adapterObj){
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
+	// 判断是否初始化
+	if(adapterObj->isInit == FALSE){
+		return TRUE;
+	}
 	// 断开连接
-	return CMDAP_FUN_WARP(adapterObj, DAP_Disconnect, adapterObj);
+	if(CMDAP_FUN_WARP(adapterObj, DAP_Disconnect, adapterObj) == TRUE){
+		adapterObj->isInit = FALSE;
+		return TRUE;
+	}else{
+		return FALSE;
+	}
 }
 
 /**

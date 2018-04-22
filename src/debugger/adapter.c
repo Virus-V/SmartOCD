@@ -19,6 +19,7 @@ static BOOL init(AdapterObject *adapterObj);	// 初始化
 static BOOL deinit(AdapterObject *adapterObj);	// 反初始化（告诉我怎么形容合适）
 static BOOL selectTrans(AdapterObject *adapterObj, enum transportType type);	// 选择transport类型(当仿真器支持多个transport时)
 static BOOL operate(AdapterObject *adapterObj, int operate, ...);	// 执行动作
+static BOOL destroy(AdapterObject *adapterObj);	// 销毁Adapter对象
 
 // 初始化Adapter对象
 BOOL __CONSTRUCT(Adapter)(AdapterObject *adapterObj, const char *desc){
@@ -26,10 +27,12 @@ BOOL __CONSTRUCT(Adapter)(AdapterObject *adapterObj, const char *desc){
 	adapterObj->DeviceDesc = strdup(desc);
 
 	// 初始化默认函数
+	adapterObj->isInit = FALSE;
 	adapterObj->Init = init;
 	adapterObj->Deinit = deinit;
 	adapterObj->SelectTrans = selectTrans;
 	adapterObj->Operate = operate;
+	adapterObj->Destroy = destroy;
 	return TRUE;
 }
 
@@ -73,6 +76,14 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 	return FALSE;
 }
 
+/**
+ * 销毁该对象
+ */
+static BOOL destroy(AdapterObject *adapterObj){
+	(void)adapterObj;
+	log_warn("Tried to call undefined function: destroy.");
+	return FALSE;
+}
 /**
  * 设置仿真器通信频率（Hz）
  */

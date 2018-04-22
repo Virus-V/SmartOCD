@@ -4,7 +4,6 @@
  * Author: Virus.V <virusv@live.com>
 ]]
 cmsis_dap = require("cmsis_dap"); -- 加载CMSIS-DAP库
-adapter = require("adapter")
 cmsis_dapObj = cmsis_dap.new(); -- 创建新的CMSIS-DAP对象
 if cmsis_dapObj == nil then
 	error("Failed to get CMSIS-DAP Object instance!")
@@ -16,16 +15,31 @@ if not cmsis_dap.connect(cmsis_dapObj, vid_pids, nil) then
 	error("CMSIS-DAP Connected Failed!")
 end
 -- 初始化Adapter对象
-if not adapter.init(cmsis_dapObj) then
+if not cmsis_dapObj:init() then
 	error("Adapter Init Failed.")
 end
 -- 点亮连接状态指示灯
-adapter.setStatus(cmsis_dapObj, "CONNECTED")
-adapter.setClock(cmsis_dapObj, 1000000)	-- 1MHz
-if not adapter.haveTransmission(cmsis_dapObj, "JTAG") then
+cmsis_dapObj:setStatus("CONNECTED")
+cmsis_dapObj:setClock(1000000)	-- 1MHz
+if not cmsis_dapObj:haveTransmission("JTAG") then
 	error("Emmm.. This adapter does not support JTAG Transmission.")
 end
-adapter.selectTransmission(cmsis_dapObj, "JTAG")
-adapter.setStatus(cmsis_dapObj, "RUNING")
--- 反初始化
-adapter.deinit(cmsis_dapObj)
+cmsis_dapObj:selectTransmission("JTAG")
+cmsis_dapObj:setStatus("RUNING")
+
+tap = require("TAP")
+tapObj = tap.new(cmsis_dapObj)	-- 新建tap对象
+if not tapObj:setInfo({4,5}) then
+	error("Set TAP Info Failed.")
+end
+tapObj:reset(false);	-- TAP soft reset
+
+idcodes = tapObj:get_IDCODE()
+print("===========Found " .. #idcodes .." TAPs===========")
+for k,v in ipairs(idcodes) do
+	print(string.format("JTAG index %d => IDCODE:0x%08X", k, v))
+end  
+
+
+-- 反初始化Adapter对象后禁止操作TAP对象和DAP对象
+cmsis_dapObj:deinit()

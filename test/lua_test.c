@@ -30,10 +30,17 @@ static int my_math_cos (lua_State *L) {
 	return 1;
 }
 
+static int my_test(lua_State *L){
+	lua_pushnumber(L, 1);
+	lua_pushnumber(L, 2);
+	lua_pushnumber(L, 3);
+	return 2;
+}
 
 static const luaL_Reg mathlib[] = {
 	{"my_cos",   my_math_cos},
 	{"my_sin",   my_math_sin},
+	{"my_test",  my_test},
 	{NULL, NULL}
 };
 
@@ -58,7 +65,7 @@ int main (){
 	luaL_requiref(L,"my_math",luaopen_my_math,0);
 
 	return luaL_dostring (L, "my_ = require(\"my_math\")\n"
-			"print(my_.my_sin(3.1415926/2))\n"
+			"print(my_.my_test())\n"	// 2.0 3.0
 			"print(my_.my_cos(3.1415926))");
 }
 

@@ -151,7 +151,6 @@ struct cmsis_dap {
 };
 
 BOOL NewCMSIS_DAP(struct cmsis_dap *cmsis_dapObj);
-void FreeCMSIS_DAP(struct cmsis_dap *cmsis_dapObj);
 BOOL ConnectCMSIS_DAP(struct cmsis_dap *cmsis_dapObj, const uint16_t *vids, const uint16_t *pids, const char *serialNum);
 
 #endif /* SRC_DEBUGGER_CMSIS_DAP_H_ */

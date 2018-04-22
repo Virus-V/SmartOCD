@@ -13,9 +13,7 @@
 #include "misc/log.h"
 #include "debugger/adapter.h"
 
-#include "lua.h"
-#include "lauxlib.h"
-#include "lualib.h"
+#include "layer/load3rd.h"
 
 /**
  * Adapter仿真器通用接口
@@ -32,7 +30,7 @@
  */
 static int adapter_init(lua_State *L){
 	luaL_checktype (L, 1, LUA_TUSERDATA);
-	AdapterObject *adapterObj = lua_touserdata(L, 1);
+	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	lua_pushboolean(L, adapterObj->Init(adapterObj));
 	return 1;
 }
@@ -44,7 +42,7 @@ static int adapter_init(lua_State *L){
  */
 static int adapter_deinit(lua_State *L){
 	luaL_checktype (L, 1, LUA_TUSERDATA);
-	AdapterObject *adapterObj = lua_touserdata(L, 1);
+	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	lua_pushboolean(L, adapterObj->Deinit(adapterObj));
 	return 1;
 }
@@ -58,7 +56,7 @@ static int adapter_deinit(lua_State *L){
 static int adapter_set_status(lua_State *L){
 	luaL_checktype (L, 1, LUA_TUSERDATA);
 	luaL_checktype (L, 2, LUA_TSTRING);
-	AdapterObject *adapterObj = lua_touserdata(L, 1);
+	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	const char *status = lua_tostring(L, 2);
 	if(strncasecmp(status, "CONNECTED", 9) == 0){
 		lua_pushboolean(L, adapter_SetStatus(adapterObj, ADAPTER_STATUS_CONNECTED));
@@ -83,7 +81,7 @@ static int adapter_set_status(lua_State *L){
 static int adapter_set_clock(lua_State *L){
 	luaL_checktype (L, 1, LUA_TUSERDATA);
 	luaL_checktype (L, 2, LUA_TNUMBER);
-	AdapterObject *adapterObj = lua_touserdata(L, 1);
+	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	int clockHz = (int)lua_tointeger(L, 2);
 	lua_pushboolean(L, adapter_SetClock(adapterObj, clockHz));
 	return 1;
@@ -98,7 +96,7 @@ static int adapter_set_clock(lua_State *L){
 static int adapter_select_transmission(lua_State *L){
 	luaL_checktype (L, 1, LUA_TUSERDATA);
 	luaL_checktype (L, 2, LUA_TSTRING);
-	AdapterObject *adapterObj = lua_touserdata(L, 1);
+	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	const char *trans = lua_tostring(L, 2);
 	// strnicmp
 	if(strncasecmp(trans, "JTAG", 4) == 0){
@@ -119,7 +117,7 @@ static int adapter_select_transmission(lua_State *L){
 static int adapter_have_transmission(lua_State *L){
 	luaL_checktype (L, 1, LUA_TUSERDATA);
 	luaL_checktype (L, 2, LUA_TSTRING);
-	AdapterObject *adapterObj = lua_touserdata(L, 1);
+	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	const char *trans = lua_tostring(L, 2);
 	// strnicmp
 	if(strncasecmp(trans, "JTAG", 4) == 0){
@@ -132,7 +130,17 @@ static int adapter_have_transmission(lua_State *L){
 	return 1;
 }
 
-static const luaL_Reg adapter_lib[] = {
+/**
+ * Adapter垃圾回收函数
+ */
+static int adapter_gc(lua_State *L){
+	AdapterObject *adapterObj = lua_touserdata(L, 1);
+	// 销毁Adapter对象
+	adapterObj->Destroy(adapterObj);
+	return 0;
+}
+
+static const luaL_Reg lib_adapter_oo[] = {
 	{"init", adapter_init},
 	{"deinit", adapter_deinit},
 	{"setStatus", adapter_set_status},
@@ -143,14 +151,15 @@ static const luaL_Reg adapter_lib[] = {
 };
 
 // 初始化Adapter库
-int luaopen_adapter (lua_State *L) {
-  luaL_newlib(L, adapter_lib);
-  return 1;
-}
+//int luaopen_adapter (lua_State *L) {
+//	luaL_newlib(L, adapter_lib);
+//	return 1;
+//}
 
 // 加载器
 void register2lua_adapter(lua_State *L){
-	luaL_requiref(L, "adapter", luaopen_adapter, 0);
-	// 将栈中model的副本弹出
-	lua_pop(L, 1);
+	// 创建类型元表
+	layer_newTypeMetatable(L, "obj.Adapter", adapter_gc, lib_adapter_oo);
+	//luaL_requiref(L, "adapter", luaopen_adapter, 0);
+	//lua_pop(L, 1);
 }
