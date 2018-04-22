@@ -268,7 +268,7 @@ typedef union {
 // DAP对象
 typedef struct DAPObject DAPObject;
 struct DAPObject{
-	TAPObject tapObj;	// 继承与TAP
+	TAPObject tapObj;	// 继承于TAP
 	uint8_t DP_Version;	// DP版本号
 	uint16_t TAP_index;	// TAP在JTAG中的索引，SWD模式下忽略该参数
 	uint32_t CTRL_STAT_Reg;	// 当前CTRL/STAT寄存器

@@ -41,12 +41,10 @@ static int tap_new(lua_State *L){
 	TAPObject *tapObj = lua_newuserdata(L, sizeof(TAPObject));
 	// 清零空间
 	memset(tapObj, 0x0, sizeof(TAPObject));
-	// 初始化CMSIS-DAP
 	if(__CONSTRUCT(TAP)(tapObj, adapterObj) == FALSE){
 		// 此函数永不返回，惯例用法前面加个return
 		return luaL_error(L, "Failed to new TAP Object.");
 	}
-	// 获得CMSIS-DAP对象的元表
 	luaL_getmetatable(L, "obj.TAP");	// 将元表压栈 +1
 	lua_setmetatable(L, -2);	// -1
 	return 1;	// 返回压到栈中的返回值个数
@@ -62,7 +60,11 @@ static int tap_new(lua_State *L){
 static int tap_reset(lua_State *L){
 	luaL_checktype(L, 1, LUA_TUSERDATA);
 	luaL_checktype(L, 2, LUA_TBOOLEAN);
-	TAPObject *tapObj = luaL_checkudata(L, 1, "obj.TAP");
+	TAPObject *tapObj = luaL_testudata(L, 1, "obj.TAP");
+	if(tapObj == NULL){	// 如果是DAP的类型
+		tapObj = luaL_testudata(L, 1, "obj.DAP");
+	}
+	luaL_argcheck(L, tapObj != NULL, 1, "Not a TAP or DAP object.");
 	BOOL hard = (BOOL)lua_toboolean(L, 2);
 	int pinWait = (int)luaL_optinteger(L, 3, 100);
 	// 复位状态机
@@ -79,7 +81,11 @@ static int tap_reset(lua_State *L){
 static int tap_set_info(lua_State *L){
 	luaL_checktype(L, 1, LUA_TUSERDATA);
 	luaL_checktype(L, 2, LUA_TTABLE);
-	TAPObject *tapObj = luaL_checkudata(L, 1, "obj.TAP");
+	TAPObject *tapObj = luaL_testudata(L, 1, "obj.TAP");
+	if(tapObj == NULL){	// 如果是DAP的类型
+		tapObj = luaL_testudata(L, 1, "obj.DAP");
+	}
+	luaL_argcheck(L, tapObj != NULL, 1, "Not a TAP or DAP object.");
 	// 获得JTAG扫描链中TAP个数
 	int tapCount = lua_rawlen(L, 2);
 	// 开辟存放IR Len的空间
@@ -103,7 +109,11 @@ static int tap_set_info(lua_State *L){
  */
 static int tap_get_idcode(lua_State *L){
 	luaL_checktype(L, 1, LUA_TUSERDATA);
-	TAPObject *tapObj = luaL_checkudata(L, 1, "obj.TAP");
+	TAPObject *tapObj = luaL_testudata(L, 1, "obj.TAP");
+	if(tapObj == NULL){	// 如果是DAP的类型
+		tapObj = luaL_testudata(L, 1, "obj.DAP");
+	}
+	luaL_argcheck(L, tapObj != NULL, 1, "Not a TAP or DAP object.");
 	// IDCODE的缓存空间
 	uint32_t *idCodes = lua_newuserdata(L, tapObj->TAP_Count * sizeof(uint32_t));
 	if(TAP_Get_IDCODE(tapObj, idCodes) == FALSE){
@@ -124,7 +134,8 @@ static const luaL_Reg lib_tap_f[] = {
 	{NULL, NULL}
 };
 
-static const luaL_Reg lib_tap_oo[] = {
+// XXX 这个没有声明为static 因为DAP对象是TAP的子类，所以DAP需要继承TAP对象的方法
+const luaL_Reg lib_tap_oo[] = {
 	{"reset", tap_reset},
 	{"setInfo", tap_set_info},
 	{"get_IDCODE", tap_get_idcode},
@@ -135,7 +146,6 @@ static const luaL_Reg lib_tap_oo[] = {
 	{NULL, NULL}
 };
 
-// 初始化Adapter库
 int luaopen_TAP (lua_State *L) {
   luaL_newlib(L, lib_tap_f);
   return 1;
@@ -147,6 +157,6 @@ void register2lua_TAP(lua_State *L){
 	layer_newTypeMetatable(L, "obj.TAP", tap_gc, lib_tap_oo);
 	// 加载器
 	luaL_requiref(L, "TAP", luaopen_TAP, 0);
-	lua_pop(L, 1);	// 清空栈
+	lua_pop(L, 2);	// 清空栈
 }
 /* SRC_LAYER_TAP_C_ */

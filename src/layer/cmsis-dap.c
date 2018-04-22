@@ -44,7 +44,6 @@ static int cmsis_dap_new (lua_State *L) {
  * 返回值：成功 TRUE，失败 FALSE
  */
 static int cmsis_dap_connect(lua_State *L){
-	luaL_checktype (L, 1, LUA_TUSERDATA);
 	luaL_checktype (L, 2, LUA_TTABLE);
 	luaL_checkany (L, 3);
 	const char *serial = lua_tostring (L, 3);

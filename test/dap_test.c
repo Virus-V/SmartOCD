@@ -124,32 +124,31 @@ static void errorHandle(DAPObject *dapObj){
 
 int main(){
 	DAPObject *dapObj;
-	struct cmsis_dap *cmsis_dapObj;
+	struct cmsis_dap cmsis_dapObj;
 	log_set_level(LOG_DEBUG);
 	dapObj = calloc(1, sizeof(DAPObject));
 	if(dapObj == NULL){
 		log_fatal("failed to new dap object.");
 		return 1;
 	}
-	cmsis_dapObj = NewCMSIS_DAP();
-	if(cmsis_dapObj == NULL){
+	if(NewCMSIS_DAP(&cmsis_dapObj) == FALSE){
 		log_fatal("failed to new cmsis dap.");
 		goto EXIT_STEP_0;
 	}
 	// 连接CMSIS-DAP
-	if(ConnectCMSIS_DAP(cmsis_dapObj, vids, pids, NULL) == FALSE){
+	if(ConnectCMSIS_DAP(&cmsis_dapObj, vids, pids, NULL) == FALSE){
 		log_fatal("failed to connect.");
 		goto EXIT_STEP_1;
 	}
 	// 同时对cmsis-dap进行初始化
-	if(__CONSTRUCT(DAP)(dapObj, GET_ADAPTER(cmsis_dapObj)) == FALSE){
+	if(__CONSTRUCT(DAP)(dapObj, GET_ADAPTER(&cmsis_dapObj)) == FALSE){
 		log_fatal("Target initialization failed.");
 		goto EXIT_STEP_1;
 	}
 	// 设置SWJ频率，最大30MHz
-	adapter_SetClock(GET_ADAPTER(cmsis_dapObj), 100000u);
+	adapter_SetClock(GET_ADAPTER(&cmsis_dapObj), 100000u);
 	// 切换到JTAG模式
-	adapter_SelectTransmission(GET_ADAPTER(cmsis_dapObj), JTAG);
+	adapter_SelectTransmission(GET_ADAPTER(&cmsis_dapObj), JTAG);
 	// 设置DAP在JTAG扫描链的索引值
 	DAP_Set_TAP_Index(dapObj, 0);
 	// 设置DAP WAIT响应的重试次数
@@ -246,7 +245,7 @@ int main(){
 	DAP_AP_Read(dapObj, AP_REG_CFG, &tmp);
 	log_info("CFG [LD,LA,BE]:%X.", tmp);
 	// 写入CSW。Privileged,Data, TAR not INC
-	//DAP_AP_Write(dapObj, AP_REG_CSW, 0xB0000040u | AP_CSW_SIZE32);
+	DAP_AP_Write(dapObj, AP_REG_CSW, 0xB0000040u | AP_CSW_SIZE32);
 	// ROM Table的首地址
 	romtable = romtable & ~0xfff;
 	addr = romtable;
@@ -286,7 +285,7 @@ EXIT_STEP_2:
 	// 释放对象
 	__DESTORY(DAP)(dapObj);
 EXIT_STEP_1:
-	FreeCMSIS_DAP(cmsis_dapObj);
+	GET_ADAPTER(&cmsis_dapObj)->Destroy(&cmsis_dapObj);
 EXIT_STEP_0:
 	free(dapObj);
 	return 0;

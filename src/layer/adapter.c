@@ -29,7 +29,6 @@
  * 返回TRUE FALSE
  */
 static int adapter_init(lua_State *L){
-	luaL_checktype (L, 1, LUA_TUSERDATA);
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	lua_pushboolean(L, adapterObj->Init(adapterObj));
 	return 1;
@@ -41,7 +40,6 @@ static int adapter_init(lua_State *L){
  * 返回TRUE FALSE
  */
 static int adapter_deinit(lua_State *L){
-	luaL_checktype (L, 1, LUA_TUSERDATA);
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	lua_pushboolean(L, adapterObj->Deinit(adapterObj));
 	return 1;
@@ -54,10 +52,8 @@ static int adapter_deinit(lua_State *L){
  * 返回：TRUE FALSE
  */
 static int adapter_set_status(lua_State *L){
-	luaL_checktype (L, 1, LUA_TUSERDATA);
-	luaL_checktype (L, 2, LUA_TSTRING);
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
-	const char *status = lua_tostring(L, 2);
+	const char *status = luaL_checkstring(L, 2);
 	if(strncasecmp(status, "CONNECTED", 9) == 0){
 		lua_pushboolean(L, adapter_SetStatus(adapterObj, ADAPTER_STATUS_CONNECTED));
 	}else if(strncasecmp(status, "DISCONNECT", 10) == 0){
@@ -79,10 +75,8 @@ static int adapter_set_status(lua_State *L){
  * 返回：TRUE FALSE
  */
 static int adapter_set_clock(lua_State *L){
-	luaL_checktype (L, 1, LUA_TUSERDATA);
-	luaL_checktype (L, 2, LUA_TNUMBER);
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
-	int clockHz = (int)lua_tointeger(L, 2);
+	int clockHz = (int)luaL_checkinteger(L, 2);
 	lua_pushboolean(L, adapter_SetClock(adapterObj, clockHz));
 	return 1;
 }
@@ -94,10 +88,8 @@ static int adapter_set_clock(lua_State *L){
  * 返回值：TRUE FALSE
  */
 static int adapter_select_transmission(lua_State *L){
-	luaL_checktype (L, 1, LUA_TUSERDATA);
-	luaL_checktype (L, 2, LUA_TSTRING);
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
-	const char *trans = lua_tostring(L, 2);
+	const char *trans = luaL_checkstring(L, 2);
 	// strnicmp
 	if(strncasecmp(trans, "JTAG", 4) == 0){
 		lua_pushboolean(L, adapter_SelectTransmission(adapterObj, JTAG));
@@ -115,10 +107,8 @@ static int adapter_select_transmission(lua_State *L){
  * 第二个参数：字符串JTAG、SWD。。
  */
 static int adapter_have_transmission(lua_State *L){
-	luaL_checktype (L, 1, LUA_TUSERDATA);
-	luaL_checktype (L, 2, LUA_TSTRING);
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
-	const char *trans = lua_tostring(L, 2);
+	const char *trans = luaL_checkstring(L, 2);
 	// strnicmp
 	if(strncasecmp(trans, "JTAG", 4) == 0){
 		lua_pushboolean(L, adapter_HaveTransmission(adapterObj, JTAG));
@@ -161,5 +151,5 @@ void register2lua_adapter(lua_State *L){
 	// 创建类型元表
 	layer_newTypeMetatable(L, "obj.Adapter", adapter_gc, lib_adapter_oo);
 	//luaL_requiref(L, "adapter", luaopen_adapter, 0);
-	//lua_pop(L, 1);
+	lua_pop(L, 1);
 }
