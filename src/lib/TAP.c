@@ -331,6 +331,7 @@ void TAP_Set_DR_Delay(TAPObject *tapObj, int delay){
 	tapObj->DR_Delay = delay;
 	// delay就是在IDLE状态空转多少个时钟周期，用来等待DR操作完成
 	tapObj->delayBytes = BIT2BYTE(delay);
+	log_debug("%d, %d.", tapObj->DR_Delay, tapObj->delayBytes);
 }
 
 /**

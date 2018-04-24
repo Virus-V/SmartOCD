@@ -64,7 +64,6 @@ void __DESTORY(USB)(USBObject *obj){
  */
 static BOOL usbStrDescriptorMatch(libusb_device_handle *devHandle, uint8_t descIndex, const char *snString) {
 	int retcode;
-	BOOL matched;
 	// 描述字符串缓冲区
 	char descString[256+1];	// XXX 较大的数组在栈中分配！
 
@@ -179,7 +178,12 @@ int USBControlTransfer(USBObject *usbObj, uint8_t requestType, uint8_t request, 
 }
 
 static int bulkWrite(USBObject *usbObj, uint8_t *data, int dataLength, int timeout){
-	return USBBulkTransfer(usbObj, usbObj->writeEP, data, dataLength, timeout);
+	int transfered = USBBulkTransfer(usbObj, usbObj->writeEP, data, dataLength, timeout);
+	// 如果写入的数据长度正好等于EP Max pack Size的整数倍，则发送0长度告诉对端传输完成
+	if(dataLength % usbObj->writeEPMaxPackSize == 0){
+		USBBulkTransfer(usbObj, usbObj->writeEP, data, 0, timeout);
+	}
+	return transfered;
 }
 
 static int bulkRead(USBObject *usbObj, uint8_t *data, int dataLength, int timeout){
@@ -190,19 +194,22 @@ static int bulkRead(USBObject *usbObj, uint8_t *data, int dataLength, int timeou
  * 读/写数据块
  */
 int USBBulkTransfer(USBObject *usbObj, uint8_t endpoint, uint8_t *data, int dataLength, int timeout) {
-	int transferred = 0, retCode;
-
+	int transfered = 0, retCode;
 	assert(usbObj != NULL && usbObj->devHandle != NULL);
-
-	retCode = libusb_bulk_transfer(usbObj->devHandle, endpoint, (unsigned char *)data, dataLength, &transferred, timeout);
+	retCode = libusb_bulk_transfer(usbObj->devHandle, endpoint, (unsigned char *)data, dataLength, &transfered, timeout);
 	if (retCode < 0){
 		log_warn("libusb_bulk_transfer():%s", libusb_error_name(retCode));
 	}
-	return transferred;
+	return transfered;
 }
 
 static int interruptWrite(USBObject *usbObj, uint8_t *data, int dataLength, int timeout){
-	return USBInterruptTransfer(usbObj, usbObj->writeEP, data, dataLength, timeout);
+	int transfered = USBInterruptTransfer(usbObj, usbObj->writeEP, data, dataLength, timeout);
+	// 如果写入的数据长度正好等于EP Max pack Size的整数倍，则发送0长度告诉对端传输完成
+	if(dataLength % usbObj->writeEPMaxPackSize == 0){
+		USBInterruptTransfer(usbObj, usbObj->writeEP, data, 0, timeout);
+	}
+	return transfered ;
 }
 
 static int interruptRead(USBObject *usbObj, uint8_t *data, int dataLength, int timeout){

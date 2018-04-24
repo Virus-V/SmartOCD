@@ -40,7 +40,7 @@ static BOOL init(AdapterObject *adapterObj);
 static BOOL deinit(AdapterObject *adapterObj);
 static BOOL selectTrans(AdapterObject *adapterObj, enum transportType type);
 static BOOL operate(AdapterObject *adapterObj, int operate, ...);
-static void destroy(struct cmsis_dap *cmsis_dapObj);
+static void destroy(AdapterObject *adapterObj);
 
 /**
  * 创建新的CMSIS-DAP仿真器对象
@@ -73,22 +73,22 @@ BOOL NewCMSIS_DAP(struct cmsis_dap *cmsis_dapObj){
 	adapterObj->Deinit = deinit;
 	adapterObj->SelectTrans = selectTrans;
 	adapterObj->Operate = operate;
-	adapterObj->Destroy = destroy;
+	adapterObj->Destroy = destroy;	// 警告，指针不匹配
 	return TRUE;
 }
 
 // 释放CMSIS-DAP对象
-static void destroy(struct cmsis_dap *cmsis_dapObj){
-	assert(cmsis_dapObj != NULL);
+static void destroy(AdapterObject *adapterObj){
+	assert(adapterObj != NULL);
 	// 关闭USB对象
-	if(GET_ADAPTER(cmsis_dapObj)->ConnObject.connectFlag){
-		USBClose(GET_USBOBJ(CAST(AdapterObject *, cmsis_dapObj)));
-		GET_ADAPTER(cmsis_dapObj)->ConnObject.connectFlag = 0;
+	if(adapterObj->ConnObject.connectFlag){
+		USBClose(GET_USBOBJ(adapterObj));
+		adapterObj->ConnObject.connectFlag = 0;
 	}
 	// 释放USB对象
-	__DESTORY(USB)(GET_USBOBJ(GET_ADAPTER(cmsis_dapObj)));
+	__DESTORY(USB)(GET_USBOBJ(adapterObj));
 	// 反初始化Adapter对象
-	__DESTORY(Adapter)(GET_ADAPTER(cmsis_dapObj));
+	__DESTORY(Adapter)(adapterObj);
 }
 
 // 连接CMSIS-DAP设备，只支持USB
@@ -571,7 +571,7 @@ MAKE_PACKT:
 		uint8_t tckCount = data[inputIdx] & 0x3f;
 		tckCount = tckCount ? tckCount : 64;
 		uint8_t tdiByte = (tckCount + 7) >> 3;	// 将TCK个数圆整到字节，表示后面跟几个byte的tdi数据
-		//log_debug("SeqInfo:0x%02x, tckCount:%d, tdiByte:%d.", data[inputIdx], tckCount, tdiByte);
+		//log_debug("SeqInfo:0x%02x, tckCount:%d, tdiByte:%d, TMS:%d.", data[inputIdx], tckCount, tdiByte, !!(data[inputIdx] & 0x40));
 		// 如果当前数据长度加上tdiByte之后大于包长度，+3的意思是两个指令头部和SeqInfo字节
 		if(sendPayloadLen + tdiByte + 3 > cmsis_dapObj->PacketSize){
 			break;
@@ -594,9 +594,12 @@ MAKE_PACKT:
 	 */
 	sendPackBuff[1] = seqCount;	// sequence count
 	memcpy(sendPackBuff + 2, data, sendPayloadLen);
-	DAP_EXCHANGE_DATA(adapterObj, sendPackBuff,  sendPayloadLen + 2, respBuff);
+
 	log_trace("Trasmission load: Send %d bytes, receive %d bytes.", sendPayloadLen, readPayloadLen);
 	//misc_PrintBulk(sendPackBuff, sendPayloadLen + 2, 8);
+
+	DAP_EXCHANGE_DATA(adapterObj, sendPackBuff,  sendPayloadLen + 2, respBuff);
+
 	//misc_PrintBulk(respBuff, readPayloadLen + 2, 8);
 	if(respBuff[1] == DAP_OK){
 		// 拷贝数据
