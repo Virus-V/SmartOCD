@@ -24,6 +24,7 @@ static void destroy(AdapterObject *adapterObj);	// 销毁Adapter对象
 // 初始化Adapter对象
 BOOL __CONSTRUCT(Adapter)(AdapterObject *adapterObj, const char *desc){
 	assert(adapterObj != NULL);
+	memset(adapterObj, 0x0, sizeof(AdapterObject));
 	adapterObj->DeviceDesc = strdup(desc);
 
 	// 初始化默认函数

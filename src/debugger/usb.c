@@ -35,7 +35,7 @@ static BOOL defaultReset(USBObject *usbObj);
  */
 BOOL __CONSTRUCT(USB)(USBObject *obj){
 	assert(obj != NULL);
-
+	memset(obj, 0x0, sizeof(USBObject));
 	if (libusb_init(&obj->libusbContext) < 0){
 		log_error("libusb_init() failed.");
 		return FALSE;

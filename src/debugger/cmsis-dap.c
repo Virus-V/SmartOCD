@@ -49,6 +49,8 @@ BOOL NewCMSIS_DAP(struct cmsis_dap *cmsis_dapObj){
 	assert(cmsis_dapObj != NULL);
 	AdapterObject *adapterObj;
 	adapterObj = CAST(AdapterObject *, cmsis_dapObj);
+	// 清空数据
+	memset(cmsis_dapObj, 0x0, sizeof(struct cmsis_dap));
 	// 构造Adapter对象
 	if(__CONSTRUCT(Adapter)(adapterObj, "ARM CMSIS-DAP") == FALSE){
 		log_warn("Failed to Init AdapterObject.");

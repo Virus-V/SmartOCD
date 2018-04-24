@@ -8,6 +8,7 @@
 /**
  * TODO
  * 这些内存操作只在小端模式下可用，兼容大端字节序有待实现
+ * 2018年04月23日：将DP数据64位长度限制去掉
  */
 
 #include <stdlib.h>
@@ -30,10 +31,25 @@
 #define GET_Nth_BIT(pos,n) ((*(CAST(uint8_t *, (pos)) + (((n)-1)>>3)) >> (((n)-1) & 0x7)) & 0x1)
 
 /**
+ * 由多少个比特位构造出多少个字节，包括控制字
+ * 比如bitCnt=64
+ * 则返回9
+ * 如果bitCnt=65
+ * 则返回11。因为 发送65位需要两个控制字节了。
+ */
+#define BIT2BYTE(bitCnt) ({	\
+	int byteCnt, tmp = (bitCnt) >> 6;	\
+	byteCnt = tmp + (tmp << 3);	\
+	tmp = (bitCnt) & 0x3f;	\
+	byteCnt += tmp ? ((tmp + 7) >> 3) + 1 : 0;	\
+})
+
+/**
  * TAP对象构造函数
  */
 BOOL __CONSTRUCT(TAP)(TAPObject *tapObj, AdapterObject *adapterObj){
 	assert(tapObj != NULL && adapterObj != NULL);
+	memset(tapObj, 0x0, sizeof(TAPObject));
 	// 创建指令队列表头
 	tapObj->jtagInstrQueue = list_new();
 	if(tapObj->jtagInstrQueue == NULL){
@@ -44,6 +60,7 @@ BOOL __CONSTRUCT(TAP)(TAPObject *tapObj, AdapterObject *adapterObj){
 	tapObj->adapterObj = adapterObj;
 	tapObj->currentStatus = JTAG_TAP_RESET;
 	tapObj->TAP_actived = -1;
+	tapObj->DR_Delay = 0;	// 不延迟
 	// 初始化Adapter
 	if(adapterObj->Init(adapterObj) == FALSE){
 		log_warn("Adapter initialization failed.");
@@ -195,21 +212,34 @@ static int build_DR_InstrData(TAPObject *tapObj, uint8_t *buff, struct JTAG_Inst
 			n = 0;
 		}
 	}
-
 	// 记录最后一个seqInfo的控制字节
-	uint8_t *seqInfo_ptr = buff;
-	// info.DR.bitCount 不会大于64
-	*buff++ = instr->info.DR.bitCount == 64 ? 0x80 : (0x80 + instr->info.DR.bitCount);
-	tapObj->JTAG_SequenceCount ++;
-	byteCnt = (instr->info.DR.bitCount + 7) >> 3;
-	for(n=0; n < byteCnt; n++){	// 复制数据
-		*buff++ = *(instr->info.DR.data + n);
+	uint8_t *seqInfo_ptr; int DR_DataOffset=0;
+	// 构造DR数据
+	for(n=instr->info.DR.bitCount; n>0;){
+		seqInfo_ptr = buff;
+		if(n>=64){
+			*buff++ = 0x80;
+			tapObj->JTAG_SequenceCount ++;
+			memcpy(buff, instr->info.DR.data + DR_DataOffset, 8);	// 拷贝8字节
+			DR_DataOffset+=8;
+			writeCnt+=9;
+			buff+=8;
+			n-=64;
+		}else{
+			*buff++ = 0x80 + n;
+			tapObj->JTAG_SequenceCount ++;
+			byteCnt = (n + 7) >> 3;
+			memcpy(buff, instr->info.DR.data + DR_DataOffset, byteCnt);	// 拷贝8字节
+			DR_DataOffset+=byteCnt;
+			buff += byteCnt;
+			writeCnt += byteCnt + 1;
+			n = 0;
+		}
 	}
-	writeCnt += byteCnt + 1;
 	//后面的tap
 	for(n= tapObj->TAP_Count - instr->TAP_Index - 1; n > 0;){
+		seqInfo_ptr = buff;
 		if(n >= 64){
-			seqInfo_ptr = buff;
 			*buff++ = 0x0;	// TDO Capture=FALSE, TMS=0,Count=64
 			tapObj->JTAG_SequenceCount ++;
 			memset(buff, 0x0, 8);
@@ -217,7 +247,6 @@ static int build_DR_InstrData(TAPObject *tapObj, uint8_t *buff, struct JTAG_Inst
 			buff+=8;
 			n-=64;
 		}else{
-			seqInfo_ptr = buff;
 			*buff++ = n;	// TDO Capture=FALSE, TMS=0,Count = instr->TAP_Index
 			tapObj->JTAG_SequenceCount ++;
 			byteCnt = (n + 7) >> 3;
@@ -244,7 +273,10 @@ static int build_DR_InstrData(TAPObject *tapObj, uint8_t *buff, struct JTAG_Inst
 		*seqInfo_ptr |= 0x40;
 	}else{	// 如果最后一个控制字输出多个二进制位，则将二进制位总数减1，并获得最后的一个二进制位，再附加一个跳出SHIFT-DR状态的控制字
 		tapObj->JTAG_SequenceCount ++;
-		(*seqInfo_ptr)--;	// 长度减1
+		// 当seqInfo_ptr是0x80的时候，减1就等于7f了，这就造成了错误，正确结果应该是BF
+		if(cnt == 0){
+			*seqInfo_ptr |= 0x3f;	// 将低6位全部置1
+		}else (*seqInfo_ptr)--;	// 当cnt不等于0的时候可以长度减1
 		// 先获得最后一个二进制位，因为后面可能会将最后一个字节覆盖
 		uint8_t last_bit = GET_Nth_BIT(seqInfo_ptr + 1, cnt) & 0xff;
 		if((cnt & 0x7) == 1){	// 当bitCount=9,17,25,33... 8*n+1时，将会多一个数据
@@ -288,6 +320,17 @@ static list_node_t * JTAG_NewInstruction(TAPObject *tapObj){
 	list_rpush(tapObj->jtagInstrQueue, instr_node);
 	instr_node->val = instruct;
 	return instr_node;
+}
+
+/**
+ * 设置DR操作后延迟的时钟数
+ * DR操作后跳到IDLE状态循环delay个周期
+ */
+void TAP_Set_DR_Delay(TAPObject *tapObj, int delay){
+	assert(tapObj != NULL);
+	tapObj->DR_Delay = delay;
+	// delay就是在IDLE状态空转多少个时钟周期，用来等待DR操作完成
+	tapObj->delayBytes = BIT2BYTE(delay);
 }
 
 /**
@@ -340,10 +383,7 @@ BOOL TAP_SetInfo(TAPObject *tapObj, uint16_t tapCount, uint16_t *IR_Len){
 		bits += IR_Len[idx];
 	}
 	// 更新ir指令固定字节
-	int IR_LengthByte = bits >> 6;
-	tapObj->IR_Bytes = IR_LengthByte + (IR_LengthByte << 3);
-	IR_LengthByte = bits & 0x3f;
-	tapObj->IR_Bytes += ((IR_LengthByte + 7) >> 3) + 1;
+	tapObj->IR_Bytes = BIT2BYTE(bits);	// bits长度的
 
 	for(idx = 0; idx < tapObj->TAP_Count; idx++){
 		bits -= ACCESS_TAP_INFO_ARRAY(tapObj,TAP_INFO_IR_LEN,idx);
@@ -436,14 +476,10 @@ BOOL TAP_IR_Write(TAPObject *tapObj, uint16_t index, uint32_t ir){
 /**
  * 交换DR寄存器的数据
  */
-BOOL TAP_DR_Exchange(TAPObject *tapObj, uint16_t index, uint8_t count, uint8_t *data){
+BOOL TAP_DR_Exchange(TAPObject *tapObj, uint16_t index, int count, uint8_t *data){
 	assert(tapObj != NULL);
 	if(index >= tapObj->TAP_Count){
 		log_warn("Object index %d does not exist.", index);
-		return FALSE;
-	}
-	if(count > 64){
-		log_warn("TDI data is too long.");
 		return FALSE;
 	}
 	if(count == 0){
@@ -460,22 +496,10 @@ BOOL TAP_DR_Exchange(TAPObject *tapObj, uint16_t index, uint8_t count, uint8_t *
 	instruct->info.DR.bitCount = count;
 	instruct->info.DR.data = data;
 	// 计算指令数据编码之后的数据长度
-	// 这里不会超过64个数据位，所以只会存在一个数据头，将数据位总数圆整到字节
-	instruct->info.DR.length = ((count + 7) >> 3) + 1;
+	instruct->info.DR.length = BIT2BYTE(count);	// 数据位长度转换成字节数，包括控制字节
 	// 计算跳过前后bypass TAP的空间
-	int TAP_BypassBefore = index >> 6;
-	// 算上头部和所有8个字节的数据
-	instruct->info.DR.length += TAP_BypassBefore + (TAP_BypassBefore << 3);
-	// 取得剩余多少个位
-	TAP_BypassBefore = index & 0x3f;
-	instruct->info.DR.length += TAP_BypassBefore ? ((TAP_BypassBefore + 7) >> 3) + 1 : 0;
-
-	int TAP_BypassAfter = (tapObj->TAP_Count - index - 1) >> 6;
-	// 算上头部和所有8个字节的数据
-	instruct->info.DR.length += TAP_BypassAfter + (TAP_BypassAfter << 3);
-	// 取得剩余多少个位
-	TAP_BypassAfter = (tapObj->TAP_Count - index - 1) & 0x3f;
-	instruct->info.DR.length += TAP_BypassAfter ? ((TAP_BypassAfter + 7) >> 3) + 1 : 0;
+	instruct->info.DR.length += BIT2BYTE(index);	// 该TAP前面的设备数
+	instruct->info.DR.length += BIT2BYTE(tapObj->TAP_Count - index - 1);	// 该TAP后面的设备数
 	// 一个跳出SHIFT-DR的控制字
 	instruct->info.DR.length += 2;
 
@@ -522,11 +546,20 @@ BOOL TAP_Execute(TAPObject *tapObj){
 		if(instr->type == JTAG_INS_EXCHANGE_DR){
 			seqInfo = JTAG_Get_TMS_Sequence(lastStatus, JTAG_TAP_DRSELECT);
 			instrBufferLen += JTAG_Cal_TMS_LevelStatus(seqInfo >> 8, seqInfo & 0xFF) << 1;
-			// 更新当前TAP状态为UPDATE-DR
-			lastStatus = JTAG_TAP_DREXIT1;
-			// 这里不会超过64个数据位，所以只会存在一个数据头，将数据位总数圆整到字节
 			resultBufferLen += ((instr->info.DR.bitCount + 7) >> 3) + 1;	// 计算 结果缓冲区的大小,+1 可能的数据分片
 			instrBufferLen += instr->info.DR.length;
+			// 如果在DR后有延迟，则转到IDLE状态延时额外时钟周期
+			if(tapObj->DR_Delay > 0){
+				// 获得从DR_EXIT1状态转换到IDLE状态的时序
+				seqInfo = JTAG_Get_TMS_Sequence(JTAG_TAP_DREXIT1, JTAG_TAP_IDLE);
+				instrBufferLen += JTAG_Cal_TMS_LevelStatus(seqInfo >> 8, seqInfo & 0xFF) << 1;
+				instrBufferLen += tapObj->delayBytes;	// 增加延时的字节
+				// 更新TAP状态机为IDLE状态
+				lastStatus = JTAG_TAP_IDLE;
+			}else{
+				// 更新当前TAP状态为EXIT1-DR
+				lastStatus = JTAG_TAP_DREXIT1;
+			}
 		}else{	// 写入IR寄存器，不管写入哪个，长度都是固定的
 			seqInfo = JTAG_Get_TMS_Sequence(lastStatus, JTAG_TAP_IRSELECT);
 			instrBufferLen += JTAG_Cal_TMS_LevelStatus(seqInfo >> 8, seqInfo & 0xFF) << 1;
@@ -599,8 +632,32 @@ BOOL TAP_Execute(TAPObject *tapObj){
 
 			// TAP状态SHIFT-DR
 			currInstr += build_DR_InstrData(tapObj, currInstr, instr);
-			// 修改当前状态位EXIT1-DR状态
-			tapObj->currentStatus = JTAG_TAP_DREXIT1;
+			if(tapObj->DR_Delay > 0){
+				// 增加额外的时钟周期去等待一些操作完成
+				seqInfo = JTAG_Get_TMS_Sequence(JTAG_TAP_DREXIT1, JTAG_TAP_IDLE);
+				currInstr += parseTMS(tapObj, currInstr, seqInfo);
+				for(int n = tapObj->DR_Delay; n > 0;){
+					if(n >= 64){
+						*currInstr++ = 0x0;	// TDO Capture=FALSE, TMS=0,Count=64
+						tapObj->JTAG_SequenceCount ++;
+						memset(currInstr, 0x0, 8);
+						currInstr += 8;
+						n -= 64;
+					}else{
+						*currInstr++ = n;	// TDO Capture=FALSE, TMS=0,Count = n
+						tapObj->JTAG_SequenceCount ++;
+						int byteCnt = (n + 7) >> 3;
+						memset(currInstr, 0x0, byteCnt);
+						currInstr += byteCnt;
+						n = 0;
+					}
+				}
+				// 修改当前状态为IDLE状态
+				tapObj->currentStatus = JTAG_TAP_IDLE;
+			}else{
+				// 修改当前状态位EXIT1-DR状态
+				tapObj->currentStatus = JTAG_TAP_DREXIT1;
+			}
 		}
 	}
 	// 执行

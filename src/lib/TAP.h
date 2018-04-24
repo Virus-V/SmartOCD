@@ -32,8 +32,8 @@ struct JTAG_Instr{
 		struct {
 			int length;	// 数据进行编码后的长度
 			uint8_t *data;	// 指向TDI将要输出的数据，LSB
-			uint8_t bitCount:7;
-			uint8_t segment:1;
+			uint32_t bitCount:31;
+			uint32_t segment:1;
 			uint8_t segment_pos;	// 切分的位原本的位置
 		} DR;
 	} info;
@@ -53,17 +53,19 @@ struct TAPObject {
 	list_t *jtagInstrQueue;	// JTAG指令队列，元素类型：struct JTAG_Instr
 	list_node_t *currProcessing;	// 下一个将要处理的指令
 	int JTAG_SequenceCount;	// 一共有多少个Sequence
+	int DR_Delay, delayBytes;	// 时钟延迟，在写入DR后进入idle状态延时多少个时钟周期。0是不延迟
 };
 
 // TAP对象构造函数和析构函数
 BOOL __CONSTRUCT(TAP)(TAPObject *tapObj, AdapterObject *adapterObj);
 void __DESTORY(TAP)(TAPObject *tapObj);
 
+void TAP_Set_DR_Delay(TAPObject *tapObj, int delay);
 BOOL TAP_Reset(TAPObject *tapObj, BOOL hard, uint32_t pinWait);
 BOOL TAP_SetInfo(TAPObject *tapObj, uint16_t tapCount, uint16_t *IR_Len);
 BOOL TAP_Get_IDCODE(TAPObject *tapObj, uint32_t *idCode);
 BOOL TAP_IR_Write(TAPObject *tapObj, uint16_t index, uint32_t ir);
-BOOL TAP_DR_Exchange(TAPObject *tapObj, uint16_t index, uint8_t count, uint8_t *data);
+BOOL TAP_DR_Exchange(TAPObject *tapObj, uint16_t index, int count, uint8_t *data);
 BOOL TAP_Execute(TAPObject *tapObj);
 
 #endif /* SRC_LIB_TAP_H_ */
