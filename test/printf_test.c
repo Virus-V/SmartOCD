@@ -43,47 +43,20 @@ char* itoa(int num, char *str, int radix) {
 	return str;
 }
 
-#define MAKE_nPACC_CHAIN_DATA(buff,data,ctrl) {	\
-	uint32_t data_t = data;					\
-	uint8_t msb3 = ((data_t) & 0xe0) >> 5;	\
-	uint8_t lsb3 = (ctrl) & 0x7;			\
-	int n;									\
-	for(n=0; n<4; n++){						\
-		*(CAST(uint8_t *,(buff)) + n) = (((data_t) & 0xff) << 3) | lsb3;	\
-		(data_t) >>= 8;						\
-		lsb3 = msb3;						\
-		msb3 = ((data_t) & 0xe0) >> 5;		\
-	}										\
-	*(CAST(uint8_t *,(buff)) + n) = lsb3;	\
-}
-
-#define GET_nPACC_CHAIN_DATA(buff) ({	\
-	uint8_t *data_t = CAST(uint8_t *, (buff)), lsb3;	\
-	uint32_t tmp = 0;	\
-	for(int n=0;n<4;n++){	\
-		lsb3 = (data_t[n+1] & 0x7) << 5;	\
-		tmp |= ((data_t[n] >> 3) | lsb3) << (n << 3);	\
-	}	\
-	tmp;	\
+#define BIT2BYTE(bitCnt) ({	\
+	int byteCnt = 0;	\
+	int tmp = (bitCnt) >> 6;	\
+	byteCnt = tmp + (tmp << 3);	\
+	tmp = bitCnt & 0x3f;	\
+	byteCnt += tmp ? ((tmp + 7) >> 3) + 1 : 0;	\
 })
-
-uint32_t getdata(uint8_t *data){
-	uint8_t *data_t = CAST(uint8_t *, data);
-	uint8_t lsb3;
-	uint32_t tmp = 0;
-	for(int n=0;n<4;n++){
-		lsb3 = (data_t[n+1] & 0x7) << 5;
-		tmp |= ((data_t[n] >> 3) | lsb3) << (n << 3);
-	}
-	return tmp;
-}
 
 int main(){
 	uint8_t data[5];
 	uint32_t tmp;
-	MAKE_nPACC_CHAIN_DATA(data, 0xdeadbeefu, 0x6);
-	tmp = GET_nPACC_CHAIN_DATA(data);
-	misc_PrintBulk(data, 5, 5);
-	printf("0x%x\n", tmp);
+	for(int n=0,j=0;n<5;n++){
+		printf("%d\n", j++);
+	}
+	printf("%d\n", BIT2BYTE(65));
 	return 0;
 }

@@ -50,9 +50,9 @@ struct TAPObject {
 	int TAP_actived;
 	int IR_Bytes;	// IR固定字节
 	uint16_t TAP_Count, *TAP_Info;
-	list_t *jtagInstrQueue;	// JTAG指令队列，元素类型：struct JTAG_Instr
+	list_t *instrQueue;	// JTAG指令队列，元素类型：struct JTAG_Instr
 	list_node_t *currProcessing;	// 下一个将要处理的指令
-	int JTAG_SequenceCount;	// 一共有多少个Sequence
+	int sequenceCount;	// 一共有多少个Sequence
 	int DR_Delay, delayBytes;	// 时钟延迟，在写入DR后进入idle状态延时多少个时钟周期。0是不延迟
 };
 

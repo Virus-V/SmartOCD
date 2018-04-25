@@ -54,13 +54,13 @@ static int adapter_deinit(lua_State *L){
 static int adapter_set_status(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	const char *status = luaL_checkstring(L, 2);
-	if(strncasecmp(status, "CONNECTED", 9) == 0){
+	if(STR_EQUAL(status, "CONNECTED")){
 		lua_pushboolean(L, adapter_SetStatus(adapterObj, ADAPTER_STATUS_CONNECTED));
-	}else if(strncasecmp(status, "DISCONNECT", 10) == 0){
+	}else if(STR_EQUAL(status, "DISCONNECT")){
 		lua_pushboolean(L, adapter_SetStatus(adapterObj, ADAPTER_STATUS_DISCONNECT));
-	}else if(strncasecmp(status, "RUNING", 6) == 0){
+	}else if(STR_EQUAL(status, "RUNING")){
 		lua_pushboolean(L, adapter_SetStatus(adapterObj, ADAPTER_STATUS_RUNING));
-	}else if(strncasecmp(status, "IDLE", 4) == 0){
+	}else if(STR_EQUAL(status, "IDLE")){
 		lua_pushboolean(L, adapter_SetStatus(adapterObj, ADAPTER_STATUS_IDLE));
 	}else{	// 其他状态
 		lua_pushboolean(L, 0);
@@ -91,9 +91,9 @@ static int adapter_select_transmission(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	const char *trans = luaL_checkstring(L, 2);
 	// strnicmp
-	if(strncasecmp(trans, "JTAG", 4) == 0){
+	if(STR_EQUAL(trans, "JTAG")){
 		lua_pushboolean(L, adapter_SelectTransmission(adapterObj, JTAG));
-	}else if(strncasecmp(trans, "SWD", 3) == 0){
+	}else if(STR_EQUAL(trans, "SWD")){
 		lua_pushboolean(L, adapter_SelectTransmission(adapterObj, SWD));
 	}else{	// 不支持其他传输协议
 		lua_pushboolean(L, 0);
@@ -110,9 +110,9 @@ static int adapter_have_transmission(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	const char *trans = luaL_checkstring(L, 2);
 	// strnicmp
-	if(strncasecmp(trans, "JTAG", 4) == 0){
+	if(STR_EQUAL(trans, "JTAG")){
 		lua_pushboolean(L, adapter_HaveTransmission(adapterObj, JTAG));
-	}else if(strncasecmp(trans, "SWD", 3) == 0){
+	}else if(STR_EQUAL(trans, "SWD")){
 		lua_pushboolean(L, adapter_HaveTransmission(adapterObj, SWD));
 	}else{	// 不支持其他传输协议
 		lua_pushboolean(L, 0);

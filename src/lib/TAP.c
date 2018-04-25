@@ -51,12 +51,12 @@ BOOL __CONSTRUCT(TAP)(TAPObject *tapObj, AdapterObject *adapterObj){
 	assert(tapObj != NULL && adapterObj != NULL);
 	memset(tapObj, 0x0, sizeof(TAPObject));
 	// 创建指令队列表头
-	tapObj->jtagInstrQueue = list_new();
-	if(tapObj->jtagInstrQueue == NULL){
+	tapObj->instrQueue = list_new();
+	if(tapObj->instrQueue == NULL){
 		log_warn("Init JTAG Instruction queue failed.");
 		return FALSE;
 	}
-	tapObj->jtagInstrQueue->free = free;
+	tapObj->instrQueue->free = free;
 	tapObj->adapterObj = adapterObj;
 	tapObj->currentStatus = JTAG_TAP_RESET;
 	tapObj->TAP_actived = -1;
@@ -64,8 +64,8 @@ BOOL __CONSTRUCT(TAP)(TAPObject *tapObj, AdapterObject *adapterObj){
 	// 初始化Adapter
 	if(adapterObj->Init(adapterObj) == FALSE){
 		log_warn("Adapter initialization failed.");
-		list_destroy(tapObj->jtagInstrQueue);
-		tapObj->jtagInstrQueue = NULL;
+		list_destroy(tapObj->instrQueue);
+		tapObj->instrQueue = NULL;
 		return FALSE;
 	}
 	return TRUE;
@@ -78,7 +78,7 @@ void __DESTORY(TAP)(TAPObject *tapObj){
 	assert(tapObj != NULL && tapObj->adapterObj != NULL);
 	// 关闭Adapter
 	tapObj->adapterObj->Deinit(tapObj->adapterObj);
-	list_destroy(tapObj->jtagInstrQueue);
+	list_destroy(tapObj->instrQueue);
 	if(tapObj->TAP_Info){
 		free(tapObj->TAP_Info);
 		tapObj->TAP_Info = NULL;
@@ -99,14 +99,14 @@ static int parseTMS(TAPObject *tapObj, uint8_t *buff, uint16_t seqInfo){
 	int writeCount = 1;
 	*buff = (TMS_Seq & 0x1) << 6;
 	// sequence 个数+1
-	tapObj->JTAG_SequenceCount ++;
+	tapObj->sequenceCount ++;
 	while(bitCount--){
 		(*buff)++;
 		TMS_Seq >>= 1;
 		if( bitCount && (((TMS_Seq & 0x1) << 6) ^ (*buff & 0x40))){
 			*++buff = 0;
 			*++buff = (TMS_Seq & 0x1) << 6;
-			tapObj->JTAG_SequenceCount ++;
+			tapObj->sequenceCount ++;
 			writeCount += 2;
 		}
 	}
@@ -162,14 +162,14 @@ static int build_IR_InstrData(TAPObject *tapObj, uint8_t *buff, uint16_t index, 
 	for(int n=all_IR_Bits - 1,readCnt=0; n>0;){
 		if(n >= 64){	// 当生成的时序字节小于8个
 			*buff++ = 0x0;	// TMS=0;TDO Capture=FALSE; 64Bit
-			tapObj->JTAG_SequenceCount ++;
+			tapObj->sequenceCount ++;
 			memcpy(buff, tmp_buff+readCnt, 8);
 			buff+=8; n-=64; readCnt+=8;
 			writeCnt += 9;	// 数据加上一个头部
 		}else{
 			int bytesCnt = (n + 7) >> 3;
 			*buff++ = n;
-			tapObj->JTAG_SequenceCount ++;
+			tapObj->sequenceCount ++;
 			memcpy(buff, tmp_buff+readCnt, bytesCnt);
 			buff+=bytesCnt; readCnt+=bytesCnt;
 			writeCnt += bytesCnt+1;	// 数据加上一个头部
@@ -180,7 +180,7 @@ static int build_IR_InstrData(TAPObject *tapObj, uint8_t *buff, uint16_t index, 
 	*buff++ = 0x41;
 	*buff++ = GET_Nth_BIT(tmp_buff, all_IR_Bits) & 0xff;
 	writeCnt += 2;
-	tapObj->JTAG_SequenceCount ++;
+	tapObj->sequenceCount ++;
 	free(tmp_buff);
 	return writeCnt;
 }
@@ -197,14 +197,14 @@ static int build_DR_InstrData(TAPObject *tapObj, uint8_t *buff, struct JTAG_Inst
 	for(n=instr->TAP_Index; n > 0;){
 		if(n >= 64){
 			*buff++ = 0x0;	// TDO Capture=FALSE, TMS=0,Count=64
-			tapObj->JTAG_SequenceCount ++;
+			tapObj->sequenceCount ++;
 			memset(buff, 0x0, 8);
 			writeCnt += 9;
 			buff+=8;
 			n-=64;
 		}else{
 			*buff++ = n;	// TDO Capture=FALSE, TMS=0,Count = instr->TAP_Index
-			tapObj->JTAG_SequenceCount ++;
+			tapObj->sequenceCount ++;
 			byteCnt = (n + 7) >> 3;
 			memset(buff, 0x0, byteCnt);
 			buff += byteCnt;
@@ -219,7 +219,7 @@ static int build_DR_InstrData(TAPObject *tapObj, uint8_t *buff, struct JTAG_Inst
 		seqInfo_ptr = buff;
 		if(n>=64){
 			*buff++ = 0x80;
-			tapObj->JTAG_SequenceCount ++;
+			tapObj->sequenceCount ++;
 			memcpy(buff, instr->info.DR.data + DR_DataOffset, 8);	// 拷贝8字节
 			DR_DataOffset+=8;
 			writeCnt+=9;
@@ -227,7 +227,7 @@ static int build_DR_InstrData(TAPObject *tapObj, uint8_t *buff, struct JTAG_Inst
 			n-=64;
 		}else{
 			*buff++ = 0x80 + n;
-			tapObj->JTAG_SequenceCount ++;
+			tapObj->sequenceCount ++;
 			byteCnt = (n + 7) >> 3;
 			memcpy(buff, instr->info.DR.data + DR_DataOffset, byteCnt);	// 拷贝8字节
 			DR_DataOffset+=byteCnt;
@@ -241,14 +241,14 @@ static int build_DR_InstrData(TAPObject *tapObj, uint8_t *buff, struct JTAG_Inst
 		seqInfo_ptr = buff;
 		if(n >= 64){
 			*buff++ = 0x0;	// TDO Capture=FALSE, TMS=0,Count=64
-			tapObj->JTAG_SequenceCount ++;
+			tapObj->sequenceCount ++;
 			memset(buff, 0x0, 8);
 			writeCnt += 9;
 			buff+=8;
 			n-=64;
 		}else{
 			*buff++ = n;	// TDO Capture=FALSE, TMS=0,Count = instr->TAP_Index
-			tapObj->JTAG_SequenceCount ++;
+			tapObj->sequenceCount ++;
 			byteCnt = (n + 7) >> 3;
 			memset(buff, 0x0, byteCnt);
 			buff += byteCnt;
@@ -272,7 +272,7 @@ static int build_DR_InstrData(TAPObject *tapObj, uint8_t *buff, struct JTAG_Inst
 	if(cnt == 1){ // 如果最后一个时序控制字是输出1个字节，那么直接修改这个控制字，将TMS置高，跳出SHIFT-DR状态
 		*seqInfo_ptr |= 0x40;
 	}else{	// 如果最后一个控制字输出多个二进制位，则将二进制位总数减1，并获得最后的一个二进制位，再附加一个跳出SHIFT-DR状态的控制字
-		tapObj->JTAG_SequenceCount ++;
+		tapObj->sequenceCount ++;
 		// 当seqInfo_ptr是0x80的时候，减1就等于7f了，这就造成了错误，正确结果应该是BF
 		if(cnt == 0){
 			*seqInfo_ptr |= 0x3f;	// 将低6位全部置1
@@ -317,7 +317,7 @@ static list_node_t * JTAG_NewInstruction(TAPObject *tapObj){
 		return NULL;
 	}
 	// 插入到指令队列尾部
-	list_rpush(tapObj->jtagInstrQueue, instr_node);
+	list_rpush(tapObj->instrQueue, instr_node);
 	instr_node->val = instruct;
 	return instr_node;
 }
@@ -432,7 +432,7 @@ BOOL TAP_Get_IDCODE(TAPObject *tapObj, uint32_t *idCode){
 		return FALSE;
 	}
 	seqInfoBuff_tmp = seqInfoBuff;
-	tapObj->JTAG_SequenceCount = tapObj->TAP_Count;
+	tapObj->sequenceCount = tapObj->TAP_Count;
 	seqInfoBuff_tmp += parseTMS(tapObj, seqInfoBuff_tmp, seqInfo[0]);
 	seqInfoBuff_tmp += parseTMS(tapObj, seqInfoBuff_tmp, seqInfo[1]);
 
@@ -443,8 +443,8 @@ BOOL TAP_Get_IDCODE(TAPObject *tapObj, uint32_t *idCode){
 	// 返回RESET状态
 	*seqInfoBuff_tmp++ = 0x45;
 	*seqInfoBuff_tmp++ = 0x0;
-	tapObj->JTAG_SequenceCount++;
-	if(tapObj->adapterObj->Operate(tapObj->adapterObj, AINS_JTAG_SEQUENCE, tapObj->JTAG_SequenceCount, seqInfoBuff, CAST(uint8_t *, idCode)) == FALSE){
+	tapObj->sequenceCount++;
+	if(tapObj->adapterObj->Operate(tapObj->adapterObj, AINS_JTAG_SEQUENCE, tapObj->sequenceCount, seqInfoBuff, CAST(uint8_t *, idCode)) == FALSE){
 		log_warn("Unable to execute get IDCODE instruction sequence.");
 		free(seqInfoBuff);
 		return FALSE;
@@ -524,11 +524,11 @@ BOOL TAP_Execute(TAPObject *tapObj){
 		return FALSE;
 	}
 	// 判断如果指令列表为空则返回
-	if(tapObj->jtagInstrQueue->len == 0){
+	if(tapObj->instrQueue->len == 0){
 		return TRUE;
 	}
 	// 创建迭代器
-	list_iterator_t *iterator = list_iterator_new(tapObj->jtagInstrQueue, LIST_HEAD);
+	list_iterator_t *iterator = list_iterator_new(tapObj->instrQueue, LIST_HEAD);
 	if(iterator == NULL){
 		log_warn("Failed to create iterator.");
 		goto EXIT_STEP_0;
@@ -585,7 +585,7 @@ BOOL TAP_Execute(TAPObject *tapObj){
 
 	uint8_t *currInstr = instrBuffer;
 	// 清空Sequence Counter
-	tapObj->JTAG_SequenceCount = 0;
+	tapObj->sequenceCount = 0;
 	// 开始下一轮迭代之前要复位迭代器
 	list_iterator_reset(iterator);
 	// 解析指令
@@ -603,7 +603,7 @@ BOOL TAP_Execute(TAPObject *tapObj){
 			 */
 			*currInstr++ = 0x02;
 			*currInstr++ = 0x00;
-			tapObj->JTAG_SequenceCount ++;
+			tapObj->sequenceCount ++;
 			/* 现在TAP状态是SHIFT-IR，TDI输出数据，TMS保持为0
 			 * 不捕获TDO。
 			 * 还得跳过该TAP前后的TAP，让这些TAP进入PASSBY状态
@@ -629,7 +629,7 @@ BOOL TAP_Execute(TAPObject *tapObj){
 			 */
 			*currInstr++ = 0x02;
 			*currInstr++ = 0x00;
-			tapObj->JTAG_SequenceCount ++;
+			tapObj->sequenceCount ++;
 
 			// TAP状态SHIFT-DR
 			currInstr += build_DR_InstrData(tapObj, currInstr, instr);
@@ -640,13 +640,13 @@ BOOL TAP_Execute(TAPObject *tapObj){
 				for(int n = tapObj->DR_Delay; n > 0;){
 					if(n >= 64){
 						*currInstr++ = 0x0;	// TDO Capture=FALSE, TMS=0,Count=64
-						tapObj->JTAG_SequenceCount ++;
+						tapObj->sequenceCount ++;
 						memset(currInstr, 0x0, 8);
 						currInstr += 8;
 						n -= 64;
 					}else{
 						*currInstr++ = n;	// TDO Capture=FALSE, TMS=0,Count = n
-						tapObj->JTAG_SequenceCount ++;
+						tapObj->sequenceCount ++;
 						int byteCnt = (n + 7) >> 3;
 						memset(currInstr, 0x0, byteCnt);
 						currInstr += byteCnt;
@@ -662,7 +662,7 @@ BOOL TAP_Execute(TAPObject *tapObj){
 		}
 	}
 	// 执行
-	if(tapObj->adapterObj->Operate(tapObj->adapterObj, AINS_JTAG_SEQUENCE, tapObj->JTAG_SequenceCount, instrBuffer, resultBuffer) == FALSE){
+	if(tapObj->adapterObj->Operate(tapObj->adapterObj, AINS_JTAG_SEQUENCE, tapObj->sequenceCount, instrBuffer, resultBuffer) == FALSE){
 		log_warn("Unable to execute instruction sequence.");
 		goto EXIT_STEP_3;
 	}
@@ -692,7 +692,7 @@ BOOL TAP_Execute(TAPObject *tapObj){
 	list_iterator_reset(iterator);
 	node = list_iterator_next(iterator);
 	for(; node; node = list_iterator_next(iterator)){
-		list_remove(tapObj->jtagInstrQueue, node);
+		list_remove(tapObj->instrQueue, node);
 	}
 	tapObj->currProcessing = NULL;
 	result = TRUE;

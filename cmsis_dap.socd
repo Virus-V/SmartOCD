@@ -54,6 +54,7 @@ for k,v in ipairs(idcodes) do
 	print(string.format("JTAG index %d => IDCODE:0x%08X", k, v))
 end
 dapObj:set_TAP(0)
+dapObj:setDelay(5)	-- 设置DR间隔
 -- 将SELECT寄存器清零
 dapObj:write_DP(0x08, 0)
 -- System domain power up && Debug domain power up
@@ -87,15 +88,20 @@ function readMem(dO, addr)
 	end
 	return dO:read_AP(0x0C)
 end
-
-print("Read ROM. Address at 0x08000000")
-
-for addr=0x08000000, 0x080000F0, 4 do
-	local data,ok = readMem(dapObj, addr)
-	if ok then 
-		print(string.format("Addr:0x%08X : 0x%08X", addr, data))
-	end
+-- 读取ROM Table
+local base, ok = dapObj:get_ROM_Table()
+if not ok then 
+	error("get rom table failed.")
 end
+print("rom table:" .. string.format("0x%08X", base))
+-- 获得当前ap的信息
+print(dapObj:get_AP_Capacity("PT","LD","LA","BE","BT"))
+-- 获得CID和PID
+pid, cid, ok = dapObj:get_CID_PID(base-3)
+if not ok then 
+	error("Read PID CID Failed")
+end
+print(string.format("0x%08X, 0x%08X", pid, cid))
 cmsis_dapObj:setStatus("IDLE")
 -- 反初始化Adapter对象后禁止操作TAP对象和DAP对象
 -- cmsis_dapObj:deinit()

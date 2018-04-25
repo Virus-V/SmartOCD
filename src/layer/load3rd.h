@@ -8,9 +8,14 @@
 #ifndef SRC_LAYER_LOAD3RD_H_
 #define SRC_LAYER_LOAD3RD_H_
 
+#include <string.h>
+
 #include "lua.h"
 #include "lauxlib.h"
 #include "lualib.h"
+
+// strnicmp
+#define STR_EQUAL(s,os) (strncasecmp((s), os, sizeof(os)) == 0)
 
 void load3rd(lua_State *L);
 void layer_newTypeMetatable(lua_State *L, const char *tname, lua_CFunction gc, const luaL_Reg *oo);

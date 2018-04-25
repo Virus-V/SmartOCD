@@ -103,6 +103,27 @@ static int tap_set_info(lua_State *L){
 }
 
 /**
+ * 设置更新DR后延时的时钟数
+ * 用于等待Memory操作完成
+ * 第一个参数：TAPObject对象
+ * 第二个参数：整数，表示延时的时钟周期数
+ * 返回：0
+ */
+static int tap_set_delay(lua_State *L){
+	luaL_checktype(L, 1, LUA_TUSERDATA);
+	TAPObject *tapObj = luaL_testudata(L, 1, "obj.TAP");
+	if(tapObj == NULL){	// 如果是DAP的类型
+		tapObj = luaL_testudata(L, 1, "obj.DAP");
+	}
+	luaL_argcheck(L, tapObj != NULL, 1, "Not a TAP or DAP object.");
+	// 获得延时的时钟周期数
+	int tapCount = (int)luaL_checkinteger(L, 2);
+	// 设置信息
+	TAP_Set_DR_Delay(tapObj, tapCount);
+	return 0;
+}
+
+/**
  * 获得idcode
  * 第一个参数：TAPObject对象引用
  * 返回：表
@@ -138,6 +159,7 @@ static const luaL_Reg lib_tap_f[] = {
 const luaL_Reg lib_tap_oo[] = {
 	{"reset", tap_reset},
 	{"setInfo", tap_set_info},
+	{"setDelay", tap_set_delay},
 	{"get_IDCODE", tap_get_idcode},
 	// TODO 实现低级操作TAP的方法
 	//{"write_IR", adapter_set_clock},

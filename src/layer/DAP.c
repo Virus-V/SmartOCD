@@ -154,13 +154,160 @@ static int dap_write_abort(lua_State *L){
 }
 
 /**
+ * 寻找特定类型的AP
+ * 1#：DAPObject对象
+ * 2#：AP类型：JTAG、AXI、AHB、APB
+ * 返回：
+ * 1#：整数
+ * 2#：bool OK
+ */
+static int dap_find_ap(lua_State *L){
+	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
+	const char *apType = luaL_checkstring(L, 2);
+	uint8_t apIdx;
+	// strnicmp
+	if(STR_EQUAL(apType, "JTAG")){
+		lua_pushboolean(L, DAP_Find_AP(dapObj, AP_TYPE_JTAG, &apIdx));
+	}else if(STR_EQUAL(apType, "AXI")){
+		lua_pushboolean(L, DAP_Find_AP(dapObj, AP_TYPE_AMBA_AXI, &apIdx));
+	}else if(STR_EQUAL(apType, "AHB")){
+		lua_pushboolean(L, DAP_Find_AP(dapObj, AP_TYPE_AMBA_AHB, &apIdx));
+	}else if(STR_EQUAL(apType, "APB")){
+		lua_pushboolean(L, DAP_Find_AP(dapObj, AP_TYPE_AMBA_APB, &apIdx));
+	}else{
+		lua_pushboolean(L, 0);
+	}
+	lua_pushinteger(L, apIdx);
+	lua_insert(L, -2);	// 调整位置，将apidx设置为第一个返回值
+	return 2;
+}
+
+/**
+ * 获得AP的标志信息
+ * 1#：DAPObject对象
+ * ...#：可能的参数："LD:Large Data","LA:Large Address","BE:Big-endian","PT:packed transfer","BT:byte Transfer"
+ * 返回：按请求的个数和顺序返回布尔值
+ */
+static int dap_ap_cap(lua_State *L){
+	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
+	// 保证栈有足够的空间
+	int stack_len = lua_gettop(L);
+	luaL_checkstack(L, stack_len-1, "Too many args!");
+	// 取出参数
+	for(int n=2; n<=stack_len; n++){
+		const char *ap_flag = luaL_checkstring(L, n);
+		if(STR_EQUAL(ap_flag, "LD")){
+			lua_pushboolean(L, dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.largeData);
+		}else if(STR_EQUAL(ap_flag, "LA")){
+			lua_pushboolean(L, dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.largeAddress);
+		}else if(STR_EQUAL(ap_flag, "BE")){
+			lua_pushboolean(L, dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.bigEndian);
+		}else if(STR_EQUAL(ap_flag, "PT")){
+			lua_pushboolean(L, dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.packedTransfers);
+		}else if(STR_EQUAL(ap_flag, "BT")){
+			lua_pushboolean(L, dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.lessWordTransfers);
+		}else{
+			lua_pushboolean(L, 0);
+		}
+	}
+	return stack_len-1;
+}
+
+/**
+ * 读取当前选择的AP的ROM TABLE的地址
+ * 1#：DAPObject对象
+ * 返回：
+ * 1#：rom table 地址 inteager
+ * 2#：是否成功
+ */
+static int dap_rom_table(lua_State *L){
+	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
+	uint64_t rom_addr = 0; uint32_t tmp;
+	// 如果当前AP支持大内存扩展
+	if(dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.largeAddress){
+		if(DAP_AP_Read(dapObj, AP_REG_ROM_MSB, &tmp) == FALSE){
+			lua_pushboolean(L, 0);
+			goto EXIT;
+		}
+		rom_addr = tmp;
+		rom_addr <<= 32;	// 将ROM MSB寄存器的值放到64位地址的高32位
+	}
+	// 读取rom TABLE的低32位地址
+	if(DAP_AP_Read(dapObj, AP_REG_ROM_LSB, &tmp) == FALSE){
+		lua_pushboolean(L, 0);
+		rom_addr = 0;
+		goto EXIT;
+	}
+	rom_addr += tmp;
+	lua_pushboolean(L, 1);
+EXIT:
+	lua_pushinteger(L, rom_addr);
+	lua_insert(L, -2);
+	return 2;
+}
+
+/**
+ * 读取32位数据
+ * 1#：DAPObject对象
+ * 2#：addr：地址64位
+ * 返回：
+ * 1#：数据
+ * 2#：OK
+ */
+static int dap_mem_read_32(lua_State *L){
+	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
+	uint64_t addr = luaL_checkinteger(L, 2);
+	uint32_t data;
+	lua_pushboolean(L, DAP_ReadMem32(dapObj, addr, &data));
+	lua_pushinteger(L, data);
+	lua_insert(L, -2);
+	return 2;
+}
+
+/**
+ * 写入32位数据
+ * 1#：DAPObject对象
+ * 2#：addr：地址64位
+ * 3#：data：数据
+ * 返回：
+ * 1#：OK
+ */
+static int dap_mem_write_32(lua_State *L){
+	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
+	uint64_t addr = luaL_checkinteger(L, 2);
+	uint32_t data = (uint32_t)luaL_checkinteger(L, 3);
+	lua_pushboolean(L, DAP_WriteMem32(dapObj, addr, data));
+	return 1;
+}
+
+/**
+ * 读取Component ID 和 Peripheral ID
+ * 1#：DAPObject对象
+ * 2#：Addr：地址64位
+ * 返回：
+ * 1#：cid
+ * 2#：pid 64位
+ * 3#：OK
+ */
+static int dap_get_pid_cid(lua_State *L){
+	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
+	uint64_t addr = luaL_checkinteger(L, 2);
+	uint32_t cid; uint64_t pid;
+	BOOL result = DAP_Read_CID_PID(dapObj, addr, &cid, &pid);
+	lua_pushinteger(L, cid);
+	lua_pushinteger(L, pid);
+	lua_pushboolean(L, result);
+	return 3;
+}
+
+/**
  * 由AP IDR解析可读信息
  * 1#：uint32 整数
  * 返回：字符串
  */
-static int dap_parse_ap_info(lua_State *L){
+static int dap_parse_APIDR(lua_State *L){
 	luaL_Buffer buff;
-	AP_IDRParse parse;
+	AP_IDR_Parse parse;
 	uint32_t ap_idr = (uint32_t)luaL_checkinteger(L, 1);
 	luaL_buffinit(L, &buff);
 	parse.regData = ap_idr;
@@ -193,7 +340,7 @@ static int dap_parse_ap_info(lua_State *L){
 
 static const luaL_Reg lib_dap_f[] = {
 	{"new", dap_new},
-	{"parse_APIDR", dap_parse_ap_info},
+	{"parse_APIDR", dap_parse_APIDR},
 	{NULL, NULL}
 };
 
@@ -209,6 +356,24 @@ static const luaL_Reg lib_dap_oo[] = {
 	{"write_AP", dap_write_ap},
 	{"select_AP", dap_select_ap},
 	{"writeAbort", dap_write_abort},
+	{"find_AP", dap_find_ap},
+	{"get_AP_Capacity", dap_ap_cap},
+	{"get_ROM_Table", dap_rom_table},
+	/*
+	{"readMem8"},
+	{"readMem16"},
+	*/
+	{"readMem32", dap_mem_read_32},
+	/*
+	{"readMem64"},
+	{"writeMem8"},
+	{"writeMem16"},
+	*/
+	{"writeMem32", dap_mem_write_32},
+	/*
+	{"writeMem64"},
+	*/
+	{"get_CID_PID", dap_get_pid_cid},
 	//{"clearStickyError", tap_get_idcode},
 	{NULL, NULL}
 };

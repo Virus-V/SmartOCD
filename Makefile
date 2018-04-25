@@ -11,7 +11,7 @@ COMPILE_TIME := $(shell date +%FT%T%z)
 
 include $(ROOT_DIR)/src/source.mk
 include $(ROOT_DIR)/test/test.mk
-
+include $(ROOT_DIR)/lua-5.3.4/lua.mk
 #==========可变参数区============ 
 # 入口文件
 SMARTOCD_ENTRY_SRC_FILE = $(ROOT_DIR)/src/smart_ocd.c

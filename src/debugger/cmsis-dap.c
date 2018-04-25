@@ -408,65 +408,6 @@ static BOOL DAP_TransferConfigure(uint8_t *respBuff, AdapterObject *adapterObj, 
 }
 
 /**
- * 读取AP、DP寄存器
- * SWD、JTAG模式下均可调用，区分协议在DAP固件中完成
- * index：device在scanchain中的索引
- * request：是请求字节
- * reg_inout：是寄存器数据的输入输出
- * ——详情查看 DAP 手册
- */
-static BOOL DAPRegister(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t index, uint8_t request, uint32_t *reg_inout){
-	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
-	uint8_t DAPTransferPack[] = {ID_DAP_Transfer, 0, 0x01, 0xFF, 0, 0, 0, 0};
-	DAPTransferPack[1] = index;
-	DAPTransferPack[3] = request;
-	if((request & DAP_TRANSFER_RnW) == DAP_TRANSFER_RnW){	// 读取寄存器
-		DAP_EXCHANGE_DATA(adapterObj, DAPTransferPack, 4, respBuff);
-		// 检查返回值
-		if(respBuff[1] == 1 && respBuff[2] == 1){
-			*reg_inout = *CAST(uint32_t *, respBuff+3);
-			return TRUE;
-		}else{
-			log_warn("Transmission %d bytes, the last response: %x.", respBuff[1], respBuff[2]);
-			return FALSE;
-		}
-	}else{	// 写寄存器
-		DAPTransferPack[4] = BYTE_IDX(*reg_inout, 0);
-		DAPTransferPack[5] = BYTE_IDX(*reg_inout, 1);
-		DAPTransferPack[6] = BYTE_IDX(*reg_inout, 2);
-		DAPTransferPack[7] = BYTE_IDX(*reg_inout, 3);
-		DAP_EXCHANGE_DATA(adapterObj, DAPTransferPack, 8, respBuff);
-		// 检查返回值
-		if(respBuff[1] == 1 && respBuff[2] == 1){
-			return TRUE;
-		}else{
-			log_warn("Transmission %d bytes, the last response: %x.", respBuff[1], respBuff[2]);
-			return FALSE;
-		}
-	}
-}
-
-/**
- * DAP_WriteAbort写入ABORT寄存器
- * index：在JTAG模式下，写入index索引的ABORT寄存器，SWD模式下无效
- * abort：32位的Abort值
- */
-//static BOOL DAP_WriteAbort(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t index, uint32_t abort){
-//	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
-//	uint8_t DAP_WriteAbortPack[] = {ID_DAP_WriteABORT, 0, 0, 0, 0, 0};
-//	DAP_WriteAbortPack[1] = index;
-//	DAP_WriteAbortPack[2] = BYTE_IDX(abort, 0);
-//	DAP_WriteAbortPack[3] = BYTE_IDX(abort, 1);
-//	DAP_WriteAbortPack[4] = BYTE_IDX(abort, 2);
-//	DAP_WriteAbortPack[5] = BYTE_IDX(abort, 3);
-//	DAP_EXCHANGE_DATA(adapterObj, DAP_WriteAbortPack, sizeof(DAP_WriteAbortPack), respBuff);
-//	if(respBuff[1] == DAP_OK){
-//		return TRUE;
-//	}
-//	return FALSE;
-//}
-
-/**
  * 发送一个或多个SWD时序
  */
 static BOOL DAP_SWD_Sequence(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t sequenceCount, uint8_t *data, uint8_t *response){
@@ -543,20 +484,28 @@ static BOOL DAP_SWJ_Clock (uint8_t *respBuff, AdapterObject *adapterObj, uint32_
  * data ：时序表示数据
  * response：TDO返回数据
  */
-// XXX 对数据包进行分片，并测试，检查是否是jtag状态
 static BOOL DAP_JTAG_Sequence(uint8_t *respBuff, AdapterObject *adapterObj, int sequenceCount, uint8_t *data, uint8_t *response){
 	assert(adapterObj != NULL && adapterObj->ConnObject.type == USB);
 	// 判断当前是否是JTAG模式
 	if(adapterObj->currTrans != JTAG) return FALSE;
 	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	assert(cmsis_dapObj->PacketSize != 0);
-	// 发送包缓冲区
-	uint8_t *sendPackBuff = malloc(cmsis_dapObj->PacketSize);
-	if(sendPackBuff == NULL){
+	/**
+	 * 分配所有缓冲区，包括max packet count和packet buff
+	 */
+	uint8_t *buff = malloc(sizeof(int) * cmsis_dapObj->MaxPcaketCount + cmsis_dapObj->PacketSize);
+	if(buff == NULL){
 		log_warn("Unable to allocate send packet buffer, the heap may be full.");
 		return FALSE;
 	}
+	// 记录每次分包需要接收的result
+	int *resultLength = CAST(int *,buff);
+	// 发送包缓冲区
+	uint8_t *sendPackBuff = buff + sizeof(int) * cmsis_dapObj->MaxPcaketCount;
+
 	int inputIdx = 0,outputIdx = 0, seqIdx = 0;	// data数据索引，response数据索引，sequence索引
+	int currIdx = 0;	// 当前的data的偏移
+	int sendPackCnt = 0;	// 当前发包计数
 	int readPayloadLen, sendPayloadLen;	// 要发送和接收的载荷总字节，不包括头部
 	uint8_t seqCount;	// 统计当前有多少个seq
 	sendPackBuff[0] = ID_DAP_JTAG_Sequence;	// 指令头部 0
@@ -565,13 +514,14 @@ MAKE_PACKT:
 	seqCount = 0;
 	readPayloadLen = 0;
 	sendPayloadLen = 0;
+	currIdx = inputIdx;
 	// 计算空间长度
 	for(; seqIdx < sequenceCount; seqIdx++){
 		// GNU编译器下面可以直接这样用：uint8_t tckCount = data[idx] & 0x3f ? : 64;
 		uint8_t tckCount = data[inputIdx] & 0x3f;
 		tckCount = tckCount ? tckCount : 64;
 		uint8_t tdiByte = (tckCount + 7) >> 3;	// 将TCK个数圆整到字节，表示后面跟几个byte的tdi数据
-		//log_debug("SeqInfo:0x%02x, tckCount:%d, tdiByte:%d, TMS:%d.", data[inputIdx], tckCount, tdiByte, !!(data[inputIdx] & 0x40));
+		// log_debug("Seq:0x%02x, tck:%d, tdiByte:%d, TMS:%d.", data[inputIdx], tckCount, tdiByte, !!(data[inputIdx] & 0x40));
 		// 如果当前数据长度加上tdiByte之后大于包长度，+3的意思是两个指令头部和SeqInfo字节
 		if(sendPayloadLen + tdiByte + 3 > cmsis_dapObj->PacketSize){
 			break;
@@ -593,28 +543,43 @@ MAKE_PACKT:
 	 * 3、seqCount == 255
 	 */
 	sendPackBuff[1] = seqCount;	// sequence count
-	memcpy(sendPackBuff + 2, data, sendPayloadLen);
-
+	memcpy(sendPackBuff + 2, data + currIdx, sendPayloadLen);
 	log_trace("Trasmission load: Send %d bytes, receive %d bytes.", sendPayloadLen, readPayloadLen);
-	//misc_PrintBulk(sendPackBuff, sendPayloadLen + 2, 8);
+	// misc_PrintBulk(sendPackBuff+2, sendPayloadLen, 16);
 
-	DAP_EXCHANGE_DATA(adapterObj, sendPackBuff,  sendPayloadLen + 2, respBuff);
+	// 发送包
+	DAPWrite(adapterObj, sendPackBuff, sendPayloadLen + 2);
+	resultLength[sendPackCnt++] = readPayloadLen;	// 本次包的响应包包含多少个数据
 
-	//misc_PrintBulk(respBuff, readPayloadLen + 2, 8);
-	if(respBuff[1] == DAP_OK){
-		// 拷贝数据
-		if(response){
-			memcpy(response + outputIdx, respBuff + 2, readPayloadLen);
-			outputIdx += readPayloadLen;
+	/**
+	 * 如果没发完，而且没有达到最大包数量，则再构建一个包发送过去
+	 */
+	if(seqIdx < (sequenceCount-1) && sendPackCnt < cmsis_dapObj->MaxPcaketCount) goto MAKE_PACKT;
+
+	// 读数据
+	for(int readPackCnt = 0; readPackCnt < sendPackCnt; readPackCnt++){
+		DAPRead(adapterObj, respBuff);
+		if(respBuff[1] == DAP_OK){
+			// misc_PrintBulk(respBuff+2, resultLength[readPackCnt], 16);
+			// 拷贝数据
+			if(response){
+				memcpy(response + outputIdx, respBuff + 2, resultLength[readPackCnt]);
+				outputIdx += resultLength[readPackCnt];
+			}
+		}else{
+			free(buff);
+			return FALSE;
 		}
-		// 判断是否处理完，如果没有则跳回去重新处理
-		if(seqIdx < (sequenceCount-1)) goto MAKE_PACKT;
-		free(sendPackBuff);
-		return TRUE;
-	}else{
-		free(sendPackBuff);
-		return FALSE;
 	}
+	// 判断是否处理完，如果没有则跳回去重新处理
+	if(seqIdx < (sequenceCount-1)) {
+		// 将已发送包清零
+		sendPackCnt = 0;
+		goto MAKE_PACKT;
+	}
+
+	free(buff);
+	return TRUE;
 }
 
 /**
@@ -764,72 +729,6 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 		}while(0);
 		break;
 
-//	case CMDAP_READ_DP_REG:
-//		log_trace("Execution command: Read DP Register.");
-//		do{
-//			// 获得index
-//			uint8_t dap_index = (uint8_t)va_arg(parames, int);
-//			// 获得地址
-//			uint8_t address = (uint8_t)va_arg(parames, int);
-//			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
-//			uint32_t *reg_out = va_arg(parames, uint32_t *);	// 数据输出地址
-//			result = CMDAP_FUN_WARP(adapterObj, DAPRegister, adapterObj, dap_index, DAP_TRANSFER_RnW | address, reg_out);
-//		}while(0);
-//
-//		break;
-//
-//	case CMDAP_READ_AP_REG:
-//		log_trace("Execution command: Read AP Register.");
-//		do{
-//			// 获得index
-//			uint8_t dap_index = (uint8_t)va_arg(parames, int);
-//			// 获得地址
-//			uint8_t address = (uint8_t)va_arg(parames, int);
-//			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
-//			uint32_t *reg_out = va_arg(parames, uint32_t *);	// 数据输出地址
-//			result = CMDAP_FUN_WARP(adapterObj, DAPRegister, adapterObj, dap_index, DAP_TRANSFER_RnW | DAP_TRANSFER_APnDP | address, reg_out);
-//		}while(0);
-//		break;
-//
-//	case CMDAP_WRITE_DP_REG:
-//		log_trace("Execution command: Write DP Register.");
-//		do{
-//			// 获得index
-//			uint8_t dap_index = (uint8_t)va_arg(parames, int);
-//			// 获得地址
-//			uint8_t address = (uint8_t)va_arg(parames, int);
-//			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
-//			uint32_t reg_in = (uint32_t)va_arg(parames, int);	// 数据地址
-//			result = CMDAP_FUN_WARP(adapterObj, DAPRegister, adapterObj, dap_index, address, &reg_in);
-//		}while(0);
-//		break;
-//
-//	case CMDAP_WRITE_AP_REG:
-//		log_trace("Execution command: Write AP Register.");
-//		do{
-//			// 获得index
-//			uint8_t dap_index = (uint8_t)va_arg(parames, int);
-//			// 获得地址
-//			uint8_t address = (uint8_t)va_arg(parames, int);
-//			address &= (DAP_TRANSFER_A2 | DAP_TRANSFER_A3);	// 提取地址
-//			uint32_t reg_in = (uint32_t)va_arg(parames, int);	// 数据地址
-//			result = CMDAP_FUN_WARP(adapterObj, DAPRegister, adapterObj, dap_index, DAP_TRANSFER_APnDP | address, &reg_in);
-//		}while(0);
-//		break;
-
-	case CMDAP_TRANSFER_BLOCK:
-		log_trace("Execution command: DAP Transfer Block.");
-
-		break;
-
-//	case CMDAP_WRITE_ABORT:
-//		log_trace("Execution command: DAP Write Abort.");
-//		do{
-//			uint8_t index = (uint8_t)va_arg(parames, int);
-//			uint32_t abort = (uint32_t)va_arg(parames, int);
-//			result = CMDAP_FUN_WARP(adapterObj, DAP_WriteAbort, adapterObj, index, abort);
-//		}while(0);
-//		break;
 	default:
 		log_warn("Unsupported operation: %d.", operate);
 		break;

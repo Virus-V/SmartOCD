@@ -56,6 +56,7 @@ static jmp_buf exception;
  */
 BOOL __CONSTRUCT(DAP)(DAPObject *dapObj, AdapterObject *adapterObj){
 	assert(dapObj != NULL && adapterObj != NULL);
+	memset(dapObj, 0x0, sizeof(DAPObject));
 	// 初始化TAP对象
 	if(__CONSTRUCT(TAP)(&dapObj->tapObj, adapterObj) == FALSE){
 		log_warn("TAP initialization failed.");
@@ -64,6 +65,11 @@ BOOL __CONSTRUCT(DAP)(DAPObject *dapObj, AdapterObject *adapterObj){
 	dapObj->ir = JTAG_BYPASS;	// ir选择BYPASS
 	dapObj->retry = 5;	// 重试5次
 	dapObj->TAP_index = 0;	// 默认第一个
+	// 初始化AP
+	for(int idx = 0; idx<=255; idx++){
+		//dapObj->AP[idx].apIdx = idx;
+		dapObj->AP[idx].ctrl_state.init = 0;
+	}
 	return TRUE;
 }
 
@@ -84,27 +90,16 @@ void __DESTORY(DAP)(DAPObject *dapObj){
  * data_out：将读取的数据输出
  */
 static BOOL DAP_Read(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t *data_out){
-	int resu, retry = dapObj->retry;
+	int retry = dapObj->retry;
 	// 先将数据清零
 	*data_out = 0;
 	// 错误处理
-	if((resu = setjmp(exception)) != 0){
-		switch(resu){
-		case 1:
-			log_warn("TAP_IR_Write:Failed!");
-			break;
-
-		case 2:
-			log_warn("TAP_DR_Exchange:Failed!");
-			break;
-
-		case 3:
-			log_warn("TAP_Execute:Failed!");
-			break;
-		default:
-			log_warn("Unknow Error.");
-		}
-		return FALSE;
+	switch(setjmp(exception)){
+	case 1: log_warn("TAP_IR_Write:Failed!"); return FALSE;
+	case 2: log_warn("TAP_DR_Exchange:Failed!"); return FALSE;
+	case 3: log_warn("TAP_Execute:Failed!"); return FALSE;
+	default: log_warn("Unknow Error."); return FALSE;
+	case 0:break;
 	}
 	// 如果当前协议是JTAG
 	if(ADAPTER_CURR_TRANS(dapObj->tapObj.adapterObj) == JTAG){
@@ -169,25 +164,14 @@ static BOOL DAP_Read(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t *data_o
  * data：写入的内容
  */
 static BOOL DAP_Write(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t data_in){
-	int resu, retry = dapObj->retry;
+	int retry = dapObj->retry;
 	// 错误处理
-	if((resu = setjmp(exception)) != 0){
-		switch(resu){
-		case 1:
-			log_warn("TAP_IR_Write:Failed!");
-			break;
-
-		case 2:
-			log_warn("TAP_DR_Exchange:Failed!");
-			break;
-
-		case 3:
-			log_warn("TAP_Execute:Failed!");
-			break;
-		default:
-			log_warn("Unknow Error.");
-		}
-		return 0;
+	switch(setjmp(exception)){
+	case 1: log_warn("TAP_IR_Write:Failed!"); return FALSE;
+	case 2: log_warn("TAP_DR_Exchange:Failed!"); return FALSE;
+	case 3: log_warn("TAP_Execute:Failed!"); return FALSE;
+	default: log_warn("Unknow Error."); return FALSE;
+	case 0:break;
 	}
 	// 如果当前协议是JTAG
 	if(ADAPTER_CURR_TRANS(dapObj->tapObj.adapterObj) == JTAG){
@@ -310,22 +294,57 @@ BOOL DAP_AP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data){
  */
 BOOL DAP_AP_Select(DAPObject *dapObj, uint8_t apIdx){
 	assert(dapObj != NULL);
-	// 当前select寄存器备份
-	uint32_t selectBak = dapObj->SelectReg.data;
-	BOOL result = TRUE;
-	if(dapObj->SelectReg.info.AP_Sel == apIdx){
+	if(dapObj->SelectReg.info.AP_Sel == apIdx && dapObj->AP[apIdx].ctrl_state.init == 1){
 		return TRUE;
 	}
+	// 当前select寄存器备份
+	uint32_t selectBak = dapObj->SelectReg.data;
 	// 修改当前apSel值
 	dapObj->SelectReg.info.AP_Sel = apIdx;
 	// 写入SELECT寄存器
-	result = DAP_Write(dapObj, 0, DP_SELECT, dapObj->SelectReg.data);
-	if(result == FALSE){
+	if(DAP_Write(dapObj, 0, DP_SELECT, dapObj->SelectReg.data) == FALSE){
 		log_warn("AP Selection Failed.");
 		dapObj->SelectReg.data = selectBak;
+		return FALSE;
+	}
+	// 获取AP相关信息：CFG
+	if(dapObj->AP[apIdx].ctrl_state.init == 0){	// 初始化ap相关参数
+		uint32_t tmp;
+		if(DAP_AP_Read(dapObj, AP_REG_CFG, &tmp) == FALSE) return FALSE;
+		dapObj->AP[apIdx].ctrl_state.largeAddress = !!(tmp & 0x2);
+		dapObj->AP[apIdx].ctrl_state.largeData = !!(tmp & 0x4);
+		dapObj->AP[apIdx].ctrl_state.bigEndian = !!(tmp & 0x1);
+		// 写入之前先读取CSW寄存器
+		if(DAP_AP_Read(dapObj, AP_REG_CSW, &dapObj->AP[apIdx].CSW.regData) == FALSE) return FALSE;
+		tmp = dapObj->AP[apIdx].CSW.regData;	// 备份到tmp
+		// 写入packed模式和8位模式
+		dapObj->AP[apIdx].CSW.regInfo.AddrInc = ADDRINC_PACKED;
+		dapObj->AP[apIdx].CSW.regInfo.Size = SIZE_8;
+		if(DAP_AP_Write(dapObj, AP_REG_CSW, dapObj->AP[apIdx].CSW.regData) == FALSE) return FALSE;
+		if(DAP_AP_Read(dapObj, AP_REG_CSW, &dapObj->AP[apIdx].CSW.regData) == FALSE) return FALSE;
+		/**
+		 * ARM ID080813
+		 * 第7-133
+		 * An implementation that supports transfers smaller than word must support packed transfers.
+		 * Packed transfers cannot be supported on a MEM-AP that only supports whole-word transfers.
+		 * 第7-136
+		 * If the MEM-AP Large Data Extention is not supported, then when a MEM-AP implementation supports different
+		 * sized access, it MUST support word, halfword and byte accesses.
+		 */
+		if(dapObj->AP[apIdx].CSW.regInfo.AddrInc == AP_CSW_PADDRINC){
+			dapObj->AP[apIdx].ctrl_state.packedTransfers = 1;
+			dapObj->AP[apIdx].ctrl_state.lessWordTransfers = 1;
+		}else{
+			dapObj->AP[apIdx].ctrl_state.lessWordTransfers = dapObj->AP[apIdx].CSW.regInfo.Size == SIZE_8 ? 1 : 0;
+		}
+		// 恢复CSW寄存器的值
+		if(DAP_AP_Write(dapObj, AP_REG_CSW, tmp) == FALSE) return FALSE;
+		// 赋值给CSW
+		dapObj->AP[apIdx].CSW.regData = tmp;
+		dapObj->AP[apIdx].ctrl_state.init = 1;
 	}
 	// 检查结果
-	return result;
+	return TRUE;
 }
 
 /**
@@ -342,7 +361,7 @@ BOOL DAP_CheckStatus(DAPObject *dapObj, BOOL updateOnly){
 		return FALSE;
 	}
 	// 更新寄存器的内容
-	dapObj->CTRL_STAT_Reg = ctrl_status;
+	dapObj->CTRL_STAT_Reg.regData = ctrl_status;
 	// 如果错误标志位置位，则执行回调函数
 	if(updateOnly == FALSE && dapObj->stickyErrHandle != NULL
 			&& (ctrl_status & (DP_STAT_STICKYORUN | DP_STAT_STICKYCMP | DP_STAT_STICKYERR | DP_STAT_WDATAERR)))
@@ -357,25 +376,14 @@ BOOL DAP_CheckStatus(DAPObject *dapObj, BOOL updateOnly){
  */
 BOOL DAP_WriteAbort(DAPObject *dapObj, uint32_t abort){
 	assert(dapObj != NULL);
-	int resu, retry = dapObj->retry;
+	int retry = dapObj->retry;
 	// 错误处理
-	if((resu = setjmp(exception)) != 0){
-		switch(resu){
-		case 1:
-			log_warn("TAP_IR_Write:Failed!");
-			break;
-
-		case 2:
-			log_warn("TAP_DR_Exchange:Failed!");
-			break;
-
-		case 3:
-			log_warn("TAP_Execute:Failed!");
-			break;
-		default:
-			log_warn("Unknow Error.");
-		}
-		return 0;
+	switch(setjmp(exception)){
+	case 1: log_warn("TAP_IR_Write:Failed!"); return FALSE;
+	case 2: log_warn("TAP_DR_Exchange:Failed!"); return FALSE;
+	case 3: log_warn("TAP_Execute:Failed!"); return FALSE;
+	default: log_warn("Unknow Error."); return FALSE;
+	case 0:break;
 	}
 	// 如果当前协议是JTAG
 	if(ADAPTER_CURR_TRANS(dapObj->tapObj.adapterObj) == JTAG){
@@ -421,7 +429,7 @@ BOOL DAP_ClearStickyFlag(DAPObject *dapObj, uint32_t flags){
 		// 写相应位到CTRL/STAT寄存器中
 		flags &= DP_STAT_STICKYORUN | DP_STAT_STICKYCMP | DP_STAT_STICKYERR | DP_STAT_WDATAERR;
 		ctrl_status = ~(DP_STAT_STICKYORUN | DP_STAT_STICKYCMP | DP_STAT_STICKYERR | DP_STAT_WDATAERR);
-		ctrl_status &= dapObj->CTRL_STAT_Reg;	// 保留其他位的值
+		ctrl_status &= dapObj->CTRL_STAT_Reg.regData;	// 保留其他位的值
 		ctrl_status |= flags;	// 置位要清除的标志位
 		// 写入到CTRL/STATUS寄存器
 		if(DAP_DP_Write(dapObj, DP_CTRL_STAT, ctrl_status) == FALSE){
@@ -429,7 +437,7 @@ BOOL DAP_ClearStickyFlag(DAPObject *dapObj, uint32_t flags){
 			return FALSE;
 		}else{
 			// 更新寄存器
-			dapObj->CTRL_STAT_Reg = ctrl_status;
+			dapObj->CTRL_STAT_Reg.regData = ctrl_status;
 			return TRUE;
 		}
 	}else if(ADAPTER_CURR_TRANS(dapObj->tapObj.adapterObj) == SWD){
@@ -437,4 +445,260 @@ BOOL DAP_ClearStickyFlag(DAPObject *dapObj, uint32_t flags){
 		return FALSE;
 	}
 	return FALSE;
+}
+
+/**
+ * 查找某一类型的AP
+ * apType：需要查找的AP类型
+ * 返回：-1：错误 其他 ap的index
+ * 同时会选中该AP
+ */
+BOOL DAP_Find_AP(DAPObject *dapObj, enum ap_type apType, uint8_t *apIdx_Out){
+	assert(dapObj != NULL);
+	*apIdx_Out = 0;
+	int apIdx; AP_IDR_Parse ap_IDR;
+	for(apIdx = 0; apIdx < 256; apIdx++){
+		// 选择AP
+		if(DAP_AP_Select(dapObj, apIdx) == FALSE){
+			return FALSE;
+		}
+		if(DAP_AP_Read(dapObj, AP_REG_IDR, &ap_IDR.regData) == FALSE){
+			return FALSE;
+		}
+		// 检查厂商
+		if(ap_IDR.regInfo.JEP106Code == JEP106_CODE_ARM){
+			if(apType == AP_TYPE_JTAG && ap_IDR.regInfo.Class == 0){	// 选择JTAG-AP
+				break;
+			}else if(apType != AP_TYPE_JTAG && ap_IDR.regInfo.Class == 8){	// 选择MEM-AP
+				if(ap_IDR.regInfo.Type == apType){
+					break;
+				}
+			}
+		}
+	}
+	*apIdx_Out = apIdx;
+	return TRUE;
+}
+
+/**
+ * 写入TAR寄存器
+ */
+static BOOL write_TAR(DAPObject *dapObj, uint64_t addr){
+	// 如果支持Large Address
+	if(dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.largeAddress == 1){
+		// 将地址的高32位写入TAR_MSB
+		if(DAP_AP_Write(dapObj, AP_REG_TAR_MSB, (uint32_t)(addr >> 32)) == FALSE) return FALSE;
+	}
+	// 将低32位写入TAR_LSB
+	if(DAP_AP_Write(dapObj, AP_REG_TAR_LSB, (uint32_t)(addr & 0xffffffffu)) == FALSE) return FALSE;
+	return 1;
+}
+
+/**
+ * 读取8位数据
+ * addr：64位地址
+ * data_out：读取的数据输出地址
+ */
+BOOL DAP_ReadMem8(DAPObject *dapObj, uint64_t addr, uint8_t *data_out){
+	assert(dapObj != NULL && dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.init == 1);
+	// 设置CSW：Size=Byte，AddrInc=off
+	uint32_t csw_bak = dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData;
+	dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regInfo.AddrInc = ADDRINC_OFF;	// AddrInc Off
+	if(dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.lessWordTransfers == 1){	// 支持lessWordTransfer
+		dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regInfo.Size = SIZE_8;	// Byte
+	}else{
+		dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regInfo.Size = SIZE_32;	// Word
+	}
+	// 是否需要更新寄存器？
+	if(dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData != csw_bak)
+		if(DAP_AP_Write(dapObj, AP_REG_CSW, dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData) == FALSE) return FALSE;
+	// 获得字节在字中的索引
+	int byteIdx = addr & 0x3;
+	// 读取数据
+	if(dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.lessWordTransfers == 0){
+		/**
+		 * 不支持lessWordTransfer
+		 * 需要将地址的低2位清零，4字节读取
+		 */
+		addr = (addr >> 2) << 2;
+	}
+	// 写入TAR
+	if(write_TAR(dapObj, addr) == FALSE) return FALSE;
+	// 读取数据，根据byte lane获得数据
+	uint32_t data;
+	if(DAP_AP_Read(dapObj, AP_REG_DRW, &data) == FALSE) return FALSE;
+	// 拆分数据
+	*data_out = (uint8_t)(data >> (8*byteIdx));
+	return TRUE;
+}
+
+/**
+ * 读取16位数据
+ * addr：64位地址
+ * data_out：读取的数据输出地址
+ * 注意：地址要以字对齐，否则返回FALSE
+ */
+BOOL DAP_ReadMem16(DAPObject *dapObj, uint64_t addr, uint16_t *data_out){
+	assert(dapObj != NULL && dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.init == 1);
+	// 检查对齐
+	if(addr & 0x1){
+		log_warn("Memory address is not halfword aligned!");
+		return FALSE;
+	}
+	// 设置CSW：Size=Halfword，AddrInc=off
+	uint32_t csw_bak = dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData;
+	dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regInfo.AddrInc = ADDRINC_OFF;	// AddrInc Off
+	if(dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.lessWordTransfers == 1){	// 支持lessWordTransfer
+		dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regInfo.Size = SIZE_16;	// Halfword
+	}else{
+		dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regInfo.Size = SIZE_32;	// Word
+	}
+	// 是否需要更新寄存器？
+	if(dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData != csw_bak)
+		if(DAP_AP_Write(dapObj, AP_REG_CSW, dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData) == FALSE) return FALSE;
+	// 获得半字在字中的索引
+	int byteIdx = addr & 0x2;
+	// 读取数据
+	if(dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.lessWordTransfers == 0){
+		/**
+		 * 不支持lessWordTransfer
+		 * 需要将地址的低2位清零，4字节读取
+		 */
+		addr = (addr >> 2) << 2;
+	}
+	// 写入TAR
+	if(write_TAR(dapObj, addr) == FALSE) return FALSE;
+	// 读取数据，根据byte lane获得数据
+	uint32_t data;
+	if(DAP_AP_Read(dapObj, AP_REG_DRW, &data) == FALSE) return FALSE;
+	// 拆分数据
+	*data_out = (uint16_t)(data >> (8*byteIdx));
+	return TRUE;
+}
+
+/**
+ * 读取32位数据
+ * addr：64位地址
+ * data_out：读取的数据输出地址
+ * 注意：地址要以字对齐，否则报错
+ */
+BOOL DAP_ReadMem32(DAPObject *dapObj, uint64_t addr, uint32_t *data_out){
+	assert(dapObj != NULL && dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.init == 1);
+	// 检查对齐
+	if(addr & 0x3){
+		log_warn("Memory address is not word aligned!");
+		return FALSE;
+	}
+	// 设置CSW：Size=Word，AddrInc=off
+	uint32_t csw_bak = dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData;
+	dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regInfo.AddrInc = ADDRINC_OFF;	// AddrInc Off
+	dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regInfo.Size = SIZE_32;	// Word
+	// 是否需要更新寄存器？
+	if(dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData != csw_bak)
+		if(DAP_AP_Write(dapObj, AP_REG_CSW, dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData) == FALSE) return FALSE;
+	// 写入TAR
+	if(write_TAR(dapObj, addr) == FALSE) return FALSE;
+	// 读取数据，根据byte lane获得数据
+	if(DAP_AP_Read(dapObj, AP_REG_DRW, data_out) == FALSE) return FALSE;
+	return TRUE;
+}
+
+/**
+ * 写入32位数据
+ * addr：64位地址
+ * data_out：读取的数据输出地址
+ * 注意：地址要以字对齐，否则报错
+ */
+BOOL DAP_WriteMem32(DAPObject *dapObj, uint64_t addr, uint32_t data){
+	assert(dapObj != NULL && dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.init == 1);
+	// 检查对齐
+	if(addr & 0x3){
+		log_warn("Memory address is not word aligned!");
+		return FALSE;
+	}
+	// 设置CSW：Size=Word，AddrInc=off
+	uint32_t csw_bak = dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData;
+	dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regInfo.AddrInc = ADDRINC_OFF;	// AddrInc Off
+	dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regInfo.Size = SIZE_32;	// Word
+	// 是否需要更新寄存器？
+	if(dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData != csw_bak)
+		if(DAP_AP_Write(dapObj, AP_REG_CSW, dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData) == FALSE) return FALSE;
+	// 写入TAR
+	if(write_TAR(dapObj, addr) == FALSE) return FALSE;
+	// 读取数据，根据byte lane获得数据
+	if(DAP_AP_Write(dapObj, AP_REG_DRW, data) == FALSE) return FALSE;
+	return TRUE;
+}
+
+/**
+ * 读取内存数据
+ * memAddr：读取的内存地址
+ * dataSize：每次读取的位数。8,16,32,64,128,256
+ * buff：从哪儿读取数据
+ * cnt：需要传输多少个数据，以dataSize为单位
+ * transdered_out：传输多少个数据
+ * buffInc：buff地址自增？单位dataSize
+ * memInc：内存地址自增？单位dataSize
+ * 返回：TRUE，FALSE
+ */
+BOOL DAP_ReadMemory(DAPObject *dapObj, uint64_t memAddr, int dataSize, uint8_t *buff, int cnt, int *transdered_out, BOOL buffInc, BOOL memInc){
+	return FALSE;
+}
+
+/**
+ * 读取Component ID和Peripheral ID
+ * componentBase：Component的基址，必须4KB对齐
+ * cid_out：读取的Component ID
+ * pid_out：读取的Peripheral ID
+ */
+BOOL DAP_Read_CID_PID(DAPObject *dapObj, uint32_t componentBase, uint32_t *cid_out, uint64_t *pid_out){
+	assert(dapObj != NULL);
+	if((componentBase & 0xFFF) != 0) {
+		log_warn("Component base address is not 4KB aligned!");
+		return FALSE;
+	}
+	*cid_out = 0; *pid_out = 0;
+	uint32_t cid0, cid1, cid2, cid3;
+	uint32_t pid0, pid1, pid2, pid3, pid4;	// pid5-7全是0，所以不用读
+	// 错误处理
+	switch(setjmp(exception)){
+	case 1: log_warn("DAP_ReadMem32:Read Component ID Failed!"); return FALSE;
+	case 2: log_warn("DAP_ReadMem32:Read Peripheral ID Failed!"); return FALSE;
+	case 3: log_warn("TAP_Execute:Failed!"); return FALSE;
+	default: log_warn("Unknow Error."); return FALSE;
+	case 0:break;
+	}
+	// 读取Component ID
+	if(DAP_ReadMem32(dapObj, componentBase + 0xFF0, &cid0) == FALSE) longjmp(exception, 1);
+	if(DAP_ReadMem32(dapObj, componentBase + 0xFF4, &cid1) == FALSE) longjmp(exception, 1);
+	if(DAP_ReadMem32(dapObj, componentBase + 0xFF8, &cid2) == FALSE) longjmp(exception, 1);
+	if(DAP_ReadMem32(dapObj, componentBase + 0xFFC, &cid3) == FALSE) longjmp(exception, 1);
+	// 读取Peripheral ID
+	if(DAP_ReadMem32(dapObj, componentBase + 0xFE0, &pid0) == FALSE) longjmp(exception, 2);
+	if(DAP_ReadMem32(dapObj, componentBase + 0xFE4, &pid1) == FALSE) longjmp(exception, 2);
+	if(DAP_ReadMem32(dapObj, componentBase + 0xFE8, &pid2) == FALSE) longjmp(exception, 2);
+	if(DAP_ReadMem32(dapObj, componentBase + 0xFEC, &pid3) == FALSE) longjmp(exception, 2);
+	if(DAP_ReadMem32(dapObj, componentBase + 0xFD0, &pid4) == FALSE) longjmp(exception, 2);
+
+	*cid_out = (cid3 & 0xff) << 24 | (cid2 & 0xff) << 16 | (cid1 & 0xff) << 8 | (cid0 & 0xff);
+	*pid_out = (uint64_t)(pid4 & 0xff) << 32 | (pid3 & 0xff) << 24 | (pid2 & 0xff) << 16 | (pid1 & 0xff) << 8 | (pid0 & 0xff);
+	return TRUE;
+}
+
+/**
+ * DAP操作队列
+ * APnDP:操作的是AP还是DP
+ * RnW：读取还是写入
+ * A：A[3:2]
+ * 返回：TRUE FALSE
+ */
+static BOOL dap_queue_add(DAPObject *dapObj, BOOL APnDP, BOOL RnW, int A){
+
+}
+
+/**
+ * 同步结果
+ */
+static BOOL dap_queue_sync(){
+
 }
