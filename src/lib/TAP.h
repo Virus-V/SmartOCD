@@ -9,7 +9,7 @@
 #define SRC_LIB_TAP_H_
 
 #include "smart_ocd.h"
-#include "misc/list/list.h"
+#include "misc/list.h"
 #include "debugger/adapter.h"
 #include "lib/JTAG.h"
 
@@ -27,6 +27,7 @@ enum JTAG_instructions{
 struct JTAG_Instr{
 	enum JTAG_instructions type;	// 指令类型
 	uint16_t TAP_Index;
+	struct list_head list_entry;
 	union {
 		uint32_t IR_Data;	// ir数据
 		struct {
@@ -50,8 +51,9 @@ struct TAPObject {
 	int TAP_actived;
 	int IR_Bytes;	// IR固定字节
 	uint16_t TAP_Count, *TAP_Info;
-	list_t *instrQueue;	// JTAG指令队列，元素类型：struct JTAG_Instr
-	list_node_t *currProcessing;	// 下一个将要处理的指令
+	int instrQueue_len;	// 指令队列长度
+	struct list_head instrQueue;	// JTAG指令队列，元素类型：struct JTAG_Instr
+	struct JTAG_Instr *currProcessing;	// 下一个将要处理的指令
 	int sequenceCount;	// 一共有多少个Sequence
 	int DR_Delay, delayBytes;	// 时钟延迟，在写入DR后进入idle状态延时多少个时钟周期。0是不延迟
 };
@@ -67,5 +69,6 @@ BOOL TAP_Get_IDCODE(TAPObject *tapObj, uint32_t *idCode);
 BOOL TAP_IR_Write(TAPObject *tapObj, uint16_t index, uint32_t ir);
 BOOL TAP_DR_Exchange(TAPObject *tapObj, uint16_t index, int count, uint8_t *data);
 BOOL TAP_Execute(TAPObject *tapObj);
+void TAP_FlushQueue(TAPObject *tapObj);
 
 #endif /* SRC_LIB_TAP_H_ */

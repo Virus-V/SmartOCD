@@ -6,6 +6,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include "misc/log.h"
 #include "debugger/cmsis-dap.h"
 #include "lib/TAP.h"

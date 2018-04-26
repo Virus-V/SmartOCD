@@ -50,13 +50,8 @@
 BOOL __CONSTRUCT(TAP)(TAPObject *tapObj, AdapterObject *adapterObj){
 	assert(tapObj != NULL && adapterObj != NULL);
 	memset(tapObj, 0x0, sizeof(TAPObject));
-	// 创建指令队列表头
-	tapObj->instrQueue = list_new();
-	if(tapObj->instrQueue == NULL){
-		log_warn("Init JTAG Instruction queue failed.");
-		return FALSE;
-	}
-	tapObj->instrQueue->free = free;
+	// 初始化指令队列表头
+	INIT_LIST_HEAD(&tapObj->instrQueue);
 	tapObj->adapterObj = adapterObj;
 	tapObj->currentStatus = JTAG_TAP_RESET;
 	tapObj->TAP_actived = -1;
@@ -64,8 +59,6 @@ BOOL __CONSTRUCT(TAP)(TAPObject *tapObj, AdapterObject *adapterObj){
 	// 初始化Adapter
 	if(adapterObj->Init(adapterObj) == FALSE){
 		log_warn("Adapter initialization failed.");
-		list_destroy(tapObj->instrQueue);
-		tapObj->instrQueue = NULL;
 		return FALSE;
 	}
 	return TRUE;
@@ -78,7 +71,6 @@ void __DESTORY(TAP)(TAPObject *tapObj){
 	assert(tapObj != NULL && tapObj->adapterObj != NULL);
 	// 关闭Adapter
 	tapObj->adapterObj->Deinit(tapObj->adapterObj);
-	list_destroy(tapObj->instrQueue);
 	if(tapObj->TAP_Info){
 		free(tapObj->TAP_Info);
 		tapObj->TAP_Info = NULL;
@@ -299,27 +291,19 @@ static int build_DR_InstrData(TAPObject *tapObj, uint8_t *buff, struct JTAG_Inst
 
 /**
  * 向TAP指令队列里新增一个指令
- * 返回：节点对象指针或者NULL
+ * 返回：返回指令对象指针或NULL
  */
-static list_node_t * JTAG_NewInstruction(TAPObject *tapObj){
-	assert(tapObj != NULL);
+static struct JTAG_Instr * JTAG_NewInstruction(TAPObject *tapObj){
 	// 新建指令对象
 	struct JTAG_Instr *instruct = calloc(1, sizeof(struct JTAG_Instr));
 	if(instruct == NULL){
 		log_warn("Failed to create a new instruction object.");
 		return NULL;
 	}
-	// 新建指令链表元素
-	list_node_t *instr_node = list_node_new(instruct);
-	if(instr_node == NULL){
-		log_warn("Failed to create a new instruction node.");
-		free(instruct);
-		return NULL;
-	}
-	// 插入到指令队列尾部
-	list_rpush(tapObj->instrQueue, instr_node);
-	instr_node->val = instruct;
-	return instr_node;
+	// 将指令插入链表尾部
+	list_add_tail(&instruct->list_entry, &tapObj->instrQueue);
+	tapObj->instrQueue_len++;
+	return instruct;
 }
 
 /**
@@ -331,7 +315,6 @@ void TAP_Set_DR_Delay(TAPObject *tapObj, int delay){
 	tapObj->DR_Delay = delay;
 	// delay就是在IDLE状态空转多少个时钟周期，用来等待DR操作完成
 	tapObj->delayBytes = BIT2BYTE(delay);
-	log_debug("%d, %d.", tapObj->DR_Delay, tapObj->delayBytes);
 }
 
 /**
@@ -462,12 +445,10 @@ BOOL TAP_IR_Write(TAPObject *tapObj, uint16_t index, uint32_t ir){
 		log_warn("Object index %d does not exist.", index);
 		return FALSE;
 	}
-	list_node_t *node = JTAG_NewInstruction(tapObj);
-	if(node == NULL){
+	struct JTAG_Instr *instruct = JTAG_NewInstruction(tapObj);
+	if(instruct == NULL){
 		return FALSE;
 	}
-
-	struct JTAG_Instr *instruct = node->val;
 	instruct->type = JTAG_INS_WRITE_IR;
 	instruct->TAP_Index = index;
 	instruct->info.IR_Data = ir;
@@ -487,11 +468,10 @@ BOOL TAP_DR_Exchange(TAPObject *tapObj, uint16_t index, int count, uint8_t *data
 		log_warn("TDI data is zero length.");
 		return FALSE;
 	}
-	list_node_t *node = JTAG_NewInstruction(tapObj);
-	if(node == NULL){
+	struct JTAG_Instr *instruct = JTAG_NewInstruction(tapObj);
+	if(instruct == NULL){
 		return FALSE;
 	}
-	struct JTAG_Instr *instruct = node->val;
 	instruct->type = JTAG_INS_EXCHANGE_DR;
 	instruct->TAP_Index = index;
 	instruct->info.DR.bitCount = count;
@@ -524,20 +504,14 @@ BOOL TAP_Execute(TAPObject *tapObj){
 		return FALSE;
 	}
 	// 判断如果指令列表为空则返回
-	if(tapObj->instrQueue->len == 0){
+	if(tapObj->instrQueue_len == 0){
 		return TRUE;
 	}
-	// 创建迭代器
-	list_iterator_t *iterator = list_iterator_new(tapObj->instrQueue, LIST_HEAD);
-	if(iterator == NULL){
-		log_warn("Failed to create iterator.");
-		goto EXIT_STEP_0;
-	}
-	list_node_t *node = list_iterator_next(iterator);
 	// 当前TAP的状态
 	enum JTAG_TAP_Status lastStatus = tapObj->currentStatus;
-	for(; node; node = list_iterator_next(iterator)){
-		struct JTAG_Instr *instr = CAST(struct JTAG_Instr *, node->val);
+
+	struct JTAG_Instr *instr;
+	list_for_each_entry(instr, &tapObj->instrQueue, list_entry){
 		uint16_t seqInfo;
 		/**
 		 * 两种指令都需要从Select-xR 到 Shift-xR
@@ -569,6 +543,7 @@ BOOL TAP_Execute(TAPObject *tapObj){
 			instrBufferLen += tapObj->IR_Bytes + 2;	// 跳出控制字
 		}
 	}
+
 	// 开辟缓冲区空间
 	log_trace("Instr buffer size: %d; Result buffer size: %d.", instrBufferLen, resultBufferLen);
 	//goto EXIT_STEP_1;
@@ -586,14 +561,10 @@ BOOL TAP_Execute(TAPObject *tapObj){
 	uint8_t *currInstr = instrBuffer;
 	// 清空Sequence Counter
 	tapObj->sequenceCount = 0;
-	// 开始下一轮迭代之前要复位迭代器
-	list_iterator_reset(iterator);
 	// 解析指令
-	node = list_iterator_next(iterator);
-	for(; node; node = list_iterator_next(iterator)){
-		struct JTAG_Instr *instr = CAST(struct JTAG_Instr *, node->val);
+	list_for_each_entry(instr, &tapObj->instrQueue, list_entry){
 		uint16_t seqInfo;
-		tapObj->currProcessing = node;	// 设置当前处理的node
+		tapObj->currProcessing = instr;	// 设置当前处理的node
 		if(instr->type == JTAG_INS_WRITE_IR){
 			// 写入状态切换时序信息
 			seqInfo = JTAG_Get_TMS_Sequence(tapObj->currentStatus, JTAG_TAP_IRSELECT);
@@ -667,12 +638,9 @@ BOOL TAP_Execute(TAPObject *tapObj){
 		goto EXIT_STEP_3;
 	}
 
-	list_iterator_reset(iterator);
 	uint8_t *resultBuff_tmp = resultBuffer;
 	// 对返回数据进行装填
-	node = list_iterator_next(iterator);
-	for(; node; node = list_iterator_next(iterator)){
-		struct JTAG_Instr *instr = CAST(struct JTAG_Instr *, node->val);
+	list_for_each_entry(instr, &tapObj->instrQueue, list_entry){
 		// 跳过IR类型的指令
 		if(instr->type == JTAG_INS_WRITE_IR) continue;
 		int byteCnt = (instr->info.DR.bitCount + 7) >> 3;
@@ -689,11 +657,7 @@ BOOL TAP_Execute(TAPObject *tapObj){
 		resultBuff_tmp += byteCnt;
 	}
 	// 销毁执行完毕的指令
-	list_iterator_reset(iterator);
-	node = list_iterator_next(iterator);
-	for(; node; node = list_iterator_next(iterator)){
-		list_remove(tapObj->instrQueue, node);
-	}
+	TAP_FlushQueue(tapObj);
 	tapObj->currProcessing = NULL;
 	result = TRUE;
 EXIT_STEP_3:
@@ -701,7 +665,20 @@ EXIT_STEP_3:
 EXIT_STEP_2:
 	free(instrBuffer);
 EXIT_STEP_1:
-	list_iterator_destroy(iterator);
 EXIT_STEP_0:
 	return result;
+}
+
+/**
+ * 清空JTAG指令队列
+ * 在出现错误的时候使用
+ * 返回值TRUE FALSE
+ */
+void TAP_FlushQueue(TAPObject *tapObj){
+	assert(tapObj != NULL);
+	struct JTAG_Instr *instr, *instr_t;
+	list_for_each_entry_safe(instr, instr_t, &tapObj->instrQueue, list_entry){
+		free(instr);
+	}
+	tapObj->instrQueue_len = 0;
 }

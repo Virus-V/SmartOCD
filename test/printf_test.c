@@ -52,11 +52,10 @@ char* itoa(int num, char *str, int radix) {
 })
 
 int main(){
-	uint8_t data[5];
+	uint8_t sdad[5];
+	uint8_t (*data)[5] = 0;
 	uint32_t tmp;
-	for(int n=0,j=0;n<5;n++){
-		printf("%d\n", j++);
-	}
-	printf("%d\n", BIT2BYTE(65));
+
+	printf("%p,%p\n", data+1 , data+2);
 	return 0;
 }

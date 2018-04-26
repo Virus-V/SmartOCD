@@ -9,7 +9,7 @@
 #define SRC_ARCH_CORESIGHT_DAP_H_
 
 #include "smart_ocd.h"
-#include "misc/list/list.h"
+#include "misc/list.h"
 #include "debugger/adapter.h"
 #include "lib/TAP.h"
 
@@ -300,16 +300,21 @@ struct DAPObject{
 	// WDATAERR, STICKYERR, STICKYCMP, STICKYORUN
 	void (*stickyErrHandle)(DAPObject *dapObj);
 	// DAP指令队列
-	list_t *instrQueue;	// DAP指令队列，元素类型：struct DAP_Instr
+	struct list_head instrQueue;	// DAP指令队列，元素类型：struct DAP_Instr
+	int instrQueue_len;	// 指令队列长度
+	int RDBUFF_Cnt;		// 需要插入多少个RDBUFF
 };
 
 // DAP指令队列
 struct DAP_Instr{
+	struct list_head list_entry;	// 链表节点
 	union {
 		struct {
 			uint32_t APnDP:1;	// 0 = Debug Port (DP), 1 = Access Port (AP).
 			uint32_t RnW:1;		// 0 = Write Register, 1 = Read Register.
 			uint32_t A:2;		// A[3:2] Register Address.
+			uint32_t :5;		// Padding
+			uint32_t ack:3;		// 当前指令的应答
 		} info;
 		uint8_t data;
 	}seq;
@@ -318,6 +323,7 @@ struct DAP_Instr{
 		uint32_t in;
 		uint32_t *out;
 	} data;
+	uint8_t (*chainData)[5];	// 该指令对应的扫描链数据
 };
 
 // packed transfer
@@ -369,10 +375,8 @@ BOOL DAP_WriteMem64(DAPObject *dapObj, uint64_t addr, uint64_t data);
 BOOL DAP_Read_CID_PID(DAPObject *dapObj, uint32_t componentBase, uint32_t *cid_out, uint64_t *pid_out);
 
 // 队列操作，只在SWD模式下可用
-BOOL DAP_Queue_DP_Read(DAPObject *dapObj);
-BOOL DAP_Queue_DP_Write(DAPObject *dapObj);
-BOOL DAP_Queue_AP_Read(DAPObject *dapObj);
-BOOL DAP_Queue_AP_Write(DAPObject *dapObj);
+BOOL DAP_Queue_xP_Read(DAPObject *dapObj, BOOL APnDP, uint8_t reg, uint32_t *data_out);
+BOOL DAP_Queue_xP_Write(DAPObject *dapObj, BOOL APnDP, uint8_t reg, uint32_t data);
 BOOL DAP_Queue_Execute(DAPObject *dapObj);
 
 #endif /* SRC_ARCH_CORESIGHT_DAP_H_ */

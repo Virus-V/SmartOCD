@@ -22,7 +22,7 @@ uint16_t pids[] = {0xf001, 0};
  * 打印AP信息
  */
 static void printAPInfo(uint32_t APIDR){
-	AP_IDRParse parse;
+	AP_IDR_Parse parse;
 	parse.regData = APIDR;
 	if(parse.regInfo.Class == 0x0){	// JTAG AP
 		printf("JTAG-AP:JTAG Connection to this AP\n");
