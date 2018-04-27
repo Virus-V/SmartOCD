@@ -64,6 +64,7 @@ BOOL __CONSTRUCT(DAP)(DAPObject *dapObj, AdapterObject *adapterObj){
 	}
 	// 初始化队列
 	INIT_LIST_HEAD(&dapObj->instrQueue);
+	INIT_LIST_HEAD(&dapObj->retryQueue);
 	dapObj->ir = JTAG_BYPASS;	// ir选择BYPASS
 	dapObj->retry = 5;	// 重试5次
 	// 初始化AP
@@ -699,7 +700,7 @@ static struct DAP_Instr * DAP_NewInstruction(DAPObject *dapObj){
 	}
 	// 插入到指令队列尾部
 	list_add_tail(&instruct->list_entry, &dapObj->instrQueue);
-	dapObj->instrQueue_len ++;
+	//dapObj->instrQueue_len ++;
 	return instruct;
 }
 
@@ -723,9 +724,11 @@ BOOL DAP_Queue_xP_Read(DAPObject *dapObj, BOOL APnDP, uint8_t reg, uint32_t *dat
 	// TODO likely 分支预测
 	if(instr->list_entry.prev != &dapObj->instrQueue){	// 如果上一个节点不是头结点
 		struct DAP_Instr * last_instr = list_entry(instr->list_entry.prev, struct DAP_Instr, list_entry);
+		// 计算当前指令的缓冲索引
 		// Ra Rb a!=b
 		if((last_instr->seq.info.RnW == 1) && (last_instr->seq.info.APnDP != instr->seq.info.APnDP)){
-			dapObj->RDBUFF_Cnt ++;	// 插入RDBUFF的个数
+			//dapObj->RDBUFF_Cnt ++;	// 插入RDBUFF的个数
+			last_instr->seq.info.end = 1;	// 标记上一个指令结束
 		}
 	}
 	return TRUE;
@@ -750,10 +753,106 @@ BOOL DAP_Queue_xP_Write(DAPObject *dapObj, BOOL APnDP, uint8_t reg, uint32_t dat
 		struct DAP_Instr *last_instr = list_entry(instr->list_entry.prev, struct DAP_Instr, list_entry);
 		// Rx Wx
 		if(last_instr->seq.info.RnW == 1){
-			dapObj->RDBUFF_Cnt ++;	// 插入RDBUFF的个数
+			//dapObj->RDBUFF_Cnt ++;	// 插入RDBUFF的个数
+			last_instr->seq.info.end = 1;
 		}
 	}
 	return TRUE;
+}
+
+/**
+ * 指令分拣
+ * 1、将响应为WAIT的指令插入到重试队列
+ * 2、将响应为ok的指令找到下一个响应为ok的数据索引
+ * TODO review
+ */
+static void DAP_JTAG_instr_sort_out(DAPObject *dapObj, struct list_head *instrQueue, uint8_t (*buff)[5], int buffLen){
+	// 数据已经在缓冲区就绪了，同步到指令中
+	struct DAP_Instr *instr,*last_t;
+	int buffIdx = 0;
+	// 指令分拣
+	list_for_each_entry_safe(instr, last_t, instrQueue, list_entry){
+		if((*(buff + buffIdx)[0] & 0x7) == JTAG_RESP_WAIT){
+			list_move_tail(&instr->list_entry, &dapObj->retryQueue);	// 将该指令插入到重试队列
+		}else{	// 当前指令成功发布，找到从buffIdx+1开始的一个ok
+			int t;
+			for(t = buffIdx + 1;t < buffLen;t++){
+				if((*(buff + t)[0] & 0x7) != JTAG_RESP_WAIT) break;
+			}
+			if(t < buffLen){	// 找到了
+				instr->buffIdx = t;
+			}else{	// 没找到，TODO 将该指令和后面的所有指令都插入重试队列
+				list_move_tail(&instr->list_entry, &dapObj->retryQueue);
+			}
+		}
+		buffIdx++;
+		if(instr->seq.info.end) break;
+	}
+}
+
+/**
+ * 执行队列里的一组指令
+ * 将这组指令转换成DAP协议插入到JTAG命令队列中
+ * 该指令出现错误不会返回。
+ * buffLen未使用
+ */
+static int DAP_JTAG_exe_queue(DAPObject *dapObj, struct list_head *instrQueue, uint8_t (*buff)[5]){
+	int buffIdx = 0;
+	struct DAP_Instr *instr;
+	list_for_each_entry(instr, instrQueue, list_entry){
+		// 当前指令的扫描链
+		uint32_t currentIR = instr->seq.info.APnDP ? JTAG_APACC : JTAG_DPACC;
+		// 选择合适的扫描链
+		if (dapObj->ir != currentIR) {
+			dapObj->ir = currentIR;
+			// 选择当前IR
+			if(TAP_IR_Write(&dapObj->tapObj, dapObj->TAP_index, currentIR) == FALSE) longjmp(exception, 1);
+		}
+		if(instr->seq.info.RnW == 1){	// 读寄存器
+			// 构造数据
+			*(buff + buffIdx)[0] = (instr->seq.info.A << 1) | 1;
+		}else{	// 写寄存器
+			// 构建当前扫描链数据
+			MAKE_nPACC_CHAIN_DATA(buff + buffIdx, instr->data.in, instr->seq.info.A << 1);
+		}
+		if(TAP_DR_Exchange(&dapObj->tapObj, dapObj->TAP_index, 35, CAST(uint8_t *,buff + buffIdx)) == FALSE) longjmp(exception, 2);
+		buffIdx++;
+		if(instr->seq.info.end) break;	// 如果当前处理的指令标志了end位，则该指令组结束
+	}
+	// 最后读RDBUFF
+	if (dapObj->ir != JTAG_DPACC) {
+		dapObj->ir = JTAG_DPACC;
+		if(TAP_IR_Write(&dapObj->tapObj, dapObj->TAP_index, JTAG_DPACC) == FALSE) longjmp(exception, 1);
+	}
+	// 读取RDBUFF，如果上一个是写，则只需要ACK。
+	*(buff + buffIdx)[0] = ((DP_RDBUFF >> 1) & 0x6) | 1;
+	if(TAP_DR_Exchange(&dapObj->tapObj, dapObj->TAP_index, 35, CAST(uint8_t *,buff + buffIdx)) == FALSE) longjmp(exception, 2);
+	// 指令都加入到队列中，执行队列
+	if(TAP_Execute(&dapObj->tapObj) == FALSE) longjmp(exception, 3);
+	return buffIdx;
+}
+
+/**
+ * 同步指令数据
+ */
+static void DAP_JTAG_instr_sync(struct list_head *instrQueue, uint8_t (*buff)[5]){
+	struct DAP_Instr *instr, *last_t;
+	// 同步指令数据
+	list_for_each_entry_safe(instr, last_t, instrQueue, list_entry){
+		// 找到是ok的响应。
+		if(instr->seq.info.RnW == 1){	// 如果是读
+			// 返回数据
+			*instr->data.out = GET_nPACC_CHAIN_DATA(buff + instr->buffIdx);
+		}
+		// 从指令寄存器中移除
+		list_del(&instr->list_entry);	// 将链表中删除
+		if(instr->seq.info.end){
+			free(instr);
+			break;
+		}else{
+			free(instr);
+		}
+	}
 }
 
 /**
@@ -762,99 +861,61 @@ BOOL DAP_Queue_xP_Write(DAPObject *dapObj, BOOL APnDP, uint8_t reg, uint32_t dat
 static BOOL DAP_JTAG_Execute(DAPObject *dapObj){
 	// 先分配空间，一共多len(instrQueue)+RDBUFF个指令，每个指令5个字节
 	BOOL result = FALSE;
-	uint8_t (*jtag_buff)[5] = malloc((dapObj->instrQueue_len + dapObj->RDBUFF_Cnt + 1) * 5);
+	// 错误处理
+	switch(setjmp(exception)){
+	case 1: log_warn("TAP_IR_Write: Select Scan Chain Failed!"); goto EXIT_STEP_2;
+	case 2: log_warn("TAP_DR_Exchange:Failed!"); goto EXIT_STEP_2;
+	case 3: log_warn("TAP_Execute:Failed!"); goto EXIT_STEP_2;
+	default: log_warn("Unknow Error."); goto EXIT_STEP_2;
+	case 0:break;
+	}
+	struct DAP_Instr *instr, *last_t;
+	int instrCnt;
+EXEQUEUE:
+	instrCnt = 0;
+	// 计算指令长度
+	list_for_each_entry(instr, &dapObj->instrQueue, list_entry){
+		instrCnt ++;
+		if(instr->seq.info.end) break;
+	}
+	// 分配JTAG数据交换缓冲区
+	uint8_t (*jtag_buff)[5] = malloc((instrCnt + 1) * 5);	// +1 是后面的RDBUFF
 	if(jtag_buff == NULL){
 		log_warn("Failed to create JTAG-DP data buff.");
 		return FALSE;
 	}
-	// 错误处理
-	switch(setjmp(exception)){
-	case 1: log_warn("TAP_IR_Write: Select Scan Chain Failed!"); goto EXIT_STEP_1;
-	case 2: log_warn("TAP_DR_Exchange:Failed!"); goto EXIT_STEP_1;
-	case 3: log_warn("TAP_Execute:Failed!"); goto EXIT_STEP_1;
-	default: log_warn("Unknow Error."); goto EXIT_STEP_1;
-	case 0:break;
-	}
-	int postRead = 0;
-	int instrIdx = 0;
+	// 执行指令
+	DAP_JTAG_exe_queue(dapObj, &dapObj->instrQueue, jtag_buff, instrCnt + 1);
+	// 分拣指令
+	DAP_JTAG_instr_sort_out(dapObj, &dapObj->instrQueue, jtag_buff, instrCnt + 1);
+	// 同步数据
+	DAP_JTAG_instr_sync(&dapObj->instrQueue, jtag_buff);
 
-	struct DAP_Instr *instr;
-	list_for_each_entry(instr, &dapObj->instrQueue, list_entry){
-		// 当前指令的扫描链
-		uint32_t currentIR = instr->seq.info.APnDP ? JTAG_APACC : JTAG_DPACC;
-		if(instr->seq.info.RnW == 1){	// 读寄存器
-			// 上一个未处理
-			if(postRead){
-				if (dapObj->ir == currentIR){
-					*(jtag_buff + instrIdx)[0] = (instr->seq.info.A << 1) | 1;
-					// 读取前一个数据并开始下一个指令
-					if(TAP_DR_Exchange(&dapObj->tapObj, dapObj->TAP_index, 35, CAST(uint8_t *,jtag_buff + instrIdx)) == FALSE) longjmp(exception, 2);
-					instr->chainData = jtag_buff + instrIdx + 1;	// 当前指令对应在下一个
-				}else{
-					// 选择DPACC扫描链
-					if (dapObj->ir != JTAG_DPACC){
-						dapObj->ir = JTAG_DPACC;
-						if(TAP_IR_Write(&dapObj->tapObj, dapObj->TAP_index, JTAG_DPACC) == FALSE) longjmp(exception, 1);
-					}
-					*(jtag_buff + instrIdx)[0] = ((DP_RDBUFF >> 1) & 0x6) | 1;
-					// 读取RDBUFF，返回上一个数据
-					if(TAP_DR_Exchange(&dapObj->tapObj, dapObj->TAP_index, 35, CAST(uint8_t *,jtag_buff + instrIdx)) == FALSE) longjmp(exception, 2);
-					instrIdx++;	// 自增，指向下一个可用的空间
-					postRead = 0;
-				}
-			}
-			// 组第一次读操作，丢弃该读操作的值
-			if(postRead == 0){
-				if (dapObj->ir != currentIR){
-					dapObj->ir = currentIR;
-					// 选择当前IR
-					if(TAP_IR_Write(&dapObj->tapObj, dapObj->TAP_index, currentIR) == FALSE) longjmp(exception, 1);
-				}
-				// 构建当前扫描链数据
-				*(jtag_buff + instrIdx)[0] = (instr->seq.info.A << 1) | 1;
-				// Post DP/AP read
-				if(TAP_DR_Exchange(&dapObj->tapObj, dapObj->TAP_index, 35, CAST(uint8_t *,jtag_buff + instrIdx)) == FALSE) longjmp(exception, 2);
-				instr->chainData = jtag_buff + instrIdx + 1;	// 当前指令的数据对应在下一个
-				postRead = 1;
-			}
-		}else{	// 写寄存器
-			if(postRead){	// 读前一个结果
-				if (dapObj->ir != JTAG_DPACC) {
-					dapObj->ir = JTAG_DPACC;
-					if(TAP_IR_Write(&dapObj->tapObj, dapObj->TAP_index, JTAG_DPACC) == FALSE) longjmp(exception, 1);
-				}
-				*(jtag_buff + instrIdx)[0] = ((DP_RDBUFF >> 1) & 0x6) | 1;
-				// 读取RDBUFF，返回上一个数据
-				if(TAP_DR_Exchange(&dapObj->tapObj, dapObj->TAP_index, 35, CAST(uint8_t *,jtag_buff + instrIdx)) == FALSE) longjmp(exception, 2);
-				instrIdx++;	// 自增，指向下一个可用的空间
-				postRead = 0;
-			}
-			// 开始写入
-			if (dapObj->ir != currentIR) {
-				dapObj->ir = currentIR;
-				// 选择当前IR
-				if(TAP_IR_Write(&dapObj->tapObj, dapObj->TAP_index, currentIR) == FALSE) longjmp(exception, 1);
-			}
-			// 构建当前扫描链数据
-			MAKE_nPACC_CHAIN_DATA(jtag_buff + instrIdx, instr->data.in, instr->seq.info.A << 1);
-		}
+	int retry = dapObj->retry;
+	// 判断重试队列是否为空，不为空则执行重试队列
+	while(!list_empty(&dapObj->retryQueue) && retry--){
+		// 执行指令
+		int buff_len = DAP_JTAG_exe_queue(dapObj, &dapObj->retryQueue, jtag_buff);
+		// 分拣指令
+		DAP_JTAG_instr_sort_out(dapObj, &dapObj->retryQueue, jtag_buff, buff_len + 1);	// buff_len是从0开始算的
+		// 同步数据
+		DAP_JTAG_instr_sync(&dapObj->retryQueue, jtag_buff);
 	}
-	if (dapObj->ir != JTAG_DPACC) {
-		dapObj->ir = JTAG_DPACC;
-		if(TAP_IR_Write(&dapObj->tapObj, dapObj->TAP_index, JTAG_DPACC) == FALSE) longjmp(exception, 1);
+	if(!list_empty(&dapObj->retryQueue)){
+		log_warn("Failed after retrying!");
+		free(jtag_buff);
+		return FALSE;
 	}
-	*(jtag_buff + instrIdx)[0] = ((DP_RDBUFF >> 1) & 0x6) | 1;
-	// 读取RDBUFF，如果上一个是读，则只需要ACK。
-	if(TAP_DR_Exchange(&dapObj->tapObj, dapObj->TAP_index, 35, CAST(uint8_t *,jtag_buff + instrIdx)) == FALSE) longjmp(exception, 2);
-	// 指令都加入到队列中，执行队列
-	if(TAP_Execute(&dapObj->tapObj) == FALSE) longjmp(exception, 3);
-	// 数据已经在缓冲区就绪了，同步到指令中
-
-
+	free(jtag_buff);	// 释放掉内存
+	if(!list_empty(&dapObj->instrQueue)){
+		goto EXEQUEUE;
+	}
+	goto EXIT_STEP_1;	// 正常退出
+EXIT_STEP_2:
+	free(jtag_buff);	// 释放掉内存
 EXIT_STEP_1:
 	TAP_FlushQueue(&dapObj->tapObj);	// 当出现错误的时候清空指令队列
 EXIT_STEP_0:
-	free(jtag_buff);
 	return result;
 }
 
@@ -865,7 +926,11 @@ EXIT_STEP_0:
  */
 BOOL DAP_Queue_Execute(DAPObject *dapObj){
 	assert(dapObj != NULL);
-	// 先统计多少个指令，计算结果空间
+	if(ADAPTER_CURR_TRANS(dapObj->tapObj.adapterObj) == JTAG){
+		return DAP_JTAG_Execute(dapObj);
+	}else{
+		return FALSE;	// 其他
+	}
 }
 
 /**

@@ -300,9 +300,9 @@ struct DAPObject{
 	// WDATAERR, STICKYERR, STICKYCMP, STICKYORUN
 	void (*stickyErrHandle)(DAPObject *dapObj);
 	// DAP指令队列
-	struct list_head instrQueue;	// DAP指令队列，元素类型：struct DAP_Instr
-	int instrQueue_len;	// 指令队列长度
-	int RDBUFF_Cnt;		// 需要插入多少个RDBUFF
+	struct list_head instrQueue, retryQueue;	// DAP指令队列，元素类型：struct DAP_Instr
+	//int instrQueue_len, retryQueue_len;	// 指令队列长度
+	//int RDBUFF_Cnt;		// 需要插入多少个RDBUFF
 };
 
 // DAP指令队列
@@ -315,6 +315,7 @@ struct DAP_Instr{
 			uint32_t A:2;		// A[3:2] Register Address.
 			uint32_t :5;		// Padding
 			uint32_t ack:3;		// 当前指令的应答
+			uint32_t end:1;	// 下一个需要读取RDBUFF
 		} info;
 		uint8_t data;
 	}seq;
@@ -323,7 +324,7 @@ struct DAP_Instr{
 		uint32_t in;
 		uint32_t *out;
 	} data;
-	uint8_t (*chainData)[5];	// 该指令对应的扫描链数据
+	int buffIdx;	// 指令数据缓冲地址
 };
 
 // packed transfer

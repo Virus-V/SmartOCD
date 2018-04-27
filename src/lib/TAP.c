@@ -678,6 +678,7 @@ void TAP_FlushQueue(TAPObject *tapObj){
 	assert(tapObj != NULL);
 	struct JTAG_Instr *instr, *instr_t;
 	list_for_each_entry_safe(instr, instr_t, &tapObj->instrQueue, list_entry){
+		list_del(&instr->list_entry);	// 将链表中删除
 		free(instr);
 	}
 	tapObj->instrQueue_len = 0;
