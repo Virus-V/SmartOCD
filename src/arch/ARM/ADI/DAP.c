@@ -105,7 +105,7 @@ static BOOL DAP_Read(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t *data_o
 	}
 	// 如果当前协议是JTAG
 	if(ADAPTER_CURR_TRANS(dapObj->tapObj.adapterObj) == JTAG){
-		uint8_t buff[5];	// 扫描链35比特
+		uint8_t buff[5] = {0,0,0,0,0};	// 扫描链35比特，清零防止valgrind报指向未初始化数据的错误。
 		// 选择AP还是DP
 		if(APnDP == 1){
 			if(dapObj->ir != JTAG_APACC){
@@ -704,6 +704,7 @@ static struct DAP_Instr * DAP_NewInstruction(DAPObject *dapObj){
 	return instruct;
 }
 
+//#define DAP_QUEUE_DEBUG
 /**
  * 将一个读取寄存器指令加入队列
  * APnDP:0 = Debug Port (DP), 1 = Access Port (AP).
@@ -711,8 +712,9 @@ static struct DAP_Instr * DAP_NewInstruction(DAPObject *dapObj){
  * data_out:读取的数据存放地址
  * 返回：TRUE、FALSE
  */
-BOOL DAP_Queue_xP_Read(DAPObject *dapObj, BOOL APnDP, uint8_t reg, uint32_t *data_out){
+BOOL DAP_Queue_xP_Read(DAPObject *dapObj, enum queue_apndp APnDP, uint8_t reg, uint32_t *data_out){
 	assert(dapObj != NULL);
+	*data_out = 0;	// 先清零
 	struct DAP_Instr * instr = DAP_NewInstruction(dapObj);
 	if(instr == NULL){
 		return FALSE;
@@ -721,6 +723,9 @@ BOOL DAP_Queue_xP_Read(DAPObject *dapObj, BOOL APnDP, uint8_t reg, uint32_t *dat
 	instr->seq.info.APnDP = APnDP;
 	instr->data.out = data_out;	// 数据地址
 	instr->seq.info.A = (reg & 0xC) >> 2;
+#ifdef DAP_QUEUE_DEBUG
+	log_debug("DAP Instr:%s %s %X", instr->seq.info.RnW ? "Read" : "Write", instr->seq.info.APnDP ? "AP" : "DP", instr->seq.info.A);
+#endif
 	// TODO likely 分支预测
 	if(instr->list_entry.prev != &dapObj->instrQueue){	// 如果上一个节点不是头结点
 		struct DAP_Instr * last_instr = list_entry(instr->list_entry.prev, struct DAP_Instr, list_entry);
@@ -741,13 +746,16 @@ BOOL DAP_Queue_xP_Read(DAPObject *dapObj, BOOL APnDP, uint8_t reg, uint32_t *dat
  * data:要写入的值
  * 返回：TRUE、FALSE
  */
-BOOL DAP_Queue_xP_Write(DAPObject *dapObj, BOOL APnDP, uint8_t reg, uint32_t data){
+BOOL DAP_Queue_xP_Write(DAPObject *dapObj, enum queue_apndp APnDP, uint8_t reg, uint32_t data){
 	assert(dapObj != NULL);
 	struct DAP_Instr * instr = DAP_NewInstruction(dapObj);
 	instr->seq.info.RnW = 0;	// Write
 	instr->seq.info.APnDP = APnDP;
 	instr->data.in = data;	// 数据
 	instr->seq.info.A = (reg & 0xC) >> 2;
+#ifdef DAP_QUEUE_DEBUG
+	log_debug("DAP Instr:%s %s %X", instr->seq.info.RnW ? "Read" : "Write", instr->seq.info.APnDP ? "AP" : "DP", instr->seq.info.A);
+#endif
 	// TODO likely 分支预测
 	if(instr->list_entry.prev != &dapObj->instrQueue){	// 如果上一个节点不是头结点
 		struct DAP_Instr *last_instr = list_entry(instr->list_entry.prev, struct DAP_Instr, list_entry);
@@ -770,9 +778,15 @@ static void DAP_JTAG_instr_sort_out(DAPObject *dapObj, struct list_head *instrQu
 	// 数据已经在缓冲区就绪了，同步到指令中
 	struct DAP_Instr *instr,*last_t;
 	int buffIdx = 0;
+#ifdef DAP_QUEUE_DEBUG
+	log_debug("===sort===");
+#endif
 	// 指令分拣
 	list_for_each_entry_safe(instr, last_t, instrQueue, list_entry){
 		if((*(buff + buffIdx)[0] & 0x7) == JTAG_RESP_WAIT){
+#ifdef DAP_QUEUE_DEBUG
+			log_debug("DAP Instr:%s %s %X WAIT.", instr->seq.info.RnW ? "Read" : "Write", instr->seq.info.APnDP ? "AP" : "DP", instr->seq.info.A);
+#endif
 			list_move_tail(&instr->list_entry, &dapObj->retryQueue);	// 将该指令插入到重试队列
 		}else{	// 当前指令成功发布，找到从buffIdx+1开始的一个ok
 			int t;
@@ -780,14 +794,24 @@ static void DAP_JTAG_instr_sort_out(DAPObject *dapObj, struct list_head *instrQu
 				if((*(buff + t)[0] & 0x7) != JTAG_RESP_WAIT) break;
 			}
 			if(t < buffLen){	// 找到了
+#ifdef DAP_QUEUE_DEBUG
+				log_debug("DAP Instr:%s %s %X OK.correspond Value:%d", instr->seq.info.RnW ? "Read" : "Write", instr->seq.info.APnDP ? "AP" : "DP", instr->seq.info.A, t);
+#endif
 				instr->buffIdx = t;
 			}else{	// 没找到，TODO 将该指令和后面的所有指令都插入重试队列
+#ifdef DAP_QUEUE_DEBUG
+				log_debug("DAP Instr:%s %s %X OK,but not response,need reExe.",
+						instr->seq.info.RnW ? "Read" : "Write", instr->seq.info.APnDP ? "AP" : "DP", instr->seq.info.A);
+#endif
 				list_move_tail(&instr->list_entry, &dapObj->retryQueue);
 			}
 		}
 		buffIdx++;
-		if(instr->seq.info.end) break;
+		if(instr->seq.info.end)break;
 	}
+#ifdef DAP_QUEUE_DEBUG
+	log_debug("Instr Group sort OK.");
+#endif
 }
 
 /**
@@ -799,7 +823,13 @@ static void DAP_JTAG_instr_sort_out(DAPObject *dapObj, struct list_head *instrQu
 static int DAP_JTAG_exe_queue(DAPObject *dapObj, struct list_head *instrQueue, uint8_t (*buff)[5]){
 	int buffIdx = 0;
 	struct DAP_Instr *instr;
+#ifdef DAP_QUEUE_DEBUG
+	log_debug("===execute===");
+#endif
 	list_for_each_entry(instr, instrQueue, list_entry){
+#ifdef DAP_QUEUE_DEBUG
+		log_debug("DAP Instr:%s %s %X", instr->seq.info.RnW ? "Read" : "Write", instr->seq.info.APnDP ? "AP" : "DP", instr->seq.info.A);
+#endif
 		// 当前指令的扫描链
 		uint32_t currentIR = instr->seq.info.APnDP ? JTAG_APACC : JTAG_DPACC;
 		// 选择合适的扫描链
@@ -827,6 +857,9 @@ static int DAP_JTAG_exe_queue(DAPObject *dapObj, struct list_head *instrQueue, u
 	// 读取RDBUFF，如果上一个是写，则只需要ACK。
 	*(buff + buffIdx)[0] = ((DP_RDBUFF >> 1) & 0x6) | 1;
 	if(TAP_DR_Exchange(&dapObj->tapObj, dapObj->TAP_index, 35, CAST(uint8_t *,buff + buffIdx)) == FALSE) longjmp(exception, 2);
+#ifdef DAP_QUEUE_DEBUG
+	log_debug("Instr Group End. Insert RDBUFF");
+#endif
 	// 指令都加入到队列中，执行队列
 	if(TAP_Execute(&dapObj->tapObj) == FALSE) longjmp(exception, 3);
 	return buffIdx;
@@ -859,7 +892,6 @@ static void DAP_JTAG_instr_sync(struct list_head *instrQueue, uint8_t (*buff)[5]
  * JTAG传输方式下刷新队列
  */
 static BOOL DAP_JTAG_Execute(DAPObject *dapObj){
-	// 先分配空间，一共多len(instrQueue)+RDBUFF个指令，每个指令5个字节
 	BOOL result = FALSE;
 	// 错误处理
 	switch(setjmp(exception)){
@@ -879,13 +911,13 @@ EXEQUEUE:
 		if(instr->seq.info.end) break;
 	}
 	// 分配JTAG数据交换缓冲区
-	uint8_t (*jtag_buff)[5] = malloc((instrCnt + 1) * 5);	// +1 是后面的RDBUFF
+	uint8_t (*jtag_buff)[5] = calloc((instrCnt + 1) * 5, sizeof(uint8_t));	// +1 是后面的RDBUFF
 	if(jtag_buff == NULL){
 		log_warn("Failed to create JTAG-DP data buff.");
 		return FALSE;
 	}
 	// 执行指令
-	DAP_JTAG_exe_queue(dapObj, &dapObj->instrQueue, jtag_buff, instrCnt + 1);
+	DAP_JTAG_exe_queue(dapObj, &dapObj->instrQueue, jtag_buff);
 	// 分拣指令
 	DAP_JTAG_instr_sort_out(dapObj, &dapObj->instrQueue, jtag_buff, instrCnt + 1);
 	// 同步数据
@@ -894,6 +926,9 @@ EXEQUEUE:
 	int retry = dapObj->retry;
 	// 判断重试队列是否为空，不为空则执行重试队列
 	while(!list_empty(&dapObj->retryQueue) && retry--){
+#ifdef DAP_QUEUE_DEBUG
+		log_debug("Some Instr WAIT,Retry %dth", retry);
+#endif
 		// 执行指令
 		int buff_len = DAP_JTAG_exe_queue(dapObj, &dapObj->retryQueue, jtag_buff);
 		// 分拣指令
@@ -910,6 +945,7 @@ EXEQUEUE:
 	if(!list_empty(&dapObj->instrQueue)){
 		goto EXEQUEUE;
 	}
+	result = TRUE;
 	goto EXIT_STEP_1;	// 正常退出
 EXIT_STEP_2:
 	free(jtag_buff);	// 释放掉内存
@@ -933,9 +969,3 @@ BOOL DAP_Queue_Execute(DAPObject *dapObj){
 	}
 }
 
-/**
- * 同步结果
- */
-static BOOL dap_queue_sync(){
-
-}

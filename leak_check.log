@@ -1,49 +1,45 @@
-==45387== Memcheck, a memory error detector
-==45387== Copyright (C) 2002-2015, and GNU GPL'd, by Julian Seward et al.
-==45387== Using Valgrind-3.11.0 and LibVEX; rerun with -h for copyright info
-==45387== Command: ./test/tap_test
-==45387== Parent PID: 45386
-==45387== 
-==45387== 
-==45387== HEAP SUMMARY:
-==45387==     in use at exit: 10,240 bytes in 3 blocks
-==45387==   total heap usage: 9,827 allocs, 9,824 frees, 1,975,568 bytes allocated
-==45387== 
-==45387== 2,048 bytes in 1 blocks are definitely lost in loss record 1 of 3
-==45387==    at 0x4C2FB55: calloc (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
-==45387==    by 0x40F16B: main (tap_test.c:56)
-==45387== 
-==45387== 4,096 bytes in 1 blocks are still reachable in loss record 2 of 3
-==45387==    at 0x4C2DB8F: malloc (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
-==45387==    by 0x4058FAF: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==45387==    by 0x4059D10: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==45387==    by 0x4E49B1C: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
-==45387==    by 0x4E476E0: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
-==45387==    by 0x4E3FB1C: libusb_init (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
-==45387==    by 0x4068B8: __construct_USBObject (usb.c:39)
-==45387==    by 0x4039F2: NewCMSIS_DAP (cmsis-dap.c:60)
-==45387==    by 0x40EFB8: main (tap_test.c:27)
-==45387== 
-==45387== 4,096 bytes in 1 blocks are still reachable in loss record 3 of 3
-==45387==    at 0x4C2DB8F: malloc (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
-==45387==    by 0x4058FAF: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==45387==    by 0x404EA8B: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==45387==    by 0x405A0D3: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==45387==    by 0x405A66E: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==45387==    by 0x40561FF: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==45387==    by 0x40565E6: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==45387==    by 0x404C5AB: udev_enumerate_scan_devices (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==45387==    by 0x4E49B24: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
-==45387==    by 0x4E476E0: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
-==45387==    by 0x4E3FB1C: libusb_init (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
-==45387==    by 0x4068B8: __construct_USBObject (usb.c:39)
-==45387== 
-==45387== LEAK SUMMARY:
-==45387==    definitely lost: 2,048 bytes in 1 blocks
-==45387==    indirectly lost: 0 bytes in 0 blocks
-==45387==      possibly lost: 0 bytes in 0 blocks
-==45387==    still reachable: 8,192 bytes in 2 blocks
-==45387==         suppressed: 0 bytes in 0 blocks
-==45387== 
-==45387== For counts of detected and suppressed errors, rerun with: -v
-==45387== ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)
+==11428== Memcheck, a memory error detector
+==11428== Copyright (C) 2002-2015, and GNU GPL'd, by Julian Seward et al.
+==11428== Using Valgrind-3.11.0 and LibVEX; rerun with -h for copyright info
+==11428== Command: ./test/dap_queue_test
+==11428== Parent PID: 11427
+==11428== 
+==11428== 
+==11428== HEAP SUMMARY:
+==11428==     in use at exit: 8,192 bytes in 2 blocks
+==11428==   total heap usage: 3,342 allocs, 3,340 frees, 1,958,020 bytes allocated
+==11428== 
+==11428== 4,096 bytes in 1 blocks are still reachable in loss record 1 of 2
+==11428==    at 0x4C2DB8F: malloc (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
+==11428==    by 0x4058FAF: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==11428==    by 0x4059D10: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==11428==    by 0x4E49B1C: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==11428==    by 0x4E476E0: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==11428==    by 0x4E3FB1C: libusb_init (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==11428==    by 0x408618: __construct_USBObject (usb.c:39)
+==11428==    by 0x40597D: NewCMSIS_DAP (cmsis-dap.c:60)
+==11428==    by 0x410E56: main (dap_queue_test.c:31)
+==11428== 
+==11428== 4,096 bytes in 1 blocks are still reachable in loss record 2 of 2
+==11428==    at 0x4C2DB8F: malloc (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
+==11428==    by 0x4058FAF: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==11428==    by 0x404EA8B: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==11428==    by 0x405A0D3: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==11428==    by 0x405A66E: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==11428==    by 0x40561FF: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==11428==    by 0x40565E6: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==11428==    by 0x404C5AB: udev_enumerate_scan_devices (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==11428==    by 0x4E49B24: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==11428==    by 0x4E476E0: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==11428==    by 0x4E3FB1C: libusb_init (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==11428==    by 0x408618: __construct_USBObject (usb.c:39)
+==11428== 
+==11428== LEAK SUMMARY:
+==11428==    definitely lost: 0 bytes in 0 blocks
+==11428==    indirectly lost: 0 bytes in 0 blocks
+==11428==      possibly lost: 0 bytes in 0 blocks
+==11428==    still reachable: 8,192 bytes in 2 blocks
+==11428==         suppressed: 0 bytes in 0 blocks
+==11428== 
+==11428== For counts of detected and suppressed errors, rerun with: -v
+==11428== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)

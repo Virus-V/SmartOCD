@@ -177,6 +177,11 @@ enum ap_type{
 	AP_TYPE_AMBA_AXI	// AMBA AXI3 or AXI4 bus, with optional ACT-Lite support
 };
 
+/**
+ * 队列操作的时候选择AP还是DP
+ */
+enum queue_apndp {DP = 0,AP};
+
 // DP IDR Register 解析
 typedef union {
 	uint32_t regData;
@@ -365,6 +370,8 @@ BOOL DAP_Find_AP(DAPObject *dapObj, enum ap_type apType, uint8_t *apIdx_Out);
 BOOL DAP_ReadMem8(DAPObject *dapObj, uint64_t addr, uint8_t *data_out);
 BOOL DAP_ReadMem16(DAPObject *dapObj, uint64_t addr, uint16_t *data_out);
 BOOL DAP_ReadMem32(DAPObject *dapObj, uint64_t addr, uint32_t *data_out);
+/*
+ * TODO 完善下面这些函数
 BOOL DAP_ReadMem64(DAPObject *dapObj, uint64_t addr, uint64_t *data_out);
 
 // 内存写入操作
@@ -372,12 +379,13 @@ BOOL DAP_WriteMem8(DAPObject *dapObj, uint64_t addr, uint8_t data);
 BOOL DAP_WriteMem16(DAPObject *dapObj, uint64_t addr, uint16_t data);
 BOOL DAP_WriteMem32(DAPObject *dapObj, uint64_t addr, uint32_t data);
 BOOL DAP_WriteMem64(DAPObject *dapObj, uint64_t addr, uint64_t data);
+*/
 
 BOOL DAP_Read_CID_PID(DAPObject *dapObj, uint32_t componentBase, uint32_t *cid_out, uint64_t *pid_out);
 
 // 队列操作，只在SWD模式下可用
-BOOL DAP_Queue_xP_Read(DAPObject *dapObj, BOOL APnDP, uint8_t reg, uint32_t *data_out);
-BOOL DAP_Queue_xP_Write(DAPObject *dapObj, BOOL APnDP, uint8_t reg, uint32_t data);
+BOOL DAP_Queue_xP_Read(DAPObject *dapObj, enum queue_apndp APnDP, uint8_t reg, uint32_t *data_out);
+BOOL DAP_Queue_xP_Write(DAPObject *dapObj, enum queue_apndp APnDP, uint8_t reg, uint32_t data);
 BOOL DAP_Queue_Execute(DAPObject *dapObj);
 
 #endif /* SRC_ARCH_CORESIGHT_DAP_H_ */

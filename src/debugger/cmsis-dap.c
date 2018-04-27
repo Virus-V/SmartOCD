@@ -493,7 +493,7 @@ static BOOL DAP_JTAG_Sequence(uint8_t *respBuff, AdapterObject *adapterObj, int 
 	/**
 	 * 分配所有缓冲区，包括max packet count和packet buff
 	 */
-	uint8_t *buff = malloc(sizeof(int) * cmsis_dapObj->MaxPcaketCount + cmsis_dapObj->PacketSize);
+	uint8_t *buff = calloc(sizeof(int) * cmsis_dapObj->MaxPcaketCount + cmsis_dapObj->PacketSize, sizeof(uint8_t));
 	if(buff == NULL){
 		log_warn("Unable to allocate send packet buffer, the heap may be full.");
 		return FALSE;
@@ -502,7 +502,6 @@ static BOOL DAP_JTAG_Sequence(uint8_t *respBuff, AdapterObject *adapterObj, int 
 	int *resultLength = CAST(int *,buff);
 	// 发送包缓冲区
 	uint8_t *sendPackBuff = buff + sizeof(int) * cmsis_dapObj->MaxPcaketCount;
-
 	int inputIdx = 0,outputIdx = 0, seqIdx = 0;	// data数据索引，response数据索引，sequence索引
 	int currIdx = 0;	// 当前的data的偏移
 	int sendPackCnt = 0;	// 当前发包计数

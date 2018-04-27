@@ -100,29 +100,19 @@ static void printComponentInfo(AdapterObject *adapterObj, uint32_t startAddr){
 
 // 测试入口点
 int main(){
-	AdapterObject *adapterObj;
-	struct cmsis_dap *cmsis_dapObj;
-	uint32_t idcode = 0, tmp;
-	int32_t int_val, idx;
-	uint8_t irLen[] = {4,4};
+	DAPObject *dapObj;
+	struct cmsis_dap cmsis_dapObj;
 	log_set_level(LOG_DEBUG);
-	struct cmsis_dap *cmsis_dapObj;	// cmsis_dap对象
-
-	cmsis_dapObj = calloc(1, sizeof(struct cmsis_dap));
-	if(cmsis_dapObj == NULL){
-		log_warn("Failed to create CMSIS-DAP object.");
-		exit(1);
-	}
-	if( NewCMSIS_DAP(cmsis_dapObj) == FALSE){
+	if( NewCMSIS_DAP(&cmsis_dapObj) == FALSE){
 		log_fatal("failed to new.");
 		exit(1);
 	}
 	// 连接CMSIS-DAP
-	if(ConnectCMSIS_DAP(cmsis_dapObj, vids, pids, NULL) == FALSE){
+	if(ConnectCMSIS_DAP(&cmsis_dapObj, vids, pids, NULL) == FALSE){
 		log_fatal("failed to connect.");
 		exit(1);
 	}
-	adapterObj = CAST(AdapterObject *, cmsis_dapObj);
+	AdapterObject *adapterObj = CAST(AdapterObject *, &cmsis_dapObj);
 	// 初始化
 	adapterObj->Init(adapterObj);
 	// 配置传输参数
@@ -145,7 +135,7 @@ int main(){
 	adapterObj->Operate(adapterObj, AINS_SET_CLOCK, 1000u);
 	// 切换到JTAG模式
 	adapterObj->SelectTrans(adapterObj, JTAG);
-	irLen[1] = 5;
+	uint16_t irLen[2] = {4, 5};
 	//adapterObj->Operate(adapterObj, CMDAP_JTAG_CONFIGURE, 2, irLen);
 	//adapterObj->Operate(adapterObj, CMDAP_JTAG_IDCODE, 0, &idcode);
 	//log_info("JTAG-DP with ID:0x%08X.", idcode);
@@ -260,6 +250,6 @@ int main(){
 	*/
 EXIT:
 	adapterObj->Deinit(adapterObj);
-	FreeCMSIS_DAP(cmsis_dapObj);
+	adapterObj->Destroy(adapterObj);
 	exit(0);
 }

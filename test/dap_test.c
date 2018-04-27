@@ -168,22 +168,22 @@ int main(){
 	DAP_DP_Write(dapObj, DP_CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ);
 	// 等待上电完成
 	do {
-		if(DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg) == FALSE){
+		if(DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData) == FALSE){
 			log_fatal("Read CTRL_STAT Failed.");
 			goto EXIT_STEP_2;
 		}
-	} while((dapObj->CTRL_STAT_Reg & (DP_STAT_CDBGPWRUPACK | DP_STAT_CSYSPWRUPACK)) != (DP_STAT_CDBGPWRUPACK | DP_STAT_CSYSPWRUPACK));
+	} while((dapObj->CTRL_STAT_Reg.regData & (DP_STAT_CDBGPWRUPACK | DP_STAT_CSYSPWRUPACK)) != (DP_STAT_CDBGPWRUPACK | DP_STAT_CSYSPWRUPACK));
 	log_info("Power up.");
-	log_debug("CTRL/STAT: 0x%08X.", dapObj->CTRL_STAT_Reg);
+	log_debug("CTRL/STAT: 0x%08X.", dapObj->CTRL_STAT_Reg.regData);
 	// 读取DPIDR寄存器
 	uint32_t dpidr = 0;
 	DAP_DP_Read(dapObj, DP_DPIDR, &dpidr);
 	log_debug("IDR: 0x%08X.", dpidr);
-	DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg);
-	log_debug("CTRL/STAT: 0x%08X.", dapObj->CTRL_STAT_Reg);
+	DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
+	log_debug("CTRL/STAT: 0x%08X.", dapObj->CTRL_STAT_Reg.regData);
 
 	// 写入初始化数据
-	DAP_DP_Write(dapObj,  DP_CTRL_STAT, dapObj->CTRL_STAT_Reg | DP_CTRL_TRNNORMAL | DP_CTRL_MASKLANEMSK);	// 不启用过载检测
+	DAP_DP_Write(dapObj,  DP_CTRL_STAT, dapObj->CTRL_STAT_Reg.regData | DP_CTRL_TRNNORMAL | DP_CTRL_MASKLANEMSK);	// 不启用过载检测
 
 	// 读取AP的IDR
 	time_t t_start, t_end;
@@ -198,8 +198,8 @@ int main(){
 		// 修改select选中ap
 		if(DAP_AP_Select(dapObj, ap) == FALSE) {
 			// write abort;
-			DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg);
-			log_warn("Write SELECT Failed, CTRL : 0x%08X.", dapObj->CTRL_STAT_Reg);
+			DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
+			log_warn("Write SELECT Failed, CTRL : 0x%08X.", dapObj->CTRL_STAT_Reg.regData);
 			goto EXIT_STEP_2;
 		}
 		// 读取AP的IDR
@@ -235,8 +235,8 @@ int main(){
 	 */
 	if(DAP_AP_Select(dapObj, 1) == FALSE) {
 		// write abort;
-		DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg);
-		log_warn("Write SELECT Failed, CTRL : 0x%08X.", dapObj->CTRL_STAT_Reg);
+		DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
+		log_warn("Write SELECT Failed, CTRL : 0x%08X.", dapObj->CTRL_STAT_Reg.regData);
 		goto EXIT_STEP_2;
 	}
 	// 读取ROM Table的基址
