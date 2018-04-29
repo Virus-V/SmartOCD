@@ -47,9 +47,6 @@
 	tmp;	\
 })
 
-// 错误处理句柄
-static jmp_buf exception;
-
 /**
  * DAP对象构造函数
  * TAP_Index：该DAP在JTAG扫描链中的索引位置
@@ -93,6 +90,7 @@ void __DESTORY(DAP)(DAPObject *dapObj){
  */
 static BOOL DAP_Read(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t *data_out){
 	int retry = dapObj->retry;
+	jmp_buf exception;
 	// 先将数据清零
 	*data_out = 0;
 	// 错误处理
@@ -138,7 +136,7 @@ static BOOL DAP_Read(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t *data_o
 		retry = dapObj->retry;
 		// 读取上次的寄存器内容，重试
 		do{
-			buff[0] = ((DP_RDBUFF >> 1) & 0x6) | 1;
+			buff[0] = ((DP_REG_RDBUFF >> 1) & 0x6) | 1;
 			if(TAP_DR_Exchange(&dapObj->tapObj, dapObj->TAP_index, 35, buff) == FALSE) longjmp(exception, 2);
 			// 执行队列
 			if(TAP_Execute(&dapObj->tapObj) == FALSE) longjmp(exception, 3);
@@ -167,6 +165,7 @@ static BOOL DAP_Read(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t *data_o
  */
 static BOOL DAP_Write(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t data_in){
 	int retry = dapObj->retry;
+	jmp_buf exception;
 	// 错误处理
 	switch(setjmp(exception)){
 	case 1: log_warn("TAP_IR_Write:Failed!"); return FALSE;
@@ -227,7 +226,7 @@ static BOOL DAP_SetBank(DAPObject *dapObj, int APnDP, uint8_t reg){
 		}
 		dapObj->SelectReg.info.AP_BankSel = regBank;
 		// 写入SELECT寄存器
-		result = DAP_Write(dapObj, 0, DP_SELECT, dapObj->SelectReg.data);
+		result = DAP_Write(dapObj, 0, DP_REG_SELECT, dapObj->SelectReg.data);
 		// 如果执行失败，则恢复寄存器
 		if(result == FALSE){
 			log_warn("AP Bank Selection Failed.");
@@ -239,7 +238,7 @@ static BOOL DAP_SetBank(DAPObject *dapObj, int APnDP, uint8_t reg){
 		}
 		dapObj->SelectReg.info.DP_BankSel = regBank;
 		// 写入SELECT寄存器
-		result = DAP_Write(dapObj, 0, DP_SELECT, dapObj->SelectReg.data);
+		result = DAP_Write(dapObj, 0, DP_REG_SELECT, dapObj->SelectReg.data);
 		// 如果执行失败，则恢复寄存器
 		if(result == FALSE){
 			log_warn("DP Bank Selection Failed.");
@@ -304,7 +303,7 @@ BOOL DAP_AP_Select(DAPObject *dapObj, uint8_t apIdx){
 	// 修改当前apSel值
 	dapObj->SelectReg.info.AP_Sel = apIdx;
 	// 写入SELECT寄存器
-	if(DAP_Write(dapObj, 0, DP_SELECT, dapObj->SelectReg.data) == FALSE){
+	if(DAP_Write(dapObj, 0, DP_REG_SELECT, dapObj->SelectReg.data) == FALSE){
 		log_warn("AP Selection Failed.");
 		dapObj->SelectReg.data = selectBak;
 		return FALSE;
@@ -350,25 +349,37 @@ BOOL DAP_AP_Select(DAPObject *dapObj, uint8_t apIdx){
 }
 
 /**
- * 检查状态标志
- * updateOnly：只更新寄存器内容，不执行相关的回调函数
+ * 检查是否出现错误，同时并更新CTRL寄存器
+ * 返回：TRUE 没有错误标志位置位
+ * 		FALSE 有错误标志位置位
  */
-BOOL DAP_CheckStatus(DAPObject *dapObj, BOOL updateOnly){
+BOOL DAP_CheckError(DAPObject *dapObj){
 	assert(dapObj != NULL);
-	BOOL result = TRUE;
+	jmp_buf exception;
 	uint32_t ctrl_status;
-	result = DAP_DP_Read(dapObj, DP_CTRL_STAT, &ctrl_status);
-	if(result == FALSE){	// 读取CTRL/STATUS寄存器失败
-		log_warn("Failed to read CTRL/STATUS register.");
-		return FALSE;
+	switch(setjmp(exception)){
+	case 1: log_error("DAP_CheckError:Write SELECT Register Failed!"); return FALSE;
+	case 2: log_error("DAP_CheckError:Read CTRL/STATE Register Failed!"); return FALSE;
+	case 3: log_error("DAP_CheckError:Failed!"); return FALSE;
+	default: log_error("Unknow Error."); return FALSE;
+	case 0:break;
+	}
+	// 要原生读取
+	if(dapObj->SelectReg.info.DP_BankSel != 0){	// 当前DP bank不等于0
+		// 写入SELECT寄存器
+		if(DAP_Write(dapObj, 0, DP_REG_SELECT, 0) == FALSE) longjmp(exception, 1);
+		// 读取CTRL_STATE寄存器
+		if(DAP_Read(dapObj, 0, DP_REG_CTRL_STAT, &ctrl_status) == FALSE) longjmp(exception, 2);
+		// 恢复SELECT寄存器
+		if(DAP_Write(dapObj, 0, DP_REG_SELECT, dapObj->SelectReg.data) == FALSE) longjmp(exception, 1);
+	}else{
+		// 读取CTRL寄存器
+		if(DAP_Read(dapObj, 0, DP_REG_CTRL_STAT, &ctrl_status) == FALSE) longjmp(exception, 2);
 	}
 	// 更新寄存器的内容
 	dapObj->CTRL_STAT_Reg.regData = ctrl_status;
-	// 如果错误标志位置位，则执行回调函数
-	if(updateOnly == FALSE && dapObj->stickyErrHandle != NULL
-			&& (ctrl_status & (DP_STAT_STICKYORUN | DP_STAT_STICKYCMP | DP_STAT_STICKYERR | DP_STAT_WDATAERR)))
-	{
-		dapObj->stickyErrHandle(dapObj);
+	if(ctrl_status & (DP_STAT_STICKYORUN | DP_STAT_STICKYCMP | DP_STAT_STICKYERR | DP_STAT_WDATAERR)){
+		return FALSE;
 	}
 	return TRUE;
 }
@@ -379,6 +390,7 @@ BOOL DAP_CheckStatus(DAPObject *dapObj, BOOL updateOnly){
 BOOL DAP_WriteAbort(DAPObject *dapObj, uint32_t abort){
 	assert(dapObj != NULL);
 	int retry = dapObj->retry;
+	jmp_buf exception;
 	// 错误处理
 	switch(setjmp(exception)){
 	case 1: log_warn("TAP_IR_Write:Failed!"); return FALSE;
@@ -433,8 +445,9 @@ BOOL DAP_ClearStickyFlag(DAPObject *dapObj, uint32_t flags){
 		ctrl_status = ~(DP_STAT_STICKYORUN | DP_STAT_STICKYCMP | DP_STAT_STICKYERR | DP_STAT_WDATAERR);
 		ctrl_status &= dapObj->CTRL_STAT_Reg.regData;	// 保留其他位的值
 		ctrl_status |= flags;	// 置位要清除的标志位
+		log_info("CLEAR:%X",ctrl_status);
 		// 写入到CTRL/STATUS寄存器
-		if(DAP_DP_Write(dapObj, DP_CTRL_STAT, ctrl_status) == FALSE){
+		if(DAP_DP_Write(dapObj, DP_REG_CTRL_STAT, ctrl_status) == FALSE){
 			log_warn("Sticky error flag clearing failed.");
 			return FALSE;
 		}else{
@@ -459,14 +472,27 @@ BOOL DAP_Find_AP(DAPObject *dapObj, enum ap_type apType, uint8_t *apIdx_Out){
 	assert(dapObj != NULL);
 	*apIdx_Out = 0;
 	int apIdx; AP_IDR_Parse ap_IDR;
+
 	for(apIdx = 0; apIdx < 256; apIdx++){
 		// 选择AP
 		if(DAP_AP_Select(dapObj, apIdx) == FALSE){
+			log_info("DAP_AP_Select fail,apIdx:%d", apIdx);
 			return FALSE;
 		}
 		if(DAP_AP_Read(dapObj, AP_REG_IDR, &ap_IDR.regData) == FALSE){
+			log_info("DAP_AP_Read fail,apIdx:%d", apIdx);
 			return FALSE;
 		}
+		// 检查是否有错误
+		if(DAP_CheckError(dapObj) == FALSE){
+			uint64_t tar;
+			DAP_ClearStickyFlag(dapObj, DP_STAT_STICKYERR);
+			DAP_Read_TAR(dapObj, &tar);
+			log_info("SELECT:%08X.,%016X", dapObj->SelectReg.data, tar);
+
+			return FALSE;
+		}
+		log_info("%X", ap_IDR.regData);
 		// 检查厂商
 		if(ap_IDR.regInfo.JEP106Code == JEP106_CODE_ARM){
 			if(apType == AP_TYPE_JTAG && ap_IDR.regInfo.Class == 0){	// 选择JTAG-AP
@@ -485,16 +511,38 @@ BOOL DAP_Find_AP(DAPObject *dapObj, enum ap_type apType, uint8_t *apIdx_Out){
 /**
  * 写入TAR寄存器
  */
-static BOOL write_TAR(DAPObject *dapObj, uint64_t addr){
+BOOL DAP_Write_TAR(DAPObject *dapObj, uint64_t addr){
+	assert(dapObj != NULL);
 	// 如果支持Large Address
-	if(dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.largeAddress == 1){
+	if(dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.init == 1 && dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.largeAddress == 1){
 		// 将地址的高32位写入TAR_MSB
 		if(DAP_AP_Write(dapObj, AP_REG_TAR_MSB, (uint32_t)(addr >> 32)) == FALSE) return FALSE;
 	}
 	// 将低32位写入TAR_LSB
 	if(DAP_AP_Write(dapObj, AP_REG_TAR_LSB, (uint32_t)(addr & 0xffffffffu)) == FALSE) return FALSE;
-	return 1;
+	return TRUE;
 }
+
+/**
+ * 读取TAR寄存器
+ */
+BOOL DAP_Read_TAR(DAPObject *dapObj, uint64_t *addr_out){
+	assert(dapObj != NULL);
+	*addr_out = 0;
+	uint64_t addr = 0; uint32_t tmp;
+	// 如果支持Large Address
+	if(dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.init == 1 && dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.largeAddress == 1){
+		if(DAP_AP_Read(dapObj, AP_REG_TAR_MSB, &tmp) == FALSE) return FALSE;
+		addr = tmp;
+		addr <<= 32;	// 移到高32位
+	}
+
+	if(DAP_AP_Read(dapObj, AP_REG_TAR_LSB, &tmp) == FALSE) return FALSE;
+	addr |= tmp;	// 赋值低32位
+	*addr_out = addr;
+	return TRUE;
+}
+
 
 /**
  * 读取8位数据
@@ -525,7 +573,7 @@ BOOL DAP_ReadMem8(DAPObject *dapObj, uint64_t addr, uint8_t *data_out){
 		addr = (addr >> 2) << 2;
 	}
 	// 写入TAR
-	if(write_TAR(dapObj, addr) == FALSE) return FALSE;
+	if(DAP_Write_TAR(dapObj, addr) == FALSE) return FALSE;
 	// 读取数据，根据byte lane获得数据
 	uint32_t data;
 	if(DAP_AP_Read(dapObj, AP_REG_DRW, &data) == FALSE) return FALSE;
@@ -569,7 +617,7 @@ BOOL DAP_ReadMem16(DAPObject *dapObj, uint64_t addr, uint16_t *data_out){
 		addr = (addr >> 2) << 2;
 	}
 	// 写入TAR
-	if(write_TAR(dapObj, addr) == FALSE) return FALSE;
+	if(DAP_Write_TAR(dapObj, addr) == FALSE) return FALSE;
 	// 读取数据，根据byte lane获得数据
 	uint32_t data;
 	if(DAP_AP_Read(dapObj, AP_REG_DRW, &data) == FALSE) return FALSE;
@@ -599,7 +647,7 @@ BOOL DAP_ReadMem32(DAPObject *dapObj, uint64_t addr, uint32_t *data_out){
 	if(dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData != csw_bak)
 		if(DAP_AP_Write(dapObj, AP_REG_CSW, dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData) == FALSE) return FALSE;
 	// 写入TAR
-	if(write_TAR(dapObj, addr) == FALSE) return FALSE;
+	if(DAP_Write_TAR(dapObj, addr) == FALSE) return FALSE;
 	// 读取数据，根据byte lane获得数据
 	if(DAP_AP_Read(dapObj, AP_REG_DRW, data_out) == FALSE) return FALSE;
 	return TRUE;
@@ -626,7 +674,7 @@ BOOL DAP_WriteMem32(DAPObject *dapObj, uint64_t addr, uint32_t data){
 	if(dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData != csw_bak)
 		if(DAP_AP_Write(dapObj, AP_REG_CSW, dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData) == FALSE) return FALSE;
 	// 写入TAR
-	if(write_TAR(dapObj, addr) == FALSE) return FALSE;
+	if(DAP_Write_TAR(dapObj, addr) == FALSE) return FALSE;
 	// 读取数据，根据byte lane获得数据
 	if(DAP_AP_Write(dapObj, AP_REG_DRW, data) == FALSE) return FALSE;
 	return TRUE;
@@ -655,6 +703,7 @@ BOOL DAP_ReadMemory(DAPObject *dapObj, uint64_t memAddr, int dataSize, uint8_t *
  */
 BOOL DAP_Read_CID_PID(DAPObject *dapObj, uint32_t componentBase, uint32_t *cid_out, uint64_t *pid_out){
 	assert(dapObj != NULL);
+	jmp_buf exception;
 	if((componentBase & 0xFFF) != 0) {
 		log_warn("Component base address is not 4KB aligned!");
 		return FALSE;
@@ -700,7 +749,6 @@ static struct DAP_Instr * DAP_NewInstruction(DAPObject *dapObj){
 	}
 	// 插入到指令队列尾部
 	list_add_tail(&instruct->list_entry, &dapObj->instrQueue);
-	//dapObj->instrQueue_len ++;
 	return instruct;
 }
 
@@ -712,7 +760,7 @@ static struct DAP_Instr * DAP_NewInstruction(DAPObject *dapObj){
  * data_out:读取的数据存放地址
  * 返回：TRUE、FALSE
  */
-BOOL DAP_Queue_xP_Read(DAPObject *dapObj, enum queue_apndp APnDP, uint8_t reg, uint32_t *data_out){
+BOOL DAP_Queue_xP_Read(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t *data_out){
 	assert(dapObj != NULL);
 	*data_out = 0;	// 先清零
 	struct DAP_Instr * instr = DAP_NewInstruction(dapObj);
@@ -723,16 +771,13 @@ BOOL DAP_Queue_xP_Read(DAPObject *dapObj, enum queue_apndp APnDP, uint8_t reg, u
 	instr->seq.info.APnDP = APnDP;
 	instr->data.out = data_out;	// 数据地址
 	instr->seq.info.A = (reg & 0xC) >> 2;
-#ifdef DAP_QUEUE_DEBUG
-	log_debug("DAP Instr:%s %s %X", instr->seq.info.RnW ? "Read" : "Write", instr->seq.info.APnDP ? "AP" : "DP", instr->seq.info.A);
-#endif
 	// TODO likely 分支预测
 	if(instr->list_entry.prev != &dapObj->instrQueue){	// 如果上一个节点不是头结点
 		struct DAP_Instr * last_instr = list_entry(instr->list_entry.prev, struct DAP_Instr, list_entry);
 		// 计算当前指令的缓冲索引
 		// Ra Rb a!=b
-		if((last_instr->seq.info.RnW == 1) && (last_instr->seq.info.APnDP != instr->seq.info.APnDP)){
-			//dapObj->RDBUFF_Cnt ++;	// 插入RDBUFF的个数
+		// W R
+		if((last_instr->seq.info.RnW == 0) || ((last_instr->seq.info.RnW == 1) && (last_instr->seq.info.APnDP != instr->seq.info.APnDP))){
 			last_instr->seq.info.end = 1;	// 标记上一个指令结束
 		}
 	}
@@ -746,27 +791,28 @@ BOOL DAP_Queue_xP_Read(DAPObject *dapObj, enum queue_apndp APnDP, uint8_t reg, u
  * data:要写入的值
  * 返回：TRUE、FALSE
  */
-BOOL DAP_Queue_xP_Write(DAPObject *dapObj, enum queue_apndp APnDP, uint8_t reg, uint32_t data){
+BOOL DAP_Queue_xP_Write(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t data){
 	assert(dapObj != NULL);
 	struct DAP_Instr * instr = DAP_NewInstruction(dapObj);
 	instr->seq.info.RnW = 0;	// Write
 	instr->seq.info.APnDP = APnDP;
 	instr->data.in = data;	// 数据
 	instr->seq.info.A = (reg & 0xC) >> 2;
-#ifdef DAP_QUEUE_DEBUG
-	log_debug("DAP Instr:%s %s %X", instr->seq.info.RnW ? "Read" : "Write", instr->seq.info.APnDP ? "AP" : "DP", instr->seq.info.A);
-#endif
 	// TODO likely 分支预测
 	if(instr->list_entry.prev != &dapObj->instrQueue){	// 如果上一个节点不是头结点
 		struct DAP_Instr *last_instr = list_entry(instr->list_entry.prev, struct DAP_Instr, list_entry);
 		// Rx Wx
 		if(last_instr->seq.info.RnW == 1){
-			//dapObj->RDBUFF_Cnt ++;	// 插入RDBUFF的个数
 			last_instr->seq.info.end = 1;
 		}
 	}
 	return TRUE;
 }
+
+/**
+ * JTAG模式下执行DAP指令队列错误恢复点
+ */
+static jmp_buf JTAG_Instr_exception;
 
 /**
  * 指令分拣
@@ -776,17 +822,15 @@ BOOL DAP_Queue_xP_Write(DAPObject *dapObj, enum queue_apndp APnDP, uint8_t reg, 
  */
 static void DAP_JTAG_instr_sort_out(DAPObject *dapObj, struct list_head *instrQueue, uint8_t (*buff)[5], int buffLen){
 	// 数据已经在缓冲区就绪了，同步到指令中
-	struct DAP_Instr *instr,*last_t;
+	struct DAP_Instr *instr,*instr_t,*instr_last;
 	int buffIdx = 0;
-#ifdef DAP_QUEUE_DEBUG
-	log_debug("===sort===");
-#endif
 	// 指令分拣
-	list_for_each_entry_safe(instr, last_t, instrQueue, list_entry){
+	list_for_each_entry_safe(instr, instr_t, instrQueue, list_entry){
 		if((*(buff + buffIdx)[0] & 0x7) == JTAG_RESP_WAIT){
-#ifdef DAP_QUEUE_DEBUG
-			log_debug("DAP Instr:%s %s %X WAIT.", instr->seq.info.RnW ? "Read" : "Write", instr->seq.info.APnDP ? "AP" : "DP", instr->seq.info.A);
-#endif
+			if(instr->seq.info.end && instr->list_entry.prev != instrQueue ){	// 如果当前指令是最后一个，那么将上一个指令设置成最后一个
+				instr_last = list_entry(instr->list_entry.prev, struct DAP_Instr, list_entry);
+				instr_last->seq.info.end = 1;
+			}
 			list_move_tail(&instr->list_entry, &dapObj->retryQueue);	// 将该指令插入到重试队列
 		}else{	// 当前指令成功发布，找到从buffIdx+1开始的一个ok
 			int t;
@@ -794,49 +838,37 @@ static void DAP_JTAG_instr_sort_out(DAPObject *dapObj, struct list_head *instrQu
 				if((*(buff + t)[0] & 0x7) != JTAG_RESP_WAIT) break;
 			}
 			if(t < buffLen){	// 找到了
-#ifdef DAP_QUEUE_DEBUG
-				log_debug("DAP Instr:%s %s %X OK.correspond Value:%d", instr->seq.info.RnW ? "Read" : "Write", instr->seq.info.APnDP ? "AP" : "DP", instr->seq.info.A, t);
-#endif
 				instr->buffIdx = t;
 			}else{	// 没找到，TODO 将该指令和后面的所有指令都插入重试队列
-#ifdef DAP_QUEUE_DEBUG
-				log_debug("DAP Instr:%s %s %X OK,but not response,need reExe.",
-						instr->seq.info.RnW ? "Read" : "Write", instr->seq.info.APnDP ? "AP" : "DP", instr->seq.info.A);
-#endif
+				if(instr->seq.info.end && instr->list_entry.prev != instrQueue){	// 如果当前指令是最后一个，那么将上一个指令设置成最后一个
+					instr_last = list_entry(instr->list_entry.prev, struct DAP_Instr, list_entry);
+					instr_last->seq.info.end = 1;
+				}
 				list_move_tail(&instr->list_entry, &dapObj->retryQueue);
 			}
 		}
 		buffIdx++;
 		if(instr->seq.info.end)break;
 	}
-#ifdef DAP_QUEUE_DEBUG
-	log_debug("Instr Group sort OK.");
-#endif
 }
+
 
 /**
  * 执行队列里的一组指令
  * 将这组指令转换成DAP协议插入到JTAG命令队列中
  * 该指令出现错误不会返回。
- * buffLen未使用
  */
 static int DAP_JTAG_exe_queue(DAPObject *dapObj, struct list_head *instrQueue, uint8_t (*buff)[5]){
 	int buffIdx = 0;
 	struct DAP_Instr *instr;
-#ifdef DAP_QUEUE_DEBUG
-	log_debug("===execute===");
-#endif
 	list_for_each_entry(instr, instrQueue, list_entry){
-#ifdef DAP_QUEUE_DEBUG
-		log_debug("DAP Instr:%s %s %X", instr->seq.info.RnW ? "Read" : "Write", instr->seq.info.APnDP ? "AP" : "DP", instr->seq.info.A);
-#endif
 		// 当前指令的扫描链
 		uint32_t currentIR = instr->seq.info.APnDP ? JTAG_APACC : JTAG_DPACC;
 		// 选择合适的扫描链
 		if (dapObj->ir != currentIR) {
 			dapObj->ir = currentIR;
 			// 选择当前IR
-			if(TAP_IR_Write(&dapObj->tapObj, dapObj->TAP_index, currentIR) == FALSE) longjmp(exception, 1);
+			if(TAP_IR_Write(&dapObj->tapObj, dapObj->TAP_index, currentIR) == FALSE) longjmp(JTAG_Instr_exception, 1);
 		}
 		if(instr->seq.info.RnW == 1){	// 读寄存器
 			// 构造数据
@@ -845,23 +877,20 @@ static int DAP_JTAG_exe_queue(DAPObject *dapObj, struct list_head *instrQueue, u
 			// 构建当前扫描链数据
 			MAKE_nPACC_CHAIN_DATA(buff + buffIdx, instr->data.in, instr->seq.info.A << 1);
 		}
-		if(TAP_DR_Exchange(&dapObj->tapObj, dapObj->TAP_index, 35, CAST(uint8_t *,buff + buffIdx)) == FALSE) longjmp(exception, 2);
+		if(TAP_DR_Exchange(&dapObj->tapObj, dapObj->TAP_index, 35, CAST(uint8_t *,buff + buffIdx)) == FALSE) longjmp(JTAG_Instr_exception, 2);
 		buffIdx++;
 		if(instr->seq.info.end) break;	// 如果当前处理的指令标志了end位，则该指令组结束
 	}
 	// 最后读RDBUFF
 	if (dapObj->ir != JTAG_DPACC) {
 		dapObj->ir = JTAG_DPACC;
-		if(TAP_IR_Write(&dapObj->tapObj, dapObj->TAP_index, JTAG_DPACC) == FALSE) longjmp(exception, 1);
+		if(TAP_IR_Write(&dapObj->tapObj, dapObj->TAP_index, JTAG_DPACC) == FALSE) longjmp(JTAG_Instr_exception, 1);
 	}
 	// 读取RDBUFF，如果上一个是写，则只需要ACK。
-	*(buff + buffIdx)[0] = ((DP_RDBUFF >> 1) & 0x6) | 1;
-	if(TAP_DR_Exchange(&dapObj->tapObj, dapObj->TAP_index, 35, CAST(uint8_t *,buff + buffIdx)) == FALSE) longjmp(exception, 2);
-#ifdef DAP_QUEUE_DEBUG
-	log_debug("Instr Group End. Insert RDBUFF");
-#endif
+	*(buff + buffIdx)[0] = ((DP_REG_RDBUFF >> 1) & 0x6) | 1;
+	if(TAP_DR_Exchange(&dapObj->tapObj, dapObj->TAP_index, 35, CAST(uint8_t *,buff + buffIdx)) == FALSE) longjmp(JTAG_Instr_exception, 2);
 	// 指令都加入到队列中，执行队列
-	if(TAP_Execute(&dapObj->tapObj) == FALSE) longjmp(exception, 3);
+	if(TAP_Execute(&dapObj->tapObj) == FALSE) longjmp(JTAG_Instr_exception, 3);
 	return buffIdx;
 }
 
@@ -869,9 +898,9 @@ static int DAP_JTAG_exe_queue(DAPObject *dapObj, struct list_head *instrQueue, u
  * 同步指令数据
  */
 static void DAP_JTAG_instr_sync(struct list_head *instrQueue, uint8_t (*buff)[5]){
-	struct DAP_Instr *instr, *last_t;
+	struct DAP_Instr *instr, *instr_t;
 	// 同步指令数据
-	list_for_each_entry_safe(instr, last_t, instrQueue, list_entry){
+	list_for_each_entry_safe(instr, instr_t, instrQueue, list_entry){
 		// 找到是ok的响应。
 		if(instr->seq.info.RnW == 1){	// 如果是读
 			// 返回数据
@@ -888,13 +917,14 @@ static void DAP_JTAG_instr_sync(struct list_head *instrQueue, uint8_t (*buff)[5]
 	}
 }
 
+
 /**
- * JTAG传输方式下刷新队列
+ * JTAG模式下刷新指令队列
  */
 static BOOL DAP_JTAG_Execute(DAPObject *dapObj){
 	BOOL result = FALSE;
 	// 错误处理
-	switch(setjmp(exception)){
+	switch(setjmp(JTAG_Instr_exception)){
 	case 1: log_warn("TAP_IR_Write: Select Scan Chain Failed!"); goto EXIT_STEP_2;
 	case 2: log_warn("TAP_DR_Exchange:Failed!"); goto EXIT_STEP_2;
 	case 3: log_warn("TAP_Execute:Failed!"); goto EXIT_STEP_2;
@@ -905,12 +935,12 @@ static BOOL DAP_JTAG_Execute(DAPObject *dapObj){
 	int instrCnt;
 EXEQUEUE:
 	instrCnt = 0;
-	// 计算指令长度
+	// 计算本组指令个数
 	list_for_each_entry(instr, &dapObj->instrQueue, list_entry){
 		instrCnt ++;
 		if(instr->seq.info.end) break;
 	}
-	// 分配JTAG数据交换缓冲区
+	// 分配本组指令JTAG数据交换缓冲区
 	uint8_t (*jtag_buff)[5] = calloc((instrCnt + 1) * 5, sizeof(uint8_t));	// +1 是后面的RDBUFF
 	if(jtag_buff == NULL){
 		log_warn("Failed to create JTAG-DP data buff.");
@@ -926,9 +956,6 @@ EXEQUEUE:
 	int retry = dapObj->retry;
 	// 判断重试队列是否为空，不为空则执行重试队列
 	while(!list_empty(&dapObj->retryQueue) && retry--){
-#ifdef DAP_QUEUE_DEBUG
-		log_debug("Some Instr WAIT,Retry %dth", retry);
-#endif
 		// 执行指令
 		int buff_len = DAP_JTAG_exe_queue(dapObj, &dapObj->retryQueue, jtag_buff);
 		// 分拣指令
@@ -969,3 +996,18 @@ BOOL DAP_Queue_Execute(DAPObject *dapObj){
 	}
 }
 
+BOOL DAP_Queue_AP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out){
+	return DAP_Queue_xP_Read(dapObj, 1, reg, data_out);
+}
+
+BOOL DAP_Queue_AP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data){
+	return DAP_Queue_xP_Write(dapObj, 1, reg, data);
+}
+
+BOOL DAP_Queue_DP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out){
+	return DAP_Queue_xP_Read(dapObj, 0, reg, data_out);
+}
+
+BOOL DAP_Queue_DP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data){
+	return DAP_Queue_xP_Write(dapObj, 0, reg, data);
+}

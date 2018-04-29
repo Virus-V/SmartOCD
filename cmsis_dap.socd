@@ -8,8 +8,15 @@ cmsis_dapObj = cmsis_dap.new(); -- 创建新的CMSIS-DAP对象
 if cmsis_dapObj == nil then
 	error("Failed to get CMSIS-DAP Object instance!")
 end
-
-vid_pids = {{0xc251, 0xf001}, {0x1, 0x3}}
+-- CMSIS-DAP的VID和PID
+local vid_pids = {
+	-- Keil Software
+	{0xc251, 0xf001},	-- LPC-Link-II CMSIS_DAP
+	{0xc251, 0xf002}, 	-- OPEN-SDA CMSIS_DAP (Freedom Board)
+	{0xc251, 0x2722}, 	-- Keil ULINK2 CMSIS-DAP
+	-- MBED Software
+	{0x0d28, 0x0204}	-- MBED CMSIS-DAP
+}
 -- 连接CMSIS-DAP仿真器
 if not cmsis_dap.connect(cmsis_dapObj, vid_pids, nil) then 
 	error("CMSIS-DAP Connected Failed!")
@@ -27,50 +34,88 @@ end
 cmsis_dapObj:selectTransmission("JTAG")
 cmsis_dapObj:setStatus("RUNING")
 
---[[
-tap = require("TAP")
-tapObj = tap.new(cmsis_dapObj)	-- 新建tap对象
-if not tapObj:setInfo({4,5}) then
-	error("Set TAP Info Failed.")
-end
-tapObj:reset(false);	-- TAP soft reset
+-- 创建DAP寄存器地址表，Lua不支持常量。
+DAP_Reg = {
+	DP_CTRL_STAT 	= 0x04,
+	DP_SELECT 		= 0x08,
+	DP_RDBUFF		= 0x0C,
+	-- DPv1
+	DP_DPIDR		= 0x00,
+	DP_ABORT		= 0x00,
+	DP_DLCR			= 0x14;
+	DP_RESEND		= 0x08,
+	-- DPv2
+	DP_TARGETID		= 0x24,
+	DP_DLPIDR		= 0x34,
+	DP_EVENTSTAT	= 0x44,
+	DP_TARGETSEL	= 0x0C,
 
-idcodes = tapObj:get_IDCODE()
-print("===========Found " .. #idcodes .." TAPs===========")
-for k,v in ipairs(idcodes) do
-	print(string.format("JTAG index %d => IDCODE:0x%08X", k, v))
-end
-]]
+	AP_CSW		= 0x00,
+	AP_TAR_LSB	= 0x04,
+	AP_TAR_MSB	= 0x08,
+	AP_DRW		= 0x0C,
+	AP_BD0		= 0x10,
+	AP_BD1		= 0x14,
+	AP_BD2		= 0x18,
+	AP_BD3		= 0x1C,
+	AP_CFG		= 0xF4,
+	AP_ROM_LSB	= 0xF8,
+	AP_ROM_MSB	= 0xF0,
+	AP_IDR		= 0xFC 
+}
 
+-- 引入DAP相关包
 dap = require("DAP")
+-- 创建DAP对象，使用CMSIS-DAP作为Adapter
 dapObj = dap.new(cmsis_dapObj)
-if not dapObj:setInfo({4,5}) then
+if not dapObj:setInfo({4}) then
 	error("Set TAP Info Failed.")
 end
 dapObj:reset(false);	-- TAP soft reset
-idcodes = dapObj:get_IDCODE()
+local idcodes = dapObj:get_IDCODE()
 print("===========Found " .. #idcodes .." TAPs===========")
 for k,v in ipairs(idcodes) do
 	print(string.format("JTAG index %d => IDCODE:0x%08X", k, v))
 end
-dapObj:set_TAP(0)
-dapObj:setDelay(5)	-- 设置DR间隔
+
+dapObj:set_TAP(0)	-- 设置JTAG模式下当前DAP使用的TAP在JTAG扫描链中的索引，SW模式下忽略
+dapObj:setDelay(5)	-- 设置Memory等待周期数，等待内存操作完成。在慢速设备上有助于减少指令WAIT响应次数
+-- 清除Sticky Flags
+dapObj:write_DP(DAP_Reg.DP_CTRL_STAT, 0x32)	
+-- dapObj:writeAbort(0x1F)	-- 清除所有错误标志 S5P6818 是DPv0，所以Abort只有DAP Abort位
 -- 将SELECT寄存器清零
-dapObj:write_DP(0x08, 0)
+dapObj:write_DP(DAP_Reg.DP_SELECT, 0)
 -- System domain power up && Debug domain power up
-dapObj:write_DP(0x04, 0x40000000 | 0x10000000)
+dapObj:write_DP(DAP_Reg.DP_CTRL_STAT, 0x40000000 | 0x10000000 | 0x32)
 local ctrl_status
 repeat 
-	ctrl_status,ok = dapObj:read_DP(0x04)
+	ctrl_status,ok = dapObj:read_DP(DAP_Reg.DP_CTRL_STAT)
 	if not ok then 
 		error("Read CTRL/STATUS Register Failed.")
 	end
 until ctrl_status & (0x20000000 | 0x80000000) == (0x20000000 | 0x80000000)
 print("System and Debug Power up.")
--- 写入CTRL/STATUS控制字
-dapObj:write_DP(0x04, ctrl_status | 0x00000F00)
--- 选择AP0
-if not dapObj:select_AP(0) then 
+-- 写入MASK LANE和OVERRUN Detection
+dapObj:write_DP(DAP_Reg.DP_CTRL_STAT, 0x40000000 | 0x10000000 | 0x00000F01 | 0x32)	
+-- 检查错误
+local err, ctrl_stat = dapObj:checkError()
+if not err then 
+	error(string.format( "%08X", ctrl_stat)) 
+else
+	print(string.format( "%08X", ctrl_stat))
+end
+
+--[[
+local err_tar,ok= dapObj:get_TAR()
+if not ok then error("Read TAR Failed!") end
+print(string.format( "0x%016X", err_tar))
+if not dapObj:set_TAR(0) then error("Set TAR FAILED") end
+local err_tar = dapObj:get_TAR()
+print(string.format( "0x%016X", err_tar))
+]]
+
+-- 选择AP0 AXI 总线
+if not dapObj:select_AP(1) then 
 	error("Select AP Failed.");
 end
 local ap_idr,ok = dapObj:read_AP(0xFC)
@@ -79,29 +124,16 @@ if not ok then
 end
 -- 打印当前ap信息
 print(dap.parse_APIDR(ap_idr))
+
+
+local csw, ok = dapObj:read_AP(DAP_Reg.AP_CSW)
+if not ok then 
+	error("Read CSW Failed.")
+end
+print(string.format( "%08X", csw ))
 -- 设置AP控制字,32位读取
-dapObj:write_AP(0x00, 0x23000050 | 0x2)
--- 读取芯片数据
-function readMem(dO, addr)
-	if not dO:write_AP(0x04, addr) then 
-		return 0,false
-	end
-	return dO:read_AP(0x0C)
-end
--- 读取ROM Table
-local base, ok = dapObj:get_ROM_Table()
-if not ok then 
-	error("get rom table failed.")
-end
-print("rom table:" .. string.format("0x%08X", base))
--- 获得当前ap的信息
-print(dapObj:get_AP_Capacity("PT","LD","LA","BE","BT"))
--- 获得CID和PID
-pid, cid, ok = dapObj:get_CID_PID(base-3)
-if not ok then 
-	error("Read PID CID Failed")
-end
-print(string.format("0x%08X, 0x%08X", pid, cid))
+dapObj:write_AP(DAP_Reg.AP_CSW, csw | 0x2)
+
 cmsis_dapObj:setStatus("IDLE")
 -- 反初始化Adapter对象后禁止操作TAP对象和DAP对象
 -- cmsis_dapObj:deinit()

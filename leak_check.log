@@ -1,45 +1,73 @@
-==11428== Memcheck, a memory error detector
-==11428== Copyright (C) 2002-2015, and GNU GPL'd, by Julian Seward et al.
-==11428== Using Valgrind-3.11.0 and LibVEX; rerun with -h for copyright info
-==11428== Command: ./test/dap_queue_test
-==11428== Parent PID: 11427
-==11428== 
-==11428== 
-==11428== HEAP SUMMARY:
-==11428==     in use at exit: 8,192 bytes in 2 blocks
-==11428==   total heap usage: 3,342 allocs, 3,340 frees, 1,958,020 bytes allocated
-==11428== 
-==11428== 4,096 bytes in 1 blocks are still reachable in loss record 1 of 2
-==11428==    at 0x4C2DB8F: malloc (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
-==11428==    by 0x4058FAF: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==11428==    by 0x4059D10: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==11428==    by 0x4E49B1C: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
-==11428==    by 0x4E476E0: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
-==11428==    by 0x4E3FB1C: libusb_init (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
-==11428==    by 0x408618: __construct_USBObject (usb.c:39)
-==11428==    by 0x40597D: NewCMSIS_DAP (cmsis-dap.c:60)
-==11428==    by 0x410E56: main (dap_queue_test.c:31)
-==11428== 
-==11428== 4,096 bytes in 1 blocks are still reachable in loss record 2 of 2
-==11428==    at 0x4C2DB8F: malloc (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
-==11428==    by 0x4058FAF: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==11428==    by 0x404EA8B: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==11428==    by 0x405A0D3: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==11428==    by 0x405A66E: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==11428==    by 0x40561FF: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==11428==    by 0x40565E6: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==11428==    by 0x404C5AB: udev_enumerate_scan_devices (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
-==11428==    by 0x4E49B24: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
-==11428==    by 0x4E476E0: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
-==11428==    by 0x4E3FB1C: libusb_init (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
-==11428==    by 0x408618: __construct_USBObject (usb.c:39)
-==11428== 
-==11428== LEAK SUMMARY:
-==11428==    definitely lost: 0 bytes in 0 blocks
-==11428==    indirectly lost: 0 bytes in 0 blocks
-==11428==      possibly lost: 0 bytes in 0 blocks
-==11428==    still reachable: 8,192 bytes in 2 blocks
-==11428==         suppressed: 0 bytes in 0 blocks
-==11428== 
-==11428== For counts of detected and suppressed errors, rerun with: -v
-==11428== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+==15840== Memcheck, a memory error detector
+==15840== Copyright (C) 2002-2015, and GNU GPL'd, by Julian Seward et al.
+==15840== Using Valgrind-3.11.0 and LibVEX; rerun with -h for copyright info
+==15840== Command: ./test/dap_queue_test
+==15840== Parent PID: 15839
+==15840== 
+==15840== Use of uninitialised value of size 8
+==15840==    at 0x53A5711: _itoa_word (_itoa.c:180)
+==15840==    by 0x53A912C: vfprintf (vfprintf.c:1631)
+==15840==    by 0x53B0898: printf (printf.c:33)
+==15840==    by 0x410E98: main (dap_queue_test.c:90)
+==15840== 
+==15840== Conditional jump or move depends on uninitialised value(s)
+==15840==    at 0x53A5718: _itoa_word (_itoa.c:180)
+==15840==    by 0x53A912C: vfprintf (vfprintf.c:1631)
+==15840==    by 0x53B0898: printf (printf.c:33)
+==15840==    by 0x410E98: main (dap_queue_test.c:90)
+==15840== 
+==15840== Conditional jump or move depends on uninitialised value(s)
+==15840==    at 0x53A91AF: vfprintf (vfprintf.c:1631)
+==15840==    by 0x53B0898: printf (printf.c:33)
+==15840==    by 0x410E98: main (dap_queue_test.c:90)
+==15840== 
+==15840== Conditional jump or move depends on uninitialised value(s)
+==15840==    at 0x53A8C59: vfprintf (vfprintf.c:1631)
+==15840==    by 0x53B0898: printf (printf.c:33)
+==15840==    by 0x410E98: main (dap_queue_test.c:90)
+==15840== 
+==15840== Conditional jump or move depends on uninitialised value(s)
+==15840==    at 0x53A8CE2: vfprintf (vfprintf.c:1631)
+==15840==    by 0x53B0898: printf (printf.c:33)
+==15840==    by 0x410E98: main (dap_queue_test.c:90)
+==15840== 
+==15840== 
+==15840== HEAP SUMMARY:
+==15840==     in use at exit: 8,192 bytes in 2 blocks
+==15840==   total heap usage: 5,240 allocs, 5,238 frees, 2,242,969 bytes allocated
+==15840== 
+==15840== 4,096 bytes in 1 blocks are still reachable in loss record 1 of 2
+==15840==    at 0x4C2DB8F: malloc (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
+==15840==    by 0x4058FAF: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15840==    by 0x4059D10: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15840==    by 0x4E49B1C: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==15840==    by 0x4E476E0: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==15840==    by 0x4E3FB1C: libusb_init (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==15840==    by 0x408278: __construct_USBObject (usb.c:39)
+==15840==    by 0x4055DD: NewCMSIS_DAP (cmsis-dap.c:60)
+==15840==    by 0x410ABB: main (dap_queue_test.c:31)
+==15840== 
+==15840== 4,096 bytes in 1 blocks are still reachable in loss record 2 of 2
+==15840==    at 0x4C2DB8F: malloc (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
+==15840==    by 0x4058FAF: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15840==    by 0x404EA8B: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15840==    by 0x405A0D3: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15840==    by 0x405A66E: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15840==    by 0x40561FF: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15840==    by 0x40565E6: ??? (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15840==    by 0x404C5AB: udev_enumerate_scan_devices (in /lib/x86_64-linux-gnu/libudev.so.1.6.4)
+==15840==    by 0x4E49B24: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==15840==    by 0x4E476E0: ??? (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==15840==    by 0x4E3FB1C: libusb_init (in /lib/x86_64-linux-gnu/libusb-1.0.so.0.1.0)
+==15840==    by 0x408278: __construct_USBObject (usb.c:39)
+==15840== 
+==15840== LEAK SUMMARY:
+==15840==    definitely lost: 0 bytes in 0 blocks
+==15840==    indirectly lost: 0 bytes in 0 blocks
+==15840==      possibly lost: 0 bytes in 0 blocks
+==15840==    still reachable: 8,192 bytes in 2 blocks
+==15840==         suppressed: 0 bytes in 0 blocks
+==15840== 
+==15840== For counts of detected and suppressed errors, rerun with: -v
+==15840== Use --track-origins=yes to see where uninitialised values come from
+==15840== ERROR SUMMARY: 320 errors from 5 contexts (suppressed: 0 from 0)

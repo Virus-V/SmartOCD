@@ -163,12 +163,12 @@ int main(){
 	// 写入Abort寄存器
 	//DAP_WriteAbort(dapObj, 0x1);
 
-	DAP_DP_Write(dapObj, DP_SELECT, 0);
+	DAP_DP_Write(dapObj, DP_REG_SELECT, 0);
 	// 上电
-	DAP_DP_Write(dapObj, DP_CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ);
+	DAP_DP_Write(dapObj, DP_REG_CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ);
 	// 等待上电完成
 	do {
-		if(DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData) == FALSE){
+		if(DAP_DP_Read(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData) == FALSE){
 			log_fatal("Read CTRL_STAT Failed.");
 			goto EXIT_STEP_2;
 		}
@@ -177,13 +177,13 @@ int main(){
 	log_debug("CTRL/STAT: 0x%08X.", dapObj->CTRL_STAT_Reg.regData);
 	// 读取DPIDR寄存器
 	uint32_t dpidr = 0;
-	DAP_DP_Read(dapObj, DP_DPIDR, &dpidr);
+	DAP_DP_Read(dapObj, DP_REG_DPIDR, &dpidr);
 	log_debug("IDR: 0x%08X.", dpidr);
-	DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
+	DAP_DP_Read(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
 	log_debug("CTRL/STAT: 0x%08X.", dapObj->CTRL_STAT_Reg.regData);
 
 	// 写入初始化数据
-	DAP_DP_Write(dapObj,  DP_CTRL_STAT, dapObj->CTRL_STAT_Reg.regData | DP_CTRL_TRNNORMAL | DP_CTRL_MASKLANEMSK);	// 不启用过载检测
+	DAP_DP_Write(dapObj,  DP_REG_CTRL_STAT, dapObj->CTRL_STAT_Reg.regData | DP_CTRL_TRNNORMAL | DP_CTRL_MASKLANEMSK);	// 不启用过载检测
 
 	// 读取AP的IDR
 	time_t t_start, t_end;
@@ -198,7 +198,7 @@ int main(){
 		// 修改select选中ap
 		if(DAP_AP_Select(dapObj, ap) == FALSE) {
 			// write abort;
-			DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
+			DAP_DP_Read(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
 			log_warn("Write SELECT Failed, CTRL : 0x%08X.", dapObj->CTRL_STAT_Reg.regData);
 			goto EXIT_STEP_2;
 		}
@@ -235,7 +235,7 @@ int main(){
 	 */
 	if(DAP_AP_Select(dapObj, 1) == FALSE) {
 		// write abort;
-		DAP_DP_Read(dapObj, DP_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
+		DAP_DP_Read(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
 		log_warn("Write SELECT Failed, CTRL : 0x%08X.", dapObj->CTRL_STAT_Reg.regData);
 		goto EXIT_STEP_2;
 	}

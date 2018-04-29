@@ -224,6 +224,8 @@ static int dap_rom_table(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
 	uint64_t rom_addr = 0; uint32_t tmp;
 	// 如果当前AP支持大内存扩展
+	// XXX ROM Table只支持32位有符号偏移
+	// 见ID080813 第7-178页
 	if(dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.largeAddress){
 		if(DAP_AP_Read(dapObj, AP_REG_ROM_MSB, &tmp) == FALSE){
 			lua_pushboolean(L, 0);
@@ -242,6 +244,72 @@ static int dap_rom_table(lua_State *L){
 	lua_pushboolean(L, 1);
 EXIT:
 	lua_pushinteger(L, rom_addr);
+	lua_insert(L, -2);
+	return 2;
+}
+
+/**
+ * 读取TAR寄存器数据
+ * 1#:DAPObject对象
+ * 返回：
+ * 1#：TAR内容
+ * 2#：OK
+ */
+static int dap_get_tar(lua_State *L){
+	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
+	uint64_t addr;
+	lua_pushboolean(L, DAP_Read_TAR(dapObj, &addr));
+	lua_pushinteger(L, addr);
+	lua_insert(L, -2);
+	return 2;
+}
+
+/**
+ * 写入TAR寄存器数据
+ * 1#:DAPObject对象
+ * 2#：数据
+ * 返回：
+ * 1#：OK
+ */
+static int dap_set_tar(lua_State *L){
+	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
+	uint64_t addr = luaL_checkinteger(L, 2);
+	lua_pushboolean(L, DAP_Write_TAR(dapObj, addr));
+	return 1;
+}
+
+/**
+ * 读取8位数据
+ * 1#：DAPObject对象
+ * 2#：addr：地址64位
+ * 返回：
+ * 1#：数据
+ * 2#：OK
+ */
+static int dap_mem_read_8(lua_State *L){
+	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
+	uint64_t addr = luaL_checkinteger(L, 2);
+	uint8_t data;
+	lua_pushboolean(L, DAP_ReadMem8(dapObj, addr, &data));
+	lua_pushinteger(L, data);
+	lua_insert(L, -2);
+	return 2;
+}
+
+/**
+ * 读取16位数据
+ * 1#：DAPObject对象
+ * 2#：addr：地址64位
+ * 返回：
+ * 1#：数据
+ * 2#：OK
+ */
+static int dap_mem_read_16(lua_State *L){
+	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
+	uint64_t addr = luaL_checkinteger(L, 2);
+	uint16_t data;
+	lua_pushboolean(L, DAP_ReadMem16(dapObj, addr, &data));
+	lua_pushinteger(L, data);
 	lua_insert(L, -2);
 	return 2;
 }
@@ -298,6 +366,20 @@ static int dap_get_pid_cid(lua_State *L){
 	lua_pushinteger(L, pid);
 	lua_pushboolean(L, result);
 	return 3;
+}
+
+/**
+ * 检查前面操作是否出现错误
+ * 1#：DAPObject
+ * 返回：
+ * 1#：TRUE 没有错误 FALSE 有错误
+ * 2#：CTRL/STATE寄存器
+ */
+static int dap_check_error(lua_State *L){
+	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
+	lua_pushboolean(L, DAP_CheckError(dapObj));
+	lua_pushinteger(L, dapObj->CTRL_STAT_Reg.regData);
+	return 2;
 }
 
 /**
@@ -359,22 +441,18 @@ static const luaL_Reg lib_dap_oo[] = {
 	{"find_AP", dap_find_ap},
 	{"get_AP_Capacity", dap_ap_cap},
 	{"get_ROM_Table", dap_rom_table},
-	/*
-	{"readMem8"},
-	{"readMem16"},
-	*/
+	{"get_TAR", dap_get_tar},
+	{"set_TAR", dap_set_tar},
+	{"readMem8", dap_mem_read_8},
+	{"readMem16", dap_mem_read_16},
 	{"readMem32", dap_mem_read_32},
 	/*
-	{"readMem64"},
 	{"writeMem8"},
 	{"writeMem16"},
 	*/
 	{"writeMem32", dap_mem_write_32},
-	/*
-	{"writeMem64"},
-	*/
 	{"get_CID_PID", dap_get_pid_cid},
-	//{"clearStickyError", tap_get_idcode},
+	{"checkError", dap_check_error},
 	{NULL, NULL}
 };
 

@@ -20,6 +20,9 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
+// 致命错误恢复点
+jmp_buf fatalException;
+
 static const struct option long_option[]={
    {"logfile", required_argument, NULL, 'l'},
    {"help", no_argument, NULL, 'h'},
@@ -347,9 +350,6 @@ static int init (lua_State *L) {
 	char **argv = lua_touserdata(L,-1);
 	int opt, logLevel = LOG_INFO;
 	int exitFlag = 0;	// 执行脚本后结束运行
-	// 设置初始log级别
-	log_set_level(logLevel);
-
 	// 打开标准库
 	luaL_openlibs(L);
 	// 设置全局变量，SmartOCD版本信息
@@ -412,6 +412,14 @@ EXIT:
  */
 int main (int argc, char **argv) {
 	int status, result;
+	// 设置初始日志级别
+	log_set_level(LOG_INFO);
+	switch(setjmp(fatalException)){
+	default:
+		log_fatal("Fatal Error! Abort!");
+		return 1;
+	case 0:break;
+	}
 	// 创建lua状态机
 	lua_State *L = luaL_newstate();
 	if (L == NULL) {
