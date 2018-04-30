@@ -485,14 +485,9 @@ BOOL DAP_Find_AP(DAPObject *dapObj, enum ap_type apType, uint8_t *apIdx_Out){
 		}
 		// 检查是否有错误
 		if(DAP_CheckError(dapObj) == FALSE){
-			uint64_t tar;
-			DAP_ClearStickyFlag(dapObj, DP_STAT_STICKYERR);
-			DAP_Read_TAR(dapObj, &tar);
-			log_info("SELECT:%08X.,%016X", dapObj->SelectReg.data, tar);
-
+			log_warn("Some Error Flaged! apIdx:%d.", apIdx);
 			return FALSE;
 		}
-		log_info("%X", ap_IDR.regData);
 		// 检查厂商
 		if(ap_IDR.regInfo.JEP106Code == JEP106_CODE_ARM){
 			if(apType == AP_TYPE_JTAG && ap_IDR.regInfo.Class == 0){	// 选择JTAG-AP

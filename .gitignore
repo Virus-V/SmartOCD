@@ -46,6 +46,9 @@
 *.mod*
 *.cmd
 .tmp_versions/
+.cproject
+.progect
+.settings/
 modules.order
 Module.symvers
 Mkfile.old
