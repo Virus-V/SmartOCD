@@ -200,6 +200,7 @@ typedef union {
 		uint32_t Revision : 4;	// 版本
 	} regInfo;
 } DP_IDR_Parse;
+
 // AP IDR Register 解析
 typedef union {
 	uint32_t regData;
@@ -281,7 +282,7 @@ struct ap{
 typedef struct DAPObject DAPObject;
 struct DAPObject{
 	TAPObject tapObj;	// 继承于TAP
-	uint8_t DP_Version;	// DP版本号
+	// uint8_t DP_Version;	// DP版本号
 	struct ap AP[256];	// AP列表
 	uint16_t TAP_index;	// TAP在JTAG中的索引，SWD模式下忽略该参数
 	DP_CTRL_STATUS_Parse CTRL_STAT_Reg;	// 当前CTRL/STAT寄存器
