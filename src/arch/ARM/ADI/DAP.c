@@ -485,7 +485,11 @@ BOOL DAP_Find_AP(DAPObject *dapObj, enum ap_type apType, uint8_t *apIdx_Out){
 		}
 		// 检查是否有错误
 		if(DAP_CheckError(dapObj) == FALSE){
+<<<<<<< HEAD
 			log_warn("Find AP Failed! Sticky Flaged in AP %d.", apIdx);
+=======
+			log_warn("Some Error Flaged! apIdx:%d.", apIdx);
+>>>>>>> cf7952135c3a4ad8fcbc4736defd2720ed1aecf3
 			return FALSE;
 		}
 		// 检查厂商
