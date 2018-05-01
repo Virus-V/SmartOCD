@@ -26,12 +26,14 @@
 /**
  * adapter初始化
  * 第一个参数：AdapterObject指针
- * 返回TRUE FALSE
+ * 返回 无
  */
 static int adapter_init(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
-	lua_pushboolean(L, adapterObj->Init(adapterObj));
-	return 1;
+	if(adapterObj->Init(adapterObj) == FALSE){
+		return luaL_error(L, "Adapter Init Failed!");
+	}
+	return 0;
 }
 
 /**
@@ -41,70 +43,78 @@ static int adapter_init(lua_State *L){
  */
 static int adapter_deinit(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
-	lua_pushboolean(L, adapterObj->Deinit(adapterObj));
-	return 1;
+	if(adapterObj->Deinit(adapterObj) == FALSE){
+		return luaL_error(L, "Adapter Deinit Failed!");
+	}
+	return 0;
 }
 
 /**
  * 设置状态指示灯 如果有的话
  * 第一个参数：AdapterObject指针
  * 第二个参数：字符串 状态：CONNECTED、DISCONNECT、RUNING、IDLE
- * 返回：TRUE FALSE
+ * 返回：无
  */
 static int adapter_set_status(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	const char *status = luaL_checkstring(L, 2);
+	BOOL result = FALSE;
 	if(STR_EQUAL(status, "CONNECTED")){
-		lua_pushboolean(L, adapter_SetStatus(adapterObj, ADAPTER_STATUS_CONNECTED));
+		result = adapter_SetStatus(adapterObj, ADAPTER_STATUS_CONNECTED);
 	}else if(STR_EQUAL(status, "DISCONNECT")){
-		lua_pushboolean(L, adapter_SetStatus(adapterObj, ADAPTER_STATUS_DISCONNECT));
+		result = adapter_SetStatus(adapterObj, ADAPTER_STATUS_DISCONNECT);
 	}else if(STR_EQUAL(status, "RUNING")){
-		lua_pushboolean(L, adapter_SetStatus(adapterObj, ADAPTER_STATUS_RUNING));
+		result = adapter_SetStatus(adapterObj, ADAPTER_STATUS_RUNING);
 	}else if(STR_EQUAL(status, "IDLE")){
-		lua_pushboolean(L, adapter_SetStatus(adapterObj, ADAPTER_STATUS_IDLE));
-	}else{	// 其他状态
-		lua_pushboolean(L, 0);
+		result = adapter_SetStatus(adapterObj, ADAPTER_STATUS_IDLE);
 	}
-	return 1;
+	if(result == FALSE){
+		return luaL_error(L, "Set Adapter Status %s Failed!", status);
+	}
+	return 0;
 }
 
 /**
  * 设置仿真器时钟
  * 第一个参数：AdapterObject指针
  * 第二个参数：整数，频率 Hz
- * 返回：TRUE FALSE
  */
 static int adapter_set_clock(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	int clockHz = (int)luaL_checkinteger(L, 2);
-	lua_pushboolean(L, adapter_SetClock(adapterObj, clockHz));
-	return 1;
+	if(adapter_SetClock(adapterObj, clockHz) == FALSE){
+		return luaL_error(L, "Set Adapter Clock Failed!");
+	}
+	return 0;
 }
 
 /**
  * 选择仿真器的传输方式
  * 第一个参数：AdapterObject指针
  * 第二个参数：字符串JTAG、SWD。。
- * 返回值：TRUE FALSE
+ * 返回值：无
  */
 static int adapter_select_transmission(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	const char *trans = luaL_checkstring(L, 2);
+	BOOL result = FALSE;
 	// strnicmp
 	if(STR_EQUAL(trans, "JTAG")){
-		lua_pushboolean(L, adapter_SelectTransmission(adapterObj, JTAG));
+		result = adapter_SelectTransmission(adapterObj, JTAG);
 	}else if(STR_EQUAL(trans, "SWD")){
-		lua_pushboolean(L, adapter_SelectTransmission(adapterObj, SWD));
-	}else{	// 不支持其他传输协议
-		lua_pushboolean(L, 0);
+		result = adapter_SelectTransmission(adapterObj, SWD);
 	}
-	return 1;
+	if(result == FALSE){
+		return luaL_error(L, "Set Adapter Transmission to %s Failed!", trans);
+	}
+	return 0;
 }
 
 /**
  * 判断仿真器是否支持某个传输方式
  * 第一个参数：AdapterObject指针
  * 第二个参数：字符串JTAG、SWD。。
+ * 返回：TRUE FALSE
  */
 static int adapter_have_transmission(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");

@@ -225,31 +225,24 @@ static BOOL DAP_SetBank(DAPObject *dapObj, int APnDP, uint8_t reg){
 			return TRUE;
 		}
 		dapObj->SelectReg.info.AP_BankSel = regBank;
-		// 写入SELECT寄存器
-		result = DAP_Write(dapObj, 0, DP_REG_SELECT, dapObj->SelectReg.data);
-		// 如果执行失败，则恢复寄存器
-		if(result == FALSE){
-			log_warn("AP Bank Selection Failed.");
-			dapObj->SelectReg.data = selectBak;
-		}
+
 	}else{
 		if(dapObj->SelectReg.info.DP_BankSel == regBank){
 			return TRUE;
 		}
 		dapObj->SelectReg.info.DP_BankSel = regBank;
-		// 写入SELECT寄存器
-		result = DAP_Write(dapObj, 0, DP_REG_SELECT, dapObj->SelectReg.data);
-		// 如果执行失败，则恢复寄存器
-		if(result == FALSE){
-			log_warn("DP Bank Selection Failed.");
-			dapObj->SelectReg.data = selectBak;
-		}
+	}// 写入SELECT寄存器
+	result = DAP_Write(dapObj, 0, DP_REG_SELECT, dapObj->SelectReg.data);
+	// 如果执行失败，则恢复寄存器
+	if(result == FALSE){
+		log_warn("AP Bank Selection Failed.");
+		dapObj->SelectReg.data = selectBak;
 	}
 	return result;
 }
 
 // 读取DP寄存器
-BOOL DAP_DP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out){
+BOOL DAP_DP_ReadReg(DAPObject *dapObj, uint8_t reg, uint32_t *data_out){
 	assert(dapObj != NULL);
 	// 设置BankSel
 	if(DAP_SetBank(dapObj, 0, reg) == FALSE){
@@ -259,7 +252,7 @@ BOOL DAP_DP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out){
 }
 
 // 写入DP寄存器
-BOOL DAP_DP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data){
+BOOL DAP_DP_WriteReg(DAPObject *dapObj, uint8_t reg, uint32_t data){
 	assert(dapObj != NULL);
 	// 设置BankSel
 	if(DAP_SetBank(dapObj, 0, reg) == FALSE){
@@ -269,7 +262,7 @@ BOOL DAP_DP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data){
 }
 
 // 读取AP寄存器
-BOOL DAP_AP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out){
+BOOL DAP_AP_ReadReg(DAPObject *dapObj, uint8_t reg, uint32_t *data_out){
 	assert(dapObj != NULL);
 	// 设置BankSel
 	if(DAP_SetBank(dapObj, 1, reg) == FALSE){
@@ -279,7 +272,7 @@ BOOL DAP_AP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out){
 }
 
 // 写入AP寄存器
-BOOL DAP_AP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data){
+BOOL DAP_AP_WriteReg(DAPObject *dapObj, uint8_t reg, uint32_t data){
 	assert(dapObj != NULL);
 	// 设置BankSel
 	if(DAP_SetBank(dapObj, 1, reg) == FALSE){
@@ -311,18 +304,18 @@ BOOL DAP_AP_Select(DAPObject *dapObj, uint8_t apIdx){
 	// 获取AP相关信息：CFG
 	if(dapObj->AP[apIdx].ctrl_state.init == 0){	// 初始化ap相关参数
 		uint32_t tmp;
-		if(DAP_AP_Read(dapObj, AP_REG_CFG, &tmp) == FALSE) return FALSE;
+		if(DAP_AP_ReadReg(dapObj, AP_REG_CFG, &tmp) == FALSE) return FALSE;
 		dapObj->AP[apIdx].ctrl_state.largeAddress = !!(tmp & 0x2);
 		dapObj->AP[apIdx].ctrl_state.largeData = !!(tmp & 0x4);
 		dapObj->AP[apIdx].ctrl_state.bigEndian = !!(tmp & 0x1);
 		// 写入之前先读取CSW寄存器
-		if(DAP_AP_Read(dapObj, AP_REG_CSW, &dapObj->AP[apIdx].CSW.regData) == FALSE) return FALSE;
+		if(DAP_AP_ReadReg(dapObj, AP_REG_CSW, &dapObj->AP[apIdx].CSW.regData) == FALSE) return FALSE;
 		tmp = dapObj->AP[apIdx].CSW.regData;	// 备份到tmp
 		// 写入packed模式和8位模式
 		dapObj->AP[apIdx].CSW.regInfo.AddrInc = ADDRINC_PACKED;
 		dapObj->AP[apIdx].CSW.regInfo.Size = SIZE_8;
-		if(DAP_AP_Write(dapObj, AP_REG_CSW, dapObj->AP[apIdx].CSW.regData) == FALSE) return FALSE;
-		if(DAP_AP_Read(dapObj, AP_REG_CSW, &dapObj->AP[apIdx].CSW.regData) == FALSE) return FALSE;
+		if(DAP_AP_WriteReg(dapObj, AP_REG_CSW, dapObj->AP[apIdx].CSW.regData) == FALSE) return FALSE;
+		if(DAP_AP_ReadReg(dapObj, AP_REG_CSW, &dapObj->AP[apIdx].CSW.regData) == FALSE) return FALSE;
 		/**
 		 * ARM ID080813
 		 * 第7-133
@@ -339,7 +332,7 @@ BOOL DAP_AP_Select(DAPObject *dapObj, uint8_t apIdx){
 			dapObj->AP[apIdx].ctrl_state.lessWordTransfers = dapObj->AP[apIdx].CSW.regInfo.Size == SIZE_8 ? 1 : 0;
 		}
 		// 恢复CSW寄存器的值
-		if(DAP_AP_Write(dapObj, AP_REG_CSW, tmp) == FALSE) return FALSE;
+		if(DAP_AP_WriteReg(dapObj, AP_REG_CSW, tmp) == FALSE) return FALSE;
 		// 赋值给CSW
 		dapObj->AP[apIdx].CSW.regData = tmp;
 		dapObj->AP[apIdx].ctrl_state.init = 1;
@@ -364,7 +357,7 @@ BOOL DAP_CheckError(DAPObject *dapObj){
 	default: log_error("Unknow Error."); return FALSE;
 	case 0:break;
 	}
-	// 要原生读取
+	// 读取CTRL/STATUS寄存器
 	if(dapObj->SelectReg.info.DP_BankSel != 0){	// 当前DP bank不等于0
 		// 写入SELECT寄存器
 		if(DAP_Write(dapObj, 0, DP_REG_SELECT, 0) == FALSE) longjmp(exception, 1);
@@ -447,7 +440,7 @@ BOOL DAP_ClearStickyFlag(DAPObject *dapObj, uint32_t flags){
 		ctrl_status |= flags;	// 置位要清除的标志位
 		log_info("CLEAR:%X",ctrl_status);
 		// 写入到CTRL/STATUS寄存器
-		if(DAP_DP_Write(dapObj, DP_REG_CTRL_STAT, ctrl_status) == FALSE){
+		if(DAP_DP_WriteReg(dapObj, DP_REG_CTRL_STAT, ctrl_status) == FALSE){
 			log_warn("Sticky error flag clearing failed.");
 			return FALSE;
 		}else{
@@ -479,7 +472,7 @@ BOOL DAP_Find_AP(DAPObject *dapObj, enum ap_type apType, uint8_t *apIdx_Out){
 			log_info("DAP_AP_Select fail,apIdx:%d", apIdx);
 			return FALSE;
 		}
-		if(DAP_AP_Read(dapObj, AP_REG_IDR, &ap_IDR.regData) == FALSE){
+		if(DAP_AP_ReadReg(dapObj, AP_REG_IDR, &ap_IDR.regData) == FALSE){
 			log_info("DAP_AP_Read fail,apIdx:%d", apIdx);
 			return FALSE;
 		}
@@ -511,10 +504,10 @@ BOOL DAP_Write_TAR(DAPObject *dapObj, uint64_t addr){
 	// 如果支持Large Address
 	if(dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.init == 1 && dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.largeAddress == 1){
 		// 将地址的高32位写入TAR_MSB
-		if(DAP_AP_Write(dapObj, AP_REG_TAR_MSB, (uint32_t)(addr >> 32)) == FALSE) return FALSE;
+		if(DAP_AP_WriteReg(dapObj, AP_REG_TAR_MSB, (uint32_t)(addr >> 32)) == FALSE) return FALSE;
 	}
 	// 将低32位写入TAR_LSB
-	if(DAP_AP_Write(dapObj, AP_REG_TAR_LSB, (uint32_t)(addr & 0xffffffffu)) == FALSE) return FALSE;
+	if(DAP_AP_WriteReg(dapObj, AP_REG_TAR_LSB, (uint32_t)(addr & 0xffffffffu)) == FALSE) return FALSE;
 	return TRUE;
 }
 
@@ -527,12 +520,12 @@ BOOL DAP_Read_TAR(DAPObject *dapObj, uint64_t *addr_out){
 	uint64_t addr = 0; uint32_t tmp;
 	// 如果支持Large Address
 	if(dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.init == 1 && dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.largeAddress == 1){
-		if(DAP_AP_Read(dapObj, AP_REG_TAR_MSB, &tmp) == FALSE) return FALSE;
+		if(DAP_AP_ReadReg(dapObj, AP_REG_TAR_MSB, &tmp) == FALSE) return FALSE;
 		addr = tmp;
 		addr <<= 32;	// 移到高32位
 	}
 
-	if(DAP_AP_Read(dapObj, AP_REG_TAR_LSB, &tmp) == FALSE) return FALSE;
+	if(DAP_AP_ReadReg(dapObj, AP_REG_TAR_LSB, &tmp) == FALSE) return FALSE;
 	addr |= tmp;	// 赋值低32位
 	*addr_out = addr;
 	return TRUE;
@@ -556,7 +549,7 @@ BOOL DAP_ReadMem8(DAPObject *dapObj, uint64_t addr, uint8_t *data_out){
 	}
 	// 是否需要更新寄存器？
 	if(dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData != csw_bak)
-		if(DAP_AP_Write(dapObj, AP_REG_CSW, dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData) == FALSE) return FALSE;
+		if(DAP_AP_WriteReg(dapObj, AP_REG_CSW, dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData) == FALSE) return FALSE;
 	// 获得字节在字中的索引
 	int byteIdx = addr & 0x3;
 	// 读取数据
@@ -571,7 +564,7 @@ BOOL DAP_ReadMem8(DAPObject *dapObj, uint64_t addr, uint8_t *data_out){
 	if(DAP_Write_TAR(dapObj, addr) == FALSE) return FALSE;
 	// 读取数据，根据byte lane获得数据
 	uint32_t data;
-	if(DAP_AP_Read(dapObj, AP_REG_DRW, &data) == FALSE) return FALSE;
+	if(DAP_AP_ReadReg(dapObj, AP_REG_DRW, &data) == FALSE) return FALSE;
 	// 拆分数据
 	*data_out = (uint8_t)(data >> (8*byteIdx));
 	return TRUE;
@@ -600,7 +593,7 @@ BOOL DAP_ReadMem16(DAPObject *dapObj, uint64_t addr, uint16_t *data_out){
 	}
 	// 是否需要更新寄存器？
 	if(dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData != csw_bak)
-		if(DAP_AP_Write(dapObj, AP_REG_CSW, dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData) == FALSE) return FALSE;
+		if(DAP_AP_WriteReg(dapObj, AP_REG_CSW, dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData) == FALSE) return FALSE;
 	// 获得半字在字中的索引
 	int byteIdx = addr & 0x2;
 	// 读取数据
@@ -615,7 +608,7 @@ BOOL DAP_ReadMem16(DAPObject *dapObj, uint64_t addr, uint16_t *data_out){
 	if(DAP_Write_TAR(dapObj, addr) == FALSE) return FALSE;
 	// 读取数据，根据byte lane获得数据
 	uint32_t data;
-	if(DAP_AP_Read(dapObj, AP_REG_DRW, &data) == FALSE) return FALSE;
+	if(DAP_AP_ReadReg(dapObj, AP_REG_DRW, &data) == FALSE) return FALSE;
 	// 拆分数据
 	*data_out = (uint16_t)(data >> (8*byteIdx));
 	return TRUE;
@@ -640,11 +633,11 @@ BOOL DAP_ReadMem32(DAPObject *dapObj, uint64_t addr, uint32_t *data_out){
 	dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regInfo.Size = SIZE_32;	// Word
 	// 是否需要更新寄存器？
 	if(dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData != csw_bak)
-		if(DAP_AP_Write(dapObj, AP_REG_CSW, dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData) == FALSE) return FALSE;
+		if(DAP_AP_WriteReg(dapObj, AP_REG_CSW, dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData) == FALSE) return FALSE;
 	// 写入TAR
 	if(DAP_Write_TAR(dapObj, addr) == FALSE) return FALSE;
 	// 读取数据，根据byte lane获得数据
-	if(DAP_AP_Read(dapObj, AP_REG_DRW, data_out) == FALSE) return FALSE;
+	if(DAP_AP_ReadReg(dapObj, AP_REG_DRW, data_out) == FALSE) return FALSE;
 	return TRUE;
 }
 
@@ -667,11 +660,11 @@ BOOL DAP_WriteMem32(DAPObject *dapObj, uint64_t addr, uint32_t data){
 	dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regInfo.Size = SIZE_32;	// Word
 	// 是否需要更新寄存器？
 	if(dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData != csw_bak)
-		if(DAP_AP_Write(dapObj, AP_REG_CSW, dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData) == FALSE) return FALSE;
+		if(DAP_AP_WriteReg(dapObj, AP_REG_CSW, dapObj->AP[DAP_CURR_AP(dapObj)].CSW.regData) == FALSE) return FALSE;
 	// 写入TAR
 	if(DAP_Write_TAR(dapObj, addr) == FALSE) return FALSE;
 	// 读取数据，根据byte lane获得数据
-	if(DAP_AP_Write(dapObj, AP_REG_DRW, data) == FALSE) return FALSE;
+	if(DAP_AP_WriteReg(dapObj, AP_REG_DRW, data) == FALSE) return FALSE;
 	return TRUE;
 }
 
@@ -755,7 +748,7 @@ static struct DAP_Instr * DAP_NewInstruction(DAPObject *dapObj){
  * data_out:读取的数据存放地址
  * 返回：TRUE、FALSE
  */
-BOOL DAP_Queue_xP_Read(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t *data_out){
+BOOL DAP_Queue_xP_Read(DAPObject *dapObj, int APnDP, uint8_t A, uint32_t *data_out){
 	assert(dapObj != NULL);
 	*data_out = 0;	// 先清零
 	struct DAP_Instr * instr = DAP_NewInstruction(dapObj);
@@ -765,7 +758,7 @@ BOOL DAP_Queue_xP_Read(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t *data
 	instr->seq.info.RnW = 1;	// Read
 	instr->seq.info.APnDP = APnDP;
 	instr->data.out = data_out;	// 数据地址
-	instr->seq.info.A = (reg & 0xC) >> 2;
+	instr->seq.info.A = (A & 0xC) >> 2;
 	// TODO likely 分支预测
 	if(instr->list_entry.prev != &dapObj->instrQueue){	// 如果上一个节点不是头结点
 		struct DAP_Instr * last_instr = list_entry(instr->list_entry.prev, struct DAP_Instr, list_entry);
@@ -786,13 +779,13 @@ BOOL DAP_Queue_xP_Read(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t *data
  * data:要写入的值
  * 返回：TRUE、FALSE
  */
-BOOL DAP_Queue_xP_Write(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t data){
+BOOL DAP_Queue_xP_Write(DAPObject *dapObj, int APnDP, uint8_t A, uint32_t data){
 	assert(dapObj != NULL);
 	struct DAP_Instr * instr = DAP_NewInstruction(dapObj);
 	instr->seq.info.RnW = 0;	// Write
 	instr->seq.info.APnDP = APnDP;
 	instr->data.in = data;	// 数据
-	instr->seq.info.A = (reg & 0xC) >> 2;
+	instr->seq.info.A = (A & 0xC) >> 2;
 	// TODO likely 分支预测
 	if(instr->list_entry.prev != &dapObj->instrQueue){	// 如果上一个节点不是头结点
 		struct DAP_Instr *last_instr = list_entry(instr->list_entry.prev, struct DAP_Instr, list_entry);
@@ -991,18 +984,3 @@ BOOL DAP_Queue_Execute(DAPObject *dapObj){
 	}
 }
 
-BOOL DAP_Queue_AP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out){
-	return DAP_Queue_xP_Read(dapObj, 1, reg, data_out);
-}
-
-BOOL DAP_Queue_AP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data){
-	return DAP_Queue_xP_Write(dapObj, 1, reg, data);
-}
-
-BOOL DAP_Queue_DP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out){
-	return DAP_Queue_xP_Read(dapObj, 0, reg, data_out);
-}
-
-BOOL DAP_Queue_DP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data){
-	return DAP_Queue_xP_Write(dapObj, 0, reg, data);
-}

@@ -123,6 +123,7 @@ BOOL USBOpen(USBObject *usbObj, const uint16_t vid, const uint16_t pid, const ch
 			libusb_close(devHandle);
 			continue;
 		}
+		// FIXME 程序结束后，无法自动连接到内核驱动
 		retCode = libusb_set_auto_detach_kernel_driver(devHandle, 1);
 		if(LIBUSB_ERROR_NOT_SUPPORTED == retCode){
 			log_warn("The current operating system does not support automatic detach kernel drive.");

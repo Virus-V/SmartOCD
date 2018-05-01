@@ -53,8 +53,8 @@ static void printComponentInfo(DAPObject *dapObj, uint32_t startAddr){
 	addr = (startAddr & ~0xfff) + 0xFF4;
 	//log_info("addr:0x%08X.", addr);
 	// 读取
-	DAP_AP_Write(dapObj, AP_REG_TAR_LSB, addr);
-	DAP_AP_Read(dapObj, AP_REG_DRW, &tmp);
+	DAP_AP_WriteReg(dapObj, AP_REG_TAR_LSB, addr);
+	DAP_AP_ReadReg(dapObj, AP_REG_DRW, &tmp);
 	//log_info("CIDR4:0x%08X.", tmp);
 	// 判断组件类型
 	switch(tmp>>4){
@@ -85,8 +85,8 @@ static void printComponentInfo(DAPObject *dapObj, uint32_t startAddr){
 	}
 	// 计算组件占用空间大小
 	addr = (startAddr & ~0xfff) + 0xFD0;
-	DAP_AP_Write(dapObj, AP_REG_TAR_LSB, addr);
-	DAP_AP_Read(dapObj, AP_REG_DRW, &tmp);
+	DAP_AP_WriteReg(dapObj, AP_REG_TAR_LSB, addr);
+	DAP_AP_ReadReg(dapObj, AP_REG_DRW, &tmp);
 	//log_info("PIDR4:0x%08X.", tmp);
 	tmp = (tmp >> 4);
 	size = pow(2, tmp);
@@ -163,12 +163,12 @@ int main(){
 	// 写入Abort寄存器
 	//DAP_WriteAbort(dapObj, 0x1);
 
-	DAP_DP_Write(dapObj, DP_REG_SELECT, 0);
+	DAP_DP_WriteReg(dapObj, DP_REG_SELECT, 0);
 	// 上电
-	DAP_DP_Write(dapObj, DP_REG_CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ);
+	DAP_DP_WriteReg(dapObj, DP_REG_CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ);
 	// 等待上电完成
 	do {
-		if(DAP_DP_Read(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData) == FALSE){
+		if(DAP_DP_ReadReg(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData) == FALSE){
 			log_fatal("Read CTRL_STAT Failed.");
 			goto EXIT_STEP_2;
 		}
@@ -177,13 +177,13 @@ int main(){
 	log_debug("CTRL/STAT: 0x%08X.", dapObj->CTRL_STAT_Reg.regData);
 	// 读取DPIDR寄存器
 	uint32_t dpidr = 0;
-	DAP_DP_Read(dapObj, DP_REG_DPIDR, &dpidr);
+	DAP_DP_ReadReg(dapObj, DP_REG_DPIDR, &dpidr);
 	log_debug("IDR: 0x%08X.", dpidr);
-	DAP_DP_Read(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
+	DAP_DP_ReadReg(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
 	log_debug("CTRL/STAT: 0x%08X.", dapObj->CTRL_STAT_Reg.regData);
 
 	// 写入初始化数据
-	DAP_DP_Write(dapObj,  DP_REG_CTRL_STAT, dapObj->CTRL_STAT_Reg.regData | DP_CTRL_TRNNORMAL | DP_CTRL_MASKLANEMSK);	// 不启用过载检测
+	DAP_DP_WriteReg(dapObj,  DP_REG_CTRL_STAT, dapObj->CTRL_STAT_Reg.regData | DP_CTRL_TRNNORMAL | DP_CTRL_MASKLANEMSK);	// 不启用过载检测
 
 	// 读取AP的IDR
 	time_t t_start, t_end;
@@ -198,12 +198,12 @@ int main(){
 		// 修改select选中ap
 		if(DAP_AP_Select(dapObj, ap) == FALSE) {
 			// write abort;
-			DAP_DP_Read(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
+			DAP_DP_ReadReg(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
 			log_warn("Write SELECT Failed, CTRL : 0x%08X.", dapObj->CTRL_STAT_Reg.regData);
 			goto EXIT_STEP_2;
 		}
 		// 读取AP的IDR
-		result = DAP_AP_Read(dapObj, AP_REG_IDR, &tmp);
+		result = DAP_AP_ReadReg(dapObj, AP_REG_IDR, &tmp);
 		DAP_CheckStatus(dapObj, FALSE);
 		if(!run){
 			goto EXIT_STEP_2;
@@ -235,17 +235,17 @@ int main(){
 	 */
 	if(DAP_AP_Select(dapObj, 1) == FALSE) {
 		// write abort;
-		DAP_DP_Read(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
+		DAP_DP_ReadReg(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
 		log_warn("Write SELECT Failed, CTRL : 0x%08X.", dapObj->CTRL_STAT_Reg.regData);
 		goto EXIT_STEP_2;
 	}
 	// 读取ROM Table的基址
-	DAP_AP_Read(dapObj, AP_REG_ROM_LSB, &romtable);
+	DAP_AP_ReadReg(dapObj, AP_REG_ROM_LSB, &romtable);
 	// 读取CFG寄存器
-	DAP_AP_Read(dapObj, AP_REG_CFG, &tmp);
+	DAP_AP_ReadReg(dapObj, AP_REG_CFG, &tmp);
 	log_info("CFG [LD,LA,BE]:%X.", tmp);
 	// 写入CSW。Privileged,Data, TAR not INC
-	DAP_AP_Write(dapObj, AP_REG_CSW, 0xB0000040u | AP_CSW_SIZE32);
+	DAP_AP_WriteReg(dapObj, AP_REG_CSW, 0xB0000040u | AP_CSW_SIZE32);
 	// ROM Table的首地址
 	romtable = romtable & ~0xfff;
 	addr = romtable;
@@ -254,8 +254,8 @@ int main(){
 	do{
 		// ROM Table[11:0]不在BaseAddr里面，[1]为1代表该寄存器是ADIv5的类型，[0]代表是否存在DebugEntry
 		// 注意还有Lagacy format要看一下资料
-		DAP_AP_Write(dapObj, AP_REG_TAR_LSB, addr);	// 将ROM TABLE写入到TAR寄存器
-		DAP_AP_Read(dapObj, AP_REG_DRW, &ROM_TableEntry);
+		DAP_AP_WriteReg(dapObj, AP_REG_TAR_LSB, addr);	// 将ROM TABLE写入到TAR寄存器
+		DAP_AP_ReadReg(dapObj, AP_REG_DRW, &ROM_TableEntry);
 		//log_info("ROM Table Entry:0x%08X.", ROM_TableEntry);
 		// 求出偏移地址
 		componentOffset = 0xfffff000 & ROM_TableEntry;

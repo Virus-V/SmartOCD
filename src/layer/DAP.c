@@ -77,28 +77,28 @@ static int dap_set_retry(lua_State *L){
  * #2：寄存器的地址
  * 返回：
  * #1：整数 读取的寄存器值
- * #2：BOOL 读取是否成功
+ * 失败抛出错误
  */
 static int dap_read_dp(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
 	uint8_t reg = (uint8_t)luaL_checkinteger(L, 2);
 	uint32_t reg_data;
-	lua_pushboolean(L, DAP_DP_Read(dapObj, reg, &reg_data)); // 将结果压栈
+	if(DAP_DP_ReadReg(dapObj, reg, &reg_data) == FALSE){
+		return luaL_error(L, "Read DP Register Failed!");
+	}
 	lua_pushinteger(L, reg_data);
-	// 将值插入到布尔值之前
-	lua_insert(L, -2);
-	return 2;
+	return 1;
 }
 
 static int dap_read_ap(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
 	uint8_t reg = (uint8_t)luaL_checkinteger(L, 2);
 	uint32_t reg_data;
-	lua_pushboolean(L, DAP_AP_Read(dapObj, reg, &reg_data)); // 将结果压栈
+	if(DAP_AP_ReadReg(dapObj, reg, &reg_data) == FALSE){
+		return luaL_error(L, "Read AP Register Failed!");
+	}
 	lua_pushinteger(L, reg_data);
-	// 将值插入到布尔值之前
-	lua_insert(L, -2);
-	return 2;
+	return 1;
 }
 
 /**
@@ -106,23 +106,26 @@ static int dap_read_ap(lua_State *L){
  * #1：DAPObject对象引用
  * #2：寄存器的地址
  * #3：要写入的内容
- * 返回：
- * #1：BOOL 读取是否成功
+ * 返回：无
  */
 static int dap_write_dp(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
 	uint8_t reg = (uint8_t)luaL_checkinteger(L, 2);
 	uint32_t reg_data = (uint32_t)luaL_checkinteger(L, 3);
-	lua_pushboolean(L, DAP_DP_Write(dapObj, reg, reg_data)); // 将结果压栈
-	return 1;
+	if(DAP_DP_WriteReg(dapObj, reg, reg_data) == FALSE){
+		return luaL_error(L, "Write DP Register Failed!");
+	}
+	return 0;
 }
 
 static int dap_write_ap(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
 	uint8_t reg = (uint8_t)luaL_checkinteger(L, 2);
 	uint32_t reg_data = (uint32_t)luaL_checkinteger(L, 3);
-	lua_pushboolean(L, DAP_AP_Write(dapObj, reg, reg_data)); // 将结果压栈
-	return 1;
+	if(DAP_AP_WriteReg(dapObj, reg, reg_data) == FALSE){
+		return luaL_error(L, "Write AP Register Failed!");
+	}
+	return 0;
 }
 
 /**
@@ -130,13 +133,15 @@ static int dap_write_ap(lua_State *L){
  * MEM-AP、JTAG-AP等
  * 1#：DAPObject对象
  * 2#：AP编号
- * 返回：TRUE FALSE
+ * 返回：无
  */
 static int dap_select_ap(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
 	uint8_t apSel = (uint8_t)luaL_checkinteger(L, 2);
-	lua_pushboolean(L, DAP_AP_Select(dapObj, apSel)); // 将结果压栈
-	return 1;
+	if(DAP_AP_Select(dapObj, apSel) == FALSE){
+		return luaL_error(L, "Select AP Failed!");
+	}
+	return 0;
 }
 
 
@@ -144,13 +149,15 @@ static int dap_select_ap(lua_State *L){
  * 写入Abort寄存器
  * 1#：DAPObject对象
  * 2#：要写入Abort寄存器的内容
- * 返回：TRUE FALSE
+ * 返回：无
  */
 static int dap_write_abort(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
 	uint32_t abort = (uint32_t)luaL_checkinteger(L, 2);
-	lua_pushboolean(L, DAP_WriteAbort(dapObj, abort)); // 将结果压栈
-	return 1;
+	if(DAP_WriteAbort(dapObj, abort) == FALSE){
+		return luaL_error(L, "Read DP Register Failed!");
+	}
+	return 0;
 }
 
 /**
@@ -159,27 +166,28 @@ static int dap_write_abort(lua_State *L){
  * 2#：AP类型：JTAG、AXI、AHB、APB
  * 返回：
  * 1#：整数
- * 2#：bool OK
  */
 static int dap_find_ap(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
 	const char *apType = luaL_checkstring(L, 2);
 	uint8_t apIdx;
+	BOOL result = FALSE;
 	// strnicmp
 	if(STR_EQUAL(apType, "JTAG")){
-		lua_pushboolean(L, DAP_Find_AP(dapObj, AP_TYPE_JTAG, &apIdx));
+		result = DAP_Find_AP(dapObj, AP_TYPE_JTAG, &apIdx);
 	}else if(STR_EQUAL(apType, "AXI")){
-		lua_pushboolean(L, DAP_Find_AP(dapObj, AP_TYPE_AMBA_AXI, &apIdx));
+		result = DAP_Find_AP(dapObj, AP_TYPE_AMBA_AXI, &apIdx);
 	}else if(STR_EQUAL(apType, "AHB")){
-		lua_pushboolean(L, DAP_Find_AP(dapObj, AP_TYPE_AMBA_AHB, &apIdx));
+		result = DAP_Find_AP(dapObj, AP_TYPE_AMBA_AHB, &apIdx);
 	}else if(STR_EQUAL(apType, "APB")){
-		lua_pushboolean(L, DAP_Find_AP(dapObj, AP_TYPE_AMBA_APB, &apIdx));
-	}else{
-		lua_pushboolean(L, 0);
+		result = DAP_Find_AP(dapObj, AP_TYPE_AMBA_APB, &apIdx);
 	}
+	if(result == FALSE){
+		return luaL_error(L, "Find %s Failed!", apType);
+	}
+	// 将结果压栈
 	lua_pushinteger(L, apIdx);
-	lua_insert(L, -2);	// 调整位置，将apidx设置为第一个返回值
-	return 2;
+	return 1;
 }
 
 /**
@@ -218,7 +226,6 @@ static int dap_ap_cap(lua_State *L){
  * 1#：DAPObject对象
  * 返回：
  * 1#：rom table 地址 inteager
- * 2#：是否成功
  */
 static int dap_rom_table(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
@@ -227,25 +234,19 @@ static int dap_rom_table(lua_State *L){
 	// XXX ROM Table只支持32位有符号偏移
 	// 见ID080813 第7-178页
 	if(dapObj->AP[DAP_CURR_AP(dapObj)].ctrl_state.largeAddress){
-		if(DAP_AP_Read(dapObj, AP_REG_ROM_MSB, &tmp) == FALSE){
-			lua_pushboolean(L, 0);
-			goto EXIT;
+		if(DAP_AP_ReadReg(dapObj, AP_REG_ROM_MSB, &tmp) == FALSE){
+			return luaL_error(L, "Read BASE_MSB Register Failed!");
 		}
 		rom_addr = tmp;
 		rom_addr <<= 32;	// 将ROM MSB寄存器的值放到64位地址的高32位
 	}
 	// 读取rom TABLE的低32位地址
-	if(DAP_AP_Read(dapObj, AP_REG_ROM_LSB, &tmp) == FALSE){
-		lua_pushboolean(L, 0);
-		rom_addr = 0;
-		goto EXIT;
+	if(DAP_AP_ReadReg(dapObj, AP_REG_ROM_LSB, &tmp) == FALSE){
+		return luaL_error(L, "Read BASE_LSB Register Failed!");
 	}
 	rom_addr += tmp;
-	lua_pushboolean(L, 1);
-EXIT:
 	lua_pushinteger(L, rom_addr);
-	lua_insert(L, -2);
-	return 2;
+	return 1;
 }
 
 /**
@@ -253,29 +254,30 @@ EXIT:
  * 1#:DAPObject对象
  * 返回：
  * 1#：TAR内容
- * 2#：OK
  */
 static int dap_get_tar(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
 	uint64_t addr;
-	lua_pushboolean(L, DAP_Read_TAR(dapObj, &addr));
+	if(DAP_Read_TAR(dapObj, &addr) == FALSE){
+		return luaL_error(L, "Read TAR Register Failed!");
+	}
 	lua_pushinteger(L, addr);
-	lua_insert(L, -2);
-	return 2;
+	return 1;
 }
 
 /**
  * 写入TAR寄存器数据
  * 1#:DAPObject对象
  * 2#：数据
- * 返回：
- * 1#：OK
+ * 返回：无
  */
 static int dap_set_tar(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
 	uint64_t addr = luaL_checkinteger(L, 2);
-	lua_pushboolean(L, DAP_Write_TAR(dapObj, addr));
-	return 1;
+	if(DAP_Write_TAR(dapObj, addr) == FALSE){
+		return luaL_error(L, "Write TAR Register Failed!");
+	}
+	return 0;
 }
 
 /**
@@ -284,16 +286,16 @@ static int dap_set_tar(lua_State *L){
  * 2#：addr：地址64位
  * 返回：
  * 1#：数据
- * 2#：OK
  */
 static int dap_mem_read_8(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
 	uint64_t addr = luaL_checkinteger(L, 2);
 	uint8_t data;
-	lua_pushboolean(L, DAP_ReadMem8(dapObj, addr, &data));
+	if(DAP_ReadMem8(dapObj, addr, &data) == FALSE){
+		return luaL_error(L, "Read Byte Memory %p Failed!", addr);
+	}
 	lua_pushinteger(L, data);
-	lua_insert(L, -2);
-	return 2;
+	return 1;
 }
 
 /**
@@ -302,16 +304,16 @@ static int dap_mem_read_8(lua_State *L){
  * 2#：addr：地址64位
  * 返回：
  * 1#：数据
- * 2#：OK
  */
 static int dap_mem_read_16(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
 	uint64_t addr = luaL_checkinteger(L, 2);
 	uint16_t data;
-	lua_pushboolean(L, DAP_ReadMem16(dapObj, addr, &data));
+	if(DAP_ReadMem16(dapObj, addr, &data) == FALSE){
+		return luaL_error(L, "Read Halfword Memory %p Failed!", addr);
+	}
 	lua_pushinteger(L, data);
-	lua_insert(L, -2);
-	return 2;
+	return 1;
 }
 
 /**
@@ -320,16 +322,16 @@ static int dap_mem_read_16(lua_State *L){
  * 2#：addr：地址64位
  * 返回：
  * 1#：数据
- * 2#：OK
  */
 static int dap_mem_read_32(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
 	uint64_t addr = luaL_checkinteger(L, 2);
 	uint32_t data;
-	lua_pushboolean(L, DAP_ReadMem32(dapObj, addr, &data));
+	if(DAP_ReadMem32(dapObj, addr, &data) == FALSE){
+		return luaL_error(L, "Read Word Memory %p Failed!", addr);
+	}
 	lua_pushinteger(L, data);
-	lua_insert(L, -2);
-	return 2;
+	return 1;
 }
 
 /**
@@ -337,15 +339,16 @@ static int dap_mem_read_32(lua_State *L){
  * 1#：DAPObject对象
  * 2#：addr：地址64位
  * 3#：data：数据
- * 返回：
- * 1#：OK
+ * 返回：无
  */
 static int dap_mem_write_32(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
 	uint64_t addr = luaL_checkinteger(L, 2);
 	uint32_t data = (uint32_t)luaL_checkinteger(L, 3);
-	lua_pushboolean(L, DAP_WriteMem32(dapObj, addr, data));
-	return 1;
+	if(DAP_WriteMem32(dapObj, addr, data) == FALSE){
+		return luaL_error(L, "Write Word Memory %p Failed!", addr);
+	}
+	return 0;
 }
 
 /**
@@ -355,17 +358,16 @@ static int dap_mem_write_32(lua_State *L){
  * 返回：
  * 1#：cid
  * 2#：pid 64位
- * 3#：OK
  */
 static int dap_get_pid_cid(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
 	uint64_t addr = luaL_checkinteger(L, 2);
 	uint32_t cid; uint64_t pid;
-	BOOL result = DAP_Read_CID_PID(dapObj, addr, &cid, &pid);
+	if(DAP_Read_CID_PID(dapObj, addr, &cid, &pid) == FALSE)
+		return luaL_error(L, "Read CID PID Failed!");
 	lua_pushinteger(L, cid);
 	lua_pushinteger(L, pid);
-	lua_pushboolean(L, result);
-	return 3;
+	return 2;
 }
 
 /**

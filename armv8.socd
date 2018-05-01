@@ -6,23 +6,7 @@
 -- 使用CMSIS-DAP
 dofile("cmsis_dap.socd")
 -- 选择访问AHB总线的MEM-AP
-local APB_AP_Idx,ok = dapObj:find_AP("APB")   -- 这里先选择AHB总线，测试用
-if not ok then
-    local err_tar = dapObj:get_TAR()
-    print(string.format( "0x%016X", err_tar))
-    local err, ctrl_stat = dapObj:checkError()
-    if not err then    -- 发现了错误
-        print(string.format( "%08X", ctrl_stat)) 
-       
-        local err_tar = dapObj:get_TAR()
-        print(string.format( "0x%016X", err_tar))
-    end
-    error("Could not find MEM-AP APB")
-else
-    print("MEM-AP APB id is:" .. APB_AP_Idx)
-    local ap_idr,ok = dapObj:read_AP(DAP_Reg.AP_IDR)
-    if ok then print(dap.parse_APIDR(ap_idr)) end   -- 显示AP信息
-end
+local APB_AP_Idx = dapObj:find_AP("AHB")   -- 这里先选择AHB总线，测试用
 --[[
     读取当前AP信息
     PT:Packed Transfer
@@ -39,12 +23,8 @@ if BigEndian then print("Big Endian Access.") end
 if ByteTrans then print("Support Less Word Transfer.") end
 
 -- 读取ROM TABLE地址
-ROM_Table_Addr,ok = dapObj:get_ROM_Table()
-if not ok then
-    error("Failed to get ROM Table!")
-else
-    print("ROM Table address is:" .. string.format("0x%08X", ROM_Table_Addr))
-end
+ROM_Table_Addr = dapObj:get_ROM_Table()
+print("ROM Table address is:" .. string.format("0x%08X", ROM_Table_Addr))
 -- DAP组件信息 desinger,part,type,fullname
 dap_infos = {
     { 0x4BB, 0x000, "Cortex-M3 SCS",              "(System Control Space)", },
@@ -147,15 +127,11 @@ function display_ROM(dap, addr, depth)
     -- 获得对齐后的地址
     local base_addr = addr & 0xFFFFF000
     -- 读取pid和cid
-    local cid, pid, ok = dap:get_CID_PID(base_addr)
-    -- 判断是否读取成功
-    if not ok  then 
-        print("Can't read component, the corresponding core might be turned off")
-        --return 
-    end
+    local cid, pid = dap:get_CID_PID(base_addr)
     if (cid & 0xFFFF0FFF) ~= 0xB105000D then
         -- 无效的CID
-        -- return 
+        print("Invaild CID:" .. string.format("%08X", cid))
+        return 
     end
     print(string.format( "Component CID:0x%08X, PID:0x%010X.", cid, pid))
     -- 获得该Component占据的空间大小
@@ -176,10 +152,7 @@ function display_ROM(dap, addr, depth)
         end
     end
     if compon_type == 0x1 then    -- ROM Table
-        local mem_type,ok = dap:readMem32(base_addr + 0xFCC)
-        if not ok then
-            error("Read MEMTYPE Register Failed!") 
-        end
+        local mem_type = dap:readMem32(base_addr + 0xFCC)
         if mem_type & 0x1 == 0x1 then
             print("MEMTYPE system memory present on bus.")
         else
@@ -187,19 +160,15 @@ function display_ROM(dap, addr, depth)
         end
         -- 遍历Table Entry
         for entry_offset = 0,0xF00,4 do
-            local entry, ok = dap:readMem32(base_addr + entry_offset)
-            if not ok then error("Read Table Entry Failed!") end
+            local entry = dap:readMem32(base_addr + entry_offset)
             if entry & 0x1 == 0x1 then  -- 存在表项
-                print(string.format( "0x%08X => 0x%08X.", base_addr + (entry & 0xFFFFF000), entry))
+                print(string.format( "0x%08X => 0x%08X.", (base_addr + (entry & 0xFFFFF000)) & 0xFFFFFFFF, entry))
                 -- 递归调用
-                display_ROM(dap, base_addr + (entry & 0xFFFFF000), depth+1)
+                -- display_ROM(dap, (base_addr + (entry & 0xFFFFF000)) & 0xFFFFFFFF, depth+1)
             elseif entry == 0 then break end
         end
     elseif compon_type == 0x9 then -- CoreSight component
-        local dev_type,ok = dap:readMem32(base_addr + 0xFCC)
-        if not ok then
-            error("Read DEVTYPE Register Failed!") 
-        end
+        local dev_type = dap:readMem32(base_addr + 0xFCC)
         local minor = (dev_type >> 4) & 0x0F
         local major_type, sub_type = "other"
         if dev_type & 0x0F == 0 then

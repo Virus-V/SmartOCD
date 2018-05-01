@@ -41,7 +41,6 @@ static int cmsis_dap_new (lua_State *L) {
  * 第一个参数是CMSIS-DAP对象
  * 第二个参数是数组，存放PID和VID {{vid,pid}...}
  * 第三个参数是serial number
- * 返回值：成功 TRUE，失败 FALSE
  */
 static int cmsis_dap_connect(lua_State *L){
 	luaL_checktype (L, 2, LUA_TTABLE);
@@ -74,8 +73,10 @@ static int cmsis_dap_connect(lua_State *L){
 		lua_pop(L, 3);	// 将3个值弹出，键保留在栈中以便下次迭代使用
 	}
 	// 连接CMSIS-DAP，返回结果
-	lua_pushboolean (L, ConnectCMSIS_DAP(cmsis_dapObj, vids, pids, serial));
-	return 1;	// 1个参数，布尔值
+	if (ConnectCMSIS_DAP(cmsis_dapObj, vids, pids, serial) == FALSE){
+		return luaL_error(L, "Couldn't connect CMSIS-DAP!");
+	}
+	return 0;	// 1个参数，布尔值
 }
 
 static const luaL_Reg lib_cmsis_dap_f[] = {

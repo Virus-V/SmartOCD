@@ -55,7 +55,7 @@ static int tap_new(lua_State *L){
  * 第一个参数：TAPObject对象
  * 第二个参数：布尔值，是否硬复位
  * 第三个参数：数字，表示硬复位时引脚延时，默认100
- * 返回：TRUE FALSE
+ * 返回：无
  */
 static int tap_reset(lua_State *L){
 	luaL_checktype(L, 1, LUA_TUSERDATA);
@@ -68,15 +68,17 @@ static int tap_reset(lua_State *L){
 	BOOL hard = (BOOL)lua_toboolean(L, 2);
 	int pinWait = (int)luaL_optinteger(L, 3, 100);
 	// 复位状态机
-	lua_pushboolean(L, TAP_Reset(tapObj, hard, pinWait));
-	return 1;
+	if(TAP_Reset(tapObj, hard, pinWait) == FALSE){
+		return luaL_error(L, "Reset TAP Failed!");
+	}
+	return 0;
 }
 
 /**
  * 设置JTAG扫描链上的TAP状态机信息
  * 第一个参数：TAPObject对象
  * 第二个参数：数组，{4,5,8...} 用来表示每个TAP的IR寄存器长度。
- * 返回：TRUE FALSE
+ * 返回：无
  */
 static int tap_set_info(lua_State *L){
 	luaL_checktype(L, 1, LUA_TUSERDATA);
@@ -98,8 +100,10 @@ static int tap_set_info(lua_State *L){
 		lua_pop(L, 1);	// 将值弹出，键保留在栈中以便下次迭代使用
 	}
 	// 设置信息
-	lua_pushboolean(L, TAP_SetInfo(tapObj, tapCount, irLens));
-	return 1;
+	if(TAP_SetInfo(tapObj, tapCount, irLens) == FALSE){
+		return luaL_error(L, "Set TAP Info Failed!");
+	}
+	return 0;
 }
 
 /**
@@ -107,7 +111,7 @@ static int tap_set_info(lua_State *L){
  * 用于等待Memory操作完成
  * 第一个参数：TAPObject对象
  * 第二个参数：整数，表示延时的时钟周期数
- * 返回：0
+ * 返回：无
  */
 static int tap_set_delay(lua_State *L){
 	luaL_checktype(L, 1, LUA_TUSERDATA);
@@ -138,8 +142,7 @@ static int tap_get_idcode(lua_State *L){
 	// IDCODE的缓存空间
 	uint32_t *idCodes = lua_newuserdata(L, tapObj->TAP_Count * sizeof(uint32_t));
 	if(TAP_Get_IDCODE(tapObj, idCodes) == FALSE){
-		lua_pushnil(L);
-		return 1;
+		return luaL_error(L, "Get IDCODES Failed!");
 	}
 	// 将IDCODE组装成一个表
 	lua_createtable(L, tapObj->TAP_Count, 0); // +1

@@ -18,13 +18,9 @@ local vid_pids = {
 	{0x0d28, 0x0204}	-- MBED CMSIS-DAP
 }
 -- 连接CMSIS-DAP仿真器
-if not cmsis_dap.connect(cmsis_dapObj, vid_pids, nil) then 
-	error("CMSIS-DAP Connected Failed!")
-end
+cmsis_dap.connect(cmsis_dapObj, vid_pids, nil)
 -- 初始化Adapter对象
-if not cmsis_dapObj:init() then
-	error("Adapter Init Failed.")
-end
+cmsis_dapObj:init()
 -- 点亮连接状态指示灯
 cmsis_dapObj:setStatus("CONNECTED")
 cmsis_dapObj:setClock(10000000)	-- 10MHz
@@ -68,9 +64,8 @@ DAP_Reg = {
 dap = require("DAP")
 -- 创建DAP对象，使用CMSIS-DAP作为Adapter
 dapObj = dap.new(cmsis_dapObj)
-if not dapObj:setInfo({4}) then
-	error("Set TAP Info Failed.")
-end
+-- 设置TAP信息，一共两个TAP，第一个TAP的指令寄存器长度为4,第二个指令寄存器长度为5
+dapObj:setInfo({4, 5})
 dapObj:reset(false);	-- TAP soft reset
 local idcodes = dapObj:get_IDCODE()
 print("===========Found " .. #idcodes .." TAPs===========")
@@ -89,10 +84,7 @@ dapObj:write_DP(DAP_Reg.DP_SELECT, 0)
 dapObj:write_DP(DAP_Reg.DP_CTRL_STAT, 0x40000000 | 0x10000000 | 0x32)
 local ctrl_status
 repeat 
-	ctrl_status,ok = dapObj:read_DP(DAP_Reg.DP_CTRL_STAT)
-	if not ok then 
-		error("Read CTRL/STATUS Register Failed.")
-	end
+	ctrl_status = dapObj:read_DP(DAP_Reg.DP_CTRL_STAT)
 until ctrl_status & (0x20000000 | 0x80000000) == (0x20000000 | 0x80000000)
 print("System and Debug Power up.")
 -- 写入MASK LANE和OVERRUN Detection
@@ -100,37 +92,20 @@ dapObj:write_DP(DAP_Reg.DP_CTRL_STAT, 0x40000000 | 0x10000000 | 0x00000F01 | 0x3
 -- 检查错误
 local err, ctrl_stat = dapObj:checkError()
 if not err then 
-	error(string.format( "%08X", ctrl_stat)) 
+	error(string.format( "CTRL/STATUS: %08X", ctrl_stat)) 
 else
-	print(string.format( "%08X", ctrl_stat))
+	print(string.format( "CTRL/STATUS: %08X", ctrl_stat))
 end
-
---[[
-local err_tar,ok= dapObj:get_TAR()
-if not ok then error("Read TAR Failed!") end
-print(string.format( "0x%016X", err_tar))
-if not dapObj:set_TAR(0) then error("Set TAR FAILED") end
-local err_tar = dapObj:get_TAR()
-print(string.format( "0x%016X", err_tar))
-]]
 
 -- 选择AP0 AXI 总线
-if not dapObj:select_AP(1) then 
-	error("Select AP Failed.");
-end
-local ap_idr,ok = dapObj:read_AP(0xFC)
-if not ok then 
-	error("Read AP IDR Failed.")
-end
+dapObj:select_AP(0)
+local ap_idr = dapObj:read_AP(0xFC)
 -- 打印当前ap信息
 print(dap.parse_APIDR(ap_idr))
 
 
-local csw, ok = dapObj:read_AP(DAP_Reg.AP_CSW)
-if not ok then 
-	error("Read CSW Failed.")
-end
-print(string.format( "%08X", csw ))
+local csw = dapObj:read_AP(DAP_Reg.AP_CSW)
+print(string.format( "CSW Register: %08X", csw ))
 -- 设置AP控制字,32位读取
 dapObj:write_AP(DAP_Reg.AP_CSW, csw | 0x2)
 
