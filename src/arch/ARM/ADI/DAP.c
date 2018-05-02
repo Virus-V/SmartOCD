@@ -231,7 +231,8 @@ static BOOL DAP_SetBank(DAPObject *dapObj, int APnDP, uint8_t reg){
 			return TRUE;
 		}
 		dapObj->SelectReg.info.DP_BankSel = regBank;
-	}// 写入SELECT寄存器
+	}
+	// 写入SELECT寄存器
 	result = DAP_Write(dapObj, 0, DP_REG_SELECT, dapObj->SelectReg.data);
 	// 如果执行失败，则恢复寄存器
 	if(result == FALSE){
@@ -357,7 +358,7 @@ BOOL DAP_CheckError(DAPObject *dapObj){
 	default: log_error("Unknow Error."); return FALSE;
 	case 0:break;
 	}
-	// 读取CTRL/STATUS寄存器
+	// 要原生读取
 	if(dapObj->SelectReg.info.DP_BankSel != 0){	// 当前DP bank不等于0
 		// 写入SELECT寄存器
 		if(DAP_Write(dapObj, 0, DP_REG_SELECT, 0) == FALSE) longjmp(exception, 1);
@@ -469,16 +470,16 @@ BOOL DAP_Find_AP(DAPObject *dapObj, enum ap_type apType, uint8_t *apIdx_Out){
 	for(apIdx = 0; apIdx < 256; apIdx++){
 		// 选择AP
 		if(DAP_AP_Select(dapObj, apIdx) == FALSE){
-			log_info("DAP_AP_Select fail,apIdx:%d", apIdx);
+			log_warn("Find AP Failed! Select AP %d Failed.", apIdx);
 			return FALSE;
 		}
 		if(DAP_AP_ReadReg(dapObj, AP_REG_IDR, &ap_IDR.regData) == FALSE){
-			log_info("DAP_AP_Read fail,apIdx:%d", apIdx);
+			log_warn("Find AP Failed! Read AP %d IDR Failed.", apIdx);
 			return FALSE;
 		}
 		// 检查是否有错误
 		if(DAP_CheckError(dapObj) == FALSE){
-			log_warn("Some Error Flaged! apIdx:%d.", apIdx);
+			log_warn("Find AP Failed! Sticky Flaged in AP %d.", apIdx);
 			return FALSE;
 		}
 		// 检查厂商
@@ -524,7 +525,6 @@ BOOL DAP_Read_TAR(DAPObject *dapObj, uint64_t *addr_out){
 		addr = tmp;
 		addr <<= 32;	// 移到高32位
 	}
-
 	if(DAP_AP_ReadReg(dapObj, AP_REG_TAR_LSB, &tmp) == FALSE) return FALSE;
 	addr |= tmp;	// 赋值低32位
 	*addr_out = addr;
@@ -983,4 +983,3 @@ BOOL DAP_Queue_Execute(DAPObject *dapObj){
 		return FALSE;	// 其他
 	}
 }
-

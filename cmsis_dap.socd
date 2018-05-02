@@ -65,7 +65,7 @@ dap = require("DAP")
 -- 创建DAP对象，使用CMSIS-DAP作为Adapter
 dapObj = dap.new(cmsis_dapObj)
 -- 设置TAP信息，一共两个TAP，第一个TAP的指令寄存器长度为4,第二个指令寄存器长度为5
-dapObj:setInfo({4, 5})
+dapObj:setInfo({4})
 dapObj:reset(false);	-- TAP soft reset
 local idcodes = dapObj:get_IDCODE()
 print("===========Found " .. #idcodes .." TAPs===========")
@@ -97,7 +97,31 @@ else
 	print(string.format( "CTRL/STATUS: %08X", ctrl_stat))
 end
 
+--[[
+0x80001000 => 0x00001003.
+0x80002000 => 0x00002003.
+0x80003000 => 0x00003003.
+0x80004000 => 0x00004003.
+0x80005000 => 0x00005003.
+0x80006000 => 0x00006003.
+0x80009000 => 0x00009003.
+0x80020000 => 0x00020003. * Component CID:0xB105900D, PID:0x04003BB9A8.
+0x80040000 => 0x00040003. * Component CID:0xB105900D, PID:0x04003BB95D.
+0x80060000 => 0x00060003.
+0x80080000 => 0x00080003.
+]]
+--[[
+local cid, pid = dapObj:get_CID_PID(0x80001000)
+if (cid & 0xFFFF0FFF) ~= 0xB105000D then
+	-- 无效的CID
+	print("Invaild CID:" .. string.format("%08X", cid))
+	return 
+end
+print(string.format( "Component CID:0x%08X, PID:0x%010X.", cid, pid))
+]]
+
 -- 选择AP0 AXI 总线
+--[[
 dapObj:select_AP(0)
 local ap_idr = dapObj:read_AP(0xFC)
 -- 打印当前ap信息
@@ -108,6 +132,16 @@ local csw = dapObj:read_AP(DAP_Reg.AP_CSW)
 print(string.format( "CSW Register: %08X", csw ))
 -- 设置AP控制字,32位读取
 dapObj:write_AP(DAP_Reg.AP_CSW, csw | 0x2)
+
+local APB_AP_Idx = dapObj:find_AP("APB")   -- 这里先选择AHB总线，测试用
+
+local csw = dapObj:read_AP(DAP_Reg.AP_CSW)
+print(string.format( "CSW Register: %08X", csw ))
+-- 设置AP控制字,32位读取
+dapObj:write_AP(DAP_Reg.AP_CSW, csw | 0x2)
+
+]]
+
 
 cmsis_dapObj:setStatus("IDLE")
 -- 反初始化Adapter对象后禁止操作TAP对象和DAP对象
