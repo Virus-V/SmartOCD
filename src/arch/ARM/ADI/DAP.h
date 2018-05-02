@@ -200,6 +200,7 @@ typedef union {
 		uint32_t Revision : 4;	// 版本
 	} regInfo;
 } DP_IDR_Parse;
+
 // AP IDR Register 解析
 typedef union {
 	uint32_t regData;
@@ -281,7 +282,7 @@ struct ap{
 typedef struct DAPObject DAPObject;
 struct DAPObject{
 	TAPObject tapObj;	// 继承于TAP
-	uint8_t DP_Version;	// DP版本号
+	// uint8_t DP_Version;	// DP版本号
 	struct ap AP[256];	// AP列表
 	uint16_t TAP_index;	// TAP在JTAG中的索引，SWD模式下忽略该参数
 	DP_CTRL_STATUS_Parse CTRL_STAT_Reg;	// 当前CTRL/STAT寄存器
@@ -343,12 +344,12 @@ void __DESTORY(DAP)(DAPObject *dapObj);
 // 设置DAP的WAIT重试次数
 #define DAP_SetRetry(p,cnt) ((p)->retry = (cnt))
 // 设置错误标志
-#define DAP_SetErrorHandle(p,fun) ((p)->stickyErrHandle = (fun))
+//#define DAP_SetErrorHandle(p,fun) ((p)->stickyErrHandle = (fun))
 
-BOOL DAP_DP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out);
-BOOL DAP_DP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data);
-BOOL DAP_AP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out);
-BOOL DAP_AP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data);
+BOOL DAP_DP_ReadReg(DAPObject *dapObj, uint8_t reg, uint32_t *data_out);
+BOOL DAP_DP_WriteReg(DAPObject *dapObj, uint8_t reg, uint32_t data);
+BOOL DAP_AP_ReadReg(DAPObject *dapObj, uint8_t reg, uint32_t *data_out);
+BOOL DAP_AP_WriteReg(DAPObject *dapObj, uint8_t reg, uint32_t data);
 BOOL DAP_AP_Select(DAPObject *dapObj, uint8_t apIdx);
 // 写入Abort寄存器
 BOOL DAP_WriteAbort(DAPObject *dapObj, uint32_t abort);
@@ -377,13 +378,13 @@ BOOL DAP_WriteMem32(DAPObject *dapObj, uint64_t addr, uint32_t data);
 BOOL DAP_Read_CID_PID(DAPObject *dapObj, uint32_t componentBase, uint32_t *cid_out, uint64_t *pid_out);
 
 // 队列操作，只在SWD模式下可用
-BOOL DAP_Queue_xP_Read(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t *data_out);
-BOOL DAP_Queue_xP_Write(DAPObject *dapObj, int APnDP, uint8_t reg, uint32_t data);
+BOOL DAP_Queue_xP_Read(DAPObject *dapObj, int APnDP, uint8_t A, uint32_t *data_out);
+BOOL DAP_Queue_xP_Write(DAPObject *dapObj, int APnDP, uint8_t A, uint32_t data);
 BOOL DAP_Queue_Execute(DAPObject *dapObj);
 
-BOOL DAP_Queue_AP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out);
-BOOL DAP_Queue_AP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data);
-BOOL DAP_Queue_DP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out);
-BOOL DAP_Queue_DP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data);
+#define DAP_Queue_AP_Read(dapObj, reg, data_out) DAP_Queue_xP_Read((dapObj), 1, (reg), (data_out))
+#define DAP_Queue_AP_Write(dapObj, reg, data) DAP_Queue_xP_Write((dapObj), 1, (reg), (data))
+#define DAP_Queue_DP_Read(dapObj, reg, data_out) DAP_Queue_xP_Read((dapObj), 0, (reg), (data_out))
+#define DAP_Queue_DP_Write(dapObj, reg, data) DAP_Queue_xP_Write((dapObj), 0, (reg), (data))
 
 #endif /* SRC_ARCH_CORESIGHT_DAP_H_ */

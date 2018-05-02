@@ -62,12 +62,12 @@ int main(){
 	// 写入Abort寄存器
 	//DAP_WriteAbort(dapObj, 0x1);
 	dapObj->CTRL_STAT_Reg.regData = 0;
-	DAP_DP_Write(dapObj, DP_REG_SELECT, 0);
+	DAP_DP_WriteReg(dapObj, DP_REG_SELECT, 0);
 	// 上电
-	DAP_DP_Write(dapObj, DP_REG_CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ);
+	DAP_DP_WriteReg(dapObj, DP_REG_CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ);
 	// 等待上电完成
 	do {
-		if(DAP_DP_Read(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData) == FALSE){
+		if(DAP_DP_ReadReg(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData) == FALSE){
 			log_fatal("Read CTRL_STAT Failed.");
 			goto EXIT_STEP_2;
 		}
