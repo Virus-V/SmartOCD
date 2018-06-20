@@ -15,9 +15,11 @@
  * 单元测试函数部分
  * 用于产生在当前状态到指定状态的TMS时序
  * 返回值：sequence 高8位为时序信息，低八位为时序个数
- * 时序信息是最低位在前。比如 0101 1111，则发送顺序是 1111 1010
+ * 时序信息是最低位先发送。比如 0101 1111，则发送顺序是 <-1111 1010<-
  */
-uint16_t JTAG_Get_TMS_Sequence(enum JTAG_TAP_Status fromStatus, enum JTAG_TAP_Status toStatus) {
+TMS_SeqInfo JTAG_Get_TMS_Sequence(enum JTAG_TAP_Status fromStatus, enum JTAG_TAP_Status toStatus) {
+	assert(fromStatus >= JTAG_TAP_RESET && fromStatus <= JTAG_TAP_IRUPDATE);
+	assert(toStatus >= JTAG_TAP_RESET && toStatus <= JTAG_TAP_IRUPDATE);
 	int sequence, idx;
 #define _SET_BIT_(x) (sequence |= ((x) << idx))
 	for (sequence = 0, idx = 8; fromStatus != toStatus; sequence++, idx++) {
@@ -152,7 +154,81 @@ uint16_t JTAG_Get_TMS_Sequence(enum JTAG_TAP_Status fromStatus, enum JTAG_TAP_St
 		}
 	}
 #undef _SET_BIT_
-	return sequence & 0xFFFF;
+	return (TMS_SeqInfo)(sequence & 0xFFFF);
+}
+
+/**
+ * 从当前TAP状态和给定的TMS，返回下一个TAP状态
+ */
+enum JTAG_TAP_Status JTAG_NextStatus(enum JTAG_TAP_Status fromStatus, int tms){
+	assert(fromStatus >= JTAG_TAP_RESET && fromStatus <= JTAG_TAP_IRUPDATE);
+	enum JTAG_TAP_Status nextStatus;
+	switch (fromStatus) {
+	case JTAG_TAP_RESET:
+		nextStatus = tms ? JTAG_TAP_RESET : JTAG_TAP_IDLE;
+		break;
+
+	case JTAG_TAP_IDLE:
+		nextStatus = tms ? JTAG_TAP_DRSELECT : JTAG_TAP_IDLE;
+		break;
+
+	case JTAG_TAP_DRSELECT:
+		nextStatus = tms ? JTAG_TAP_IRSELECT : JTAG_TAP_DRCAPTURE;
+		break;
+
+	case JTAG_TAP_DRCAPTURE:
+		nextStatus = tms ? JTAG_TAP_DREXIT1 : JTAG_TAP_DRSHIFT;
+		break;
+
+	case JTAG_TAP_DRSHIFT:
+		nextStatus = tms ? JTAG_TAP_DREXIT1 : JTAG_TAP_DRSHIFT;
+		break;
+
+	case JTAG_TAP_DREXIT1:
+		nextStatus = tms ? JTAG_TAP_DRUPDATE : JTAG_TAP_DRPAUSE;
+		break;
+
+	case JTAG_TAP_DRPAUSE:
+		nextStatus = tms ? JTAG_TAP_DREXIT2 : JTAG_TAP_DRPAUSE;
+		break;
+
+	case JTAG_TAP_DREXIT2:
+		nextStatus = tms ? JTAG_TAP_DRUPDATE : JTAG_TAP_DRSHIFT;
+		break;
+
+	case JTAG_TAP_DRUPDATE:
+		nextStatus = tms ? JTAG_TAP_DRSELECT : JTAG_TAP_IDLE;
+		break;
+
+	case JTAG_TAP_IRSELECT:
+		nextStatus = tms ? JTAG_TAP_RESET : JTAG_TAP_IRCAPTURE;
+		break;
+
+	case JTAG_TAP_IRCAPTURE:
+		nextStatus = tms ? JTAG_TAP_IREXIT1 : JTAG_TAP_IRSHIFT;
+		break;
+
+	case JTAG_TAP_IRSHIFT:
+		nextStatus = tms ? JTAG_TAP_IREXIT1 : JTAG_TAP_IRSHIFT;
+		break;
+
+	case JTAG_TAP_IREXIT1:
+		nextStatus = tms ? JTAG_TAP_IRUPDATE : JTAG_TAP_IRPAUSE;
+		break;
+
+	case JTAG_TAP_IRPAUSE:
+		nextStatus = tms ? JTAG_TAP_IREXIT2 : JTAG_TAP_IRPAUSE;
+		break;
+
+	case JTAG_TAP_IREXIT2:
+		nextStatus = tms ? JTAG_TAP_IRUPDATE : JTAG_TAP_IRSHIFT;
+		break;
+
+	case JTAG_TAP_IRUPDATE:
+		nextStatus = tms ? JTAG_TAP_DRSELECT : JTAG_TAP_IDLE;
+		break;
+	}
+	return nextStatus;
 }
 
 /**

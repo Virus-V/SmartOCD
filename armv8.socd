@@ -158,7 +158,7 @@ function display_ROM(dap, addr, depth)
         else
             print("MEMTYPE system memory not present: dedicated debug bus.")
         end
-        -- 遍历Table Entry
+        -- 遍历Table Entry 0xefc
         for entry_offset = 0,0xF00,4 do
             local entry = dap:readMem32(base_addr + entry_offset)
             if entry & 0x1 == 0x1 then  -- 存在表项

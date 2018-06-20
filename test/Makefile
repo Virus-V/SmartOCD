@@ -34,8 +34,7 @@ OPT ?= 0
 DEBUG = -ggdb
 
 CFLAGS = $(DEBUG)
-#开发过程中使用-Werror，所有警告都当做错误来终止编译
-CFLAGS += -O$(OPT) -Werror
+CFLAGS += -O$(OPT)
 CFLAGS += $(addprefix -D,$(DEFINES)) $(addprefix -I,$(SMARTOCD_INC_PATHS) $(TEST_INC_PATHS))
 # Linker Flags
 LDFLAGS += $(addprefix -L,$(ALL_LIB_PATH))
@@ -49,10 +48,6 @@ all: $(TARGET)
 $(TARGET): $(SMARTOCD_OBJ_FILES) $(SMARTOCD_ENTRY_OBJ_FILE)
 	$(CC) $^ -o $@ $(LDFLAGS) 
 	@echo "Build Complete!"
-
-
-%_test: $(SMARTOCD_OBJ_FILES) $(TEST_OBJ_FILES) $(ROOT_DIR)/test/%_test.o
-	$(CC) $^ -ggdb -o $(ROOT_DIR)/test/$@ $(LDFLAGS)
 
 #%.o : %.c
 .PHONY: reset all clean

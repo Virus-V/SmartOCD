@@ -51,11 +51,24 @@ char* itoa(int num, char *str, int radix) {
 	byteCnt += tmp ? ((tmp + 7) >> 3) + 1 : 0;	\
 })
 
+#define SET_Nth_BIT(data,n,val) do{	\
+	uint8_t tmp_data = *(CAST(uint8_t *, (data)) + ((n)>>3)); \
+	tmp_data &= ~(1 << ((n) & 0x7));	\
+	tmp_data |= ((val) & 0x1) << ((n) & 0x7);	\
+	*(CAST(uint8_t *, (data)) + ((n)>>3)) = tmp_data;	\
+}while(0);
+
+
 int main(){
 	uint8_t sdad[5];
-	uint8_t (*data)[5] = 0;
-	uint32_t tmp;
-
-	printf("%p,%p\n", data+1 , data+2);
+	memset(sdad, 0, 5);
+	for(int i=0;i<40;i++){
+		SET_Nth_BIT(sdad, i, 1);
+		misc_PrintBulk(sdad, 5, 5);
+	}
+	for(int i=0;i<40;i++){
+		SET_Nth_BIT(sdad, i, 0);
+		misc_PrintBulk(sdad, 5, 5);
+	}
 	return 0;
 }

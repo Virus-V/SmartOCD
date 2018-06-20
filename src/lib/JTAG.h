@@ -10,6 +10,13 @@
 
 #include "smart_ocd.h"
 
+/**
+ * TMS时序信息
+ * 高八位为时序信息，低八位为时序个数
+ * 高八位时序信息低位先发送
+ */
+typedef uint16_t TMS_SeqInfo;
+
 enum JTAG_TAP_Status {
 	/* 特殊状态 */
 	JTAG_TAP_RESET = 0,
@@ -32,7 +39,8 @@ enum JTAG_TAP_Status {
 	JTAG_TAP_IRUPDATE,
 };
 
-uint16_t JTAG_Get_TMS_Sequence(enum JTAG_TAP_Status fromStatus, enum JTAG_TAP_Status toStatus);
+TMS_SeqInfo JTAG_Get_TMS_Sequence(enum JTAG_TAP_Status fromStatus, enum JTAG_TAP_Status toStatus);
+enum JTAG_TAP_Status JTAG_NextStatus(enum JTAG_TAP_Status fromStatus, int tms);
 int JTAG_Cal_TMS_LevelStatus(uint32_t tms, int count);
 const char *JTAG_state2str(enum JTAG_TAP_Status tap_state);
 

@@ -22,7 +22,7 @@ void load3rd(lua_State *L){
 	register2lua_cmsis_dap(L);
 	register2lua_adapter(L);
 	register2lua_TAP(L);
-	register2lua_DAP(L);
+	//register2lua_DAP(L);
 }
 
 /**

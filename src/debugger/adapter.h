@@ -11,27 +11,109 @@
 
 #include <stdarg.h>
 #include "smart_ocd.h"
-#include "debugger/usb.h"
+#include "misc/list.h"
+#include "lib/JTAG.h"
+#include "arch/ARM/ADI/ADIv5.h"
+#include "arch/ARM/ADI/DAP.h"
 
-// 仿真通信方式
+// SW和JTAG引脚映射，用在JTAG_INS_RW_PINS指令里
+#define SWJ_PIN_SWCLK_TCK		0       // SWCLK/TCK
+#define SWJ_PIN_SWDIO_TMS		1       // SWDIO/TMS
+#define SWJ_PIN_TDI				2       // TDI
+#define SWJ_PIN_TDO				3       // TDO
+#define SWJ_PIN_nTRST			5       // nTRST
+#define SWJ_PIN_nRESET			7       // nRESET
+
+// 仿真底层通信方式
 enum transportType {
 	UNKNOW_NULL = 0,	// 未知协议，由仿真器默认指定
 	JTAG,
 	SWD
 };
 
-// 支持的仿真器类型
-enum supportedAdapter{
-	LEGACY,
-	CMSIS_DAP,	// ARM 公司提供的一个仿真器
-	USB_BLASTER,
-	STLINK,
-	OPENJTAG,
+// JTAG指令类型
+enum JTAG_InstrType{
+	/**
+	 * 状态机改变状态
+	 */
+	JTAG_INS_STATUS_MOVE,
+	/**
+	 * 交换TDI-TDO数据
+	 */
+	JTAG_INS_EXCHANGE_IO,
+	/**
+	 * 进入IDLE等待几个时钟周期
+	 */
+	JTAG_INS_IDLE_WAIT,
 };
 
-// 仿真器的公共操作命令
-// XXX 提取出来公共操作，每个仿真器都必须实现这些
-enum commonInstr {
+// DAP指令类型
+enum DAP_InstrType{
+	/**
+	 * 读写nP寄存器
+	 */
+	DAP_INS_READ_AP_REG,
+	DAP_INS_WRITE_AP_REG,
+	DAP_INS_READ_DP_REG,
+	DAP_INS_WRITE_DP_REG,
+	// TODO 增加TransferBlock的指令
+};
+
+// JTAG状态机切换指令
+struct JTAG_StatusMove{
+	TMS_SeqInfo seqInfo;
+};
+
+// JTAG交换IO
+struct JTAG_ExchangeIO{
+	uint8_t *data;	// 需要交换的数据地址
+	int bitNum;	// 交换的二进制位个数
+};
+
+// 进入IDLE状态等待几个周期
+struct JTAG_IDLE_Wait{
+	int wait;	// 等待的时钟周期数
+};
+
+// JTAG指令
+struct JTAG_Command{
+	enum JTAG_InstrType type;	// JTAG指令类型
+	struct list_head list_entry;	// 链表对象
+	// 指令结构共用体
+	union {
+		struct JTAG_StatusMove statusMove;
+		struct JTAG_ExchangeIO exchangeIO;
+		struct JTAG_IDLE_Wait idleWait;
+	} instr;
+};
+
+// DAP读写寄存器指令结构体
+struct DAP_RW_Register{
+	union {
+		enum AP_Regs ap;
+		enum DP_Regs dp;
+	} reg;
+	// 指令的数据
+	union {
+		uint32_t write;
+		uint32_t *read;
+	} data;
+};
+
+// DAP指令
+struct DAP_Command{
+	enum DAP_InstrType type;	// DAP指令类型
+	struct list_head list_entry;
+	// 指令结构共用体
+	union {
+		// TODO 增加TransferBlock的指令
+		struct DAP_RW_Register RWReg;
+	} instr;
+};
+
+// 仿真器的公共操作命令，每个仿真器都必须实现这些
+// XXX 提取出来公共操作
+enum commonOperation {
 	/**
 	 * 设置仿真器状态
 	 * 参数：int status 状态
@@ -39,96 +121,45 @@ enum commonInstr {
 	 */
 	AINS_SET_STATUS,
 	/**
-	 * 设置最大通信时钟
+	 * 设置最大通信时钟频率
 	 * 参数：uint32_t clock 频率，单位Hz
 	 * 返回：成功 TRUE，失败 FALSE
 	 */
 	AINS_SET_CLOCK,
 	/**
-	 * 发送一个jtag时序
-	 * 参数：int sequenceCount, uint8_t *data, uint8_t *response
-	 * 其中：sequenceCount是一共需要发送多少个序列；
-	 * data是一个数组，用来描述jtag时序。格式为：
-	 * {(uint8_t)Sequence Info + (uint8_t)TDI Data...}...
-	 * 每一个Sequence Info后面紧跟着一个或多个TDI Data，根据Sequence Info[5:0]来决定
-	 * 后面跟多少个TDI Data。
-	 * Sequence Info: Contains number of TDI bits and fixed TMS value
-	 * Bit 5 .. 0: Number of TCK cycles: 1 .. 64 (64 encoded as 0)
-	 * Bit 6: TMS value
-	 * Bit 7: TDO Capture
-	 *
-	 * TDI Data: Data generated on TDI
-	 * One bit for each TCK cycle
-	 * LSB transmitted first, padded to BYTE boundary
-	 * 举个栗子：
-	 * 0x45, 0x00, 0x01, 0x00 => jtag将在TCK产生6个时钟周期；TMS序列为：111110，TDI序列为：000000
-	 * 0x04, 0x0e => jtag将在TCK产生4个时钟周期；这4个时钟周期TMS为1，TDI序列为 0111
-	 * 0xa0, 0x00, 0x00, 0x00, 0x00 => jtag将在TCK产生32个时钟周期，TMS为0，TDI为32个0，同时将TDO的数据一共32位放入response
-	 *
-	 * response是一个数组空间，用来保存输出的，具体大小需要根据你的指令去决定。如果不需要TDO则该参数为NULL。格式为：
-	 * (uint8_t)TDO Data...
-	 *
-	 * TDO Data: Data captured from TDO
-	 * One bit for each TCK cycle when TDO Capture is enabled
-	 * LSB received first, padded to BYTE boundary
-	 *
-	 * 返回值：成功：TRUE，失败：FALSE
+	 * 执行复位操作
+	 * BOOL hard：是否执行硬复位
+	 * BOOL srst：是否系统复位
+	 * int pinWait：死区时间
 	 */
-	AINS_JTAG_SEQUENCE,
+	AINS_RESET,
 	/**
-	 * 读取或写入jtag的某个引脚
-	 * 参数：uint8_t pinSelect, uint8_t pinOutput, uint8_t *pinInput, uint32_t pinWait
-	 * 其中：pinSelect是选中哪几个输出引脚需要被修改。当该值为0也就是任何引脚没有被选中时，函数只读取
-	 * 全部引脚，不对引脚进行操作。引脚映射为：
-	 * Bit 0: SWCLK/TCK
-	 * Bit 1: SWDIO/TMS
-	 * Bit 2: TDI
-	 * Bit 3: TDO
-	 * Bit 5: nTRST
-	 * Bit 7: nRESET
-	 *
-	 * pinOutput是引脚将要设置的值，引脚映射参见上面。
-	 * pinInput是当pinOutput的数据实现（全部响应或者等待pinWait超时）之后，读取全部引脚当前的值。如果不需要读取则该参数为NULL。
-	 * pinWait是死区等待时间(µs)。死区等待时间在nRESET引脚或其他引脚实现为开漏输出的系统中非常有用。
-	 * 在调试器de-assert nRESET引脚之后，外部电路可能没有立即反应，仍然将目标器件保持在复位状态一段时间。
-	 * 调试器可以监视选定的I/O引脚并等待，直到它们出现预期值或超时pinWait设置的死区时间。不可超过3秒
+	 * 读写JTAG-SWD引脚电平
+	 * pinSelect：要写入的引脚
+	 * 引脚映射：
+	 *  Bit 0: SWCLK/TCK
+	 *  Bit 1: SWDIO/TMS
+	 *  Bit 2: TDI
+	 *  Bit 3: TDO
+	 *  Bit 5: nTRST
+	 *  Bit 7: nRESET
+	 * pinData：引脚数据，数据位映射如上，写入后读取引脚状态写回。
+	 * pinWait：引脚等待时间。
+	 * 引脚等待时间在nRESET引脚实现为开漏输出的系统中非常有用。
+	 * 调试器释放nRESET后，外部电路仍然可以将目标器件保持在复位状态一段时间。
+	 * 使用引脚等待时间，调试器可能会监视选定的I/O引脚并等待，直到它们出现预期值或超时。
 	 */
 	AINS_JTAG_PINS,
 	/**
-	 * 发送一个或多个DAP协议时序，仿真器支持SWD模式时（ADAPTER_CAP_SWD置位）必须实现该方法
-	 * 参数：uint8_t index, uint8_t transferCount, uint8_t *data, uint8_t *response
-	 * 其中各参数：
-	 * index: 从0开始算起JTAG扫描链中设备的索引值。在SWD模式下该值被忽略。
-	 * transferCount: Number of transfers: 1 .. 255. For each transfer a Transfer Request BYTE is sent.
-	 * 		Depending on the request an additional Transfer Data WORD is sent.
-	 * data: Contains information about requested access from host debugger.
-	 * 		Bit 0: APnDP: 0 = Debug Port (DP), 1 = Access Port (AP).
-	 * 		Bit 1: RnW: 0 = Write Register, 1 = Read Register.
-	 * 		Bit 2: A2 Register Address bit 2.
-	 * 		Bit 3: A3 Register Address bit 3.
-	 * response:是一个数组空间，用来保存输出的，具体大小需要根据你的指令去决定。
-	 * 第一个字节：Transfer Count: Number of transfers: 1 .. 255 that are executed.
-	 * 第二个字节：Transfer Response: Contains information about last response from target Device.
-	 * 		Bit 2..0: ACK (Acknowledge) value:
-	 * 		1 = OK (for SWD protocol), OK or FAULT (for JTAG protocol),
-	 * 		2 = WAIT
-	 * 		4 = FAULT
-	 * 		7 = NO_ACK (no response from target)
-	 * 		Bit 3: 1 = Protocol Error (SWD)
-	 * Transfer Data: register value or match value in the order of the Transfer Request.
-	 * 		for Read Register transfer request: the register value of the CoreSight register.
-	 * 		no data is sent for other operations.
-	 * 返回值：只有TRUE
+	 * 执行命令队列
 	 */
-	AINS_DAP_TRANSFER,
+	AINS_JTAG_CMD_EXECUTE,	// 解析并执行JTAG队列命令
+	/**
+	 * 写DAP ABORT寄存器
+	 */
+	AINS_DAP_WRITE_ABOTR,
+	AINS_DAP_CMD_EXECUTE,	// 解析并执行DAP队列命令
 	AINS_COMM_LAST	// 分隔符，代表最后一个
-};
-
-enum connType {
-	UNKNOW,	// 未知
-	USB,	// 使用USB方式连接
-	ETHERNAET,	// 以太网，Wifi
-	SERIAL_PORT	// 串行口
 };
 
 // CMSIS-DAP Status灯
@@ -139,26 +170,41 @@ enum adapterStatus {
 	ADAPTER_STATUS_IDLE,		// Adapter空闲
 };
 
-// 仿真器的连接方式，比如使用USB、以太网、串口等等
-// 此处先实现使用usb协议的仿真器类型
-struct adapterConnector{
-	enum connType type;	// 指示当前的仿真器连接类型
-	int connectFlag;	// 是否已连接
-	union {	// 连接对象共用体
-		USBObject usbObj;
-	} object;
+// TAP对象
+struct TAP {
+	enum JTAG_TAP_Status currentStatus;	// TAP状态机当前状态
+	uint16_t TAP_Count, *TAP_Info;
+	struct list_head instrQueue;	// JTAG指令队列，元素类型：struct JTAG_Instr
+	int IR_Bits;	// IR寄存器链一共多少位
 };
 
-// 判断是否支持某些功能
-#define ADAPTER_HAS_CAPALITY(p,flags) (((p)->capablityFlag & (flags)) == (flags))
+// AP对象 TODO 没研究过JTAG AP，以后添加。
+struct ap{
+	//uint8_t apIdx;	// 当前ap的索引
+	struct {
+		uint8_t init:1;	// 该AP是否初始化过
+		uint8_t largeAddress:1;	// 该AP是否支持64位地址访问，如果支持，则TAR和ROM寄存器是64位
+		uint8_t largeData:1;	// 是否支持大于32位数据
+		uint8_t bigEndian:1;	// 是否是大端字节序，ADI5.2废弃该功能，所以该位必须为0
+		uint8_t packedTransfers:1;	// 是否支持packed传输
+		uint8_t lessWordTransfers:1;	// 是否支持小于1个字的传输
+	} ctrl_state;
+	MEM_AP_CSW_Parse CSW;	// CSW 寄存器
+};
 
-// 设置标志位
-// 如果ca的第bit位为1，则执行p->capablityFlag |= flag
-#define ADAPTER_SET_CAP(p,ca,bit,flag) \
-	if( ((ca) & (0x1 << (bit))) != 0) (p)->capablityFlag |= (flag);
-
-// 返回仿真器激活的传输类型
-#define ADAPTER_CURR_TRANS(p) ((p)->currTrans)
+// DAP对象
+struct DAP{
+	// uint8_t DP_Version;	// DP版本号
+	struct ap AP[256];	// AP列表
+	uint32_t ir;	// 当前ir寄存器
+	uint16_t DAP_Index;	// JTAG扫描链中DAP的索引，从0开始
+	DP_CTRL_STATUS_Parse CTRL_STAT_Reg;	// 当前CTRL/STAT寄存器
+	DP_SELECT_Parse SELECT_Reg;	// SELECT寄存器
+	int Retry;	// 接收到WAIT应答时重试次数
+	int IdleCycle;	// UPDATE-DR后需要等待的时钟周期数，0表示不等待
+	// DAP指令队列
+	struct list_head instrQueue;	// DAP指令队列，元素类型struct DAP_Command
+};
 
 //仿真器对象
 typedef struct AdapterObject AdapterObject;
@@ -167,26 +213,51 @@ typedef struct AdapterObject AdapterObject;
  * 仿真器提供一种或多种仿真协议(Transport)支持，比如SWD、JTAG等等
  */
 struct AdapterObject{
-	struct adapterConnector ConnObject;	// 仿真器连接对象
 	char *DeviceDesc;	// 设备描述字符
-	enum supportedAdapter AdapterClass;	// 仿真器类型
 	enum transportType currTrans;	// 当前使用的仿真协议
 	const enum transportType *supportedTrans;	// 支持的仿真协议列表（不能出现UNKNOW）
+	struct TAP tap;	// TAP对象
+	struct DAP dap;	// DAP对象
 	BOOL isInit;	// 是否已经初始化
-	BOOL (*Init)(AdapterObject *adapterObj);	// 执行初始化动作
-	BOOL (*Deinit)(AdapterObject *adapterObj);	// 反初始化（告诉我怎么形容合适）
+	BOOL (*Init)(AdapterObject *adapterObj);	// 连接仿真器，并执行初始化
+	BOOL (*Deinit)(AdapterObject *adapterObj);	// 反初始化：断开仿真器
 	BOOL (*SelectTrans)(AdapterObject *adapterObj, enum transportType type);	// 选择transport类型(当仿真器支持多个transport时)
 	BOOL (*Operate)(AdapterObject *adapterObj, int operate, ...);	// 执行动作
-	void (*Destroy)(AdapterObject *adapterObj);	// 销毁该对象
+	void (*Destroy)(AdapterObject *adapterObj);	// XXX 销毁该对象，释放相关资源
 };
 
-// 获得USBObject的指针
-#define GET_USBOBJ(pa) CAST(USBObject *, &(pa)->ConnObject.object.usbObj)
 // 获得子类的Adapter对象
 #define GET_ADAPTER(p) CAST(AdapterObject *, &(p)->AdapterObj)
+// 返回仿真器当前激活的传输类型
+#define ADAPTER_CURR_TRANS(p) ((p)->currTrans)
+
+/**
+ * 在一串数据中获得第n个二进制位，n从0开始
+ * lsb
+ * data:数据存放的位置指针
+ * n:第几位，最低位是第0位
+ */
+#define GET_Nth_BIT(data,n) ((*(CAST(uint8_t *, (data)) + ((n)>>3)) >> ((n) & 0x7)) & 0x1)
+/**
+ * 设置data的第n个二进制位
+ * data:数据存放的位置
+ * n：要修改哪一位，从0开始
+ * val：要设置的位，0或者1，只使用最低位
+ */
+#define SET_Nth_BIT(data,n,val) do{	\
+	uint8_t tmp_data = *(CAST(uint8_t *, (data)) + ((n)>>3)); \
+	tmp_data &= ~(1 << ((n) & 0x7));	\
+	tmp_data |= ((val) & 0x1) << ((n) & 0x7);	\
+	*(CAST(uint8_t *, (data)) + ((n)>>3)) = tmp_data;	\
+}while(0);
+
 
 BOOL __CONSTRUCT(Adapter)(AdapterObject *object, const char *desc);
 void __DESTORY(Adapter)(AdapterObject *object);
+
+/**
+ * 对仿真器的公共基础操作
+ */
 // 设置仿真器JTAG的CLK频率
 BOOL adapter_SetClock(AdapterObject *adapterObj, uint32_t clockHz);
 // 设置仿真器的传输方式
@@ -195,6 +266,69 @@ BOOL adapter_SelectTransmission(AdapterObject *adapterObj, enum transportType ty
 BOOL adapter_HaveTransmission(AdapterObject *adapterObj, enum transportType type);
 // 设置状态指示灯
 BOOL adapter_SetStatus(AdapterObject *adapterObj, enum adapterStatus status);
+// JTAG复位
+BOOL adapter_Reset(AdapterObject *adapterObj, BOOL hard, BOOL srst, int pinWait);
+/*
+ * JTAG基础操作
+ * 这些指令都是队列缓冲的
+ * 调用adapter_JTAG_Execute才会真正执行
+ */
+// 状态机改变
+BOOL adapter_JTAG_StatusChange(AdapterObject *adapterObj, enum JTAG_TAP_Status newStatus);
+// 交换TDI和TDO的数据
+BOOL adapter_JTAG_Exchange_IO(AdapterObject *adapterObj, uint8_t *dataPtr, int bitCount);
+// 进入IDLE状态空转几个时钟周期，一般是执行UPDATE之后会产生耗时的操作，需要等待
+BOOL adapter_JTAG_IdleWait(AdapterObject *adapterObj, int clkCnt);
+// 执行JTAG队列中的指令
+BOOL adapter_JTAG_Execute(AdapterObject *adapterObj);
+// 清空JTAG指令队列
+void adapter_JTAG_CleanCommandQueue(AdapterObject *adapterObj);
+
+/*
+ * 同步操作
+ * 复位和读取引脚状态是同步的，不会缓冲到队列，会立即获得结果
+ * 注意：复位adapter_JTAG_Reset为软复位的时候，同样会使用队列，
+ * 所以它会自动调用adapter_JTAG_Execute，之前存在于JTAG指令队列的指令也会被执行
+ */
+// 读写Pins
+BOOL adapter_JTAG_RW_Pins(AdapterObject *adapterObj, uint8_t pinSelect, uint8_t *pinData, int pinWait);
+
+/**
+ * 较高级别的JTAG TAP操作，在JTAG扫描链中有多个TAP时用到它，
+ * 根据要操作的TAP在扫描链中的位置，它会在IR和DR前后自动填充一些数据
+ * 在JTAG方式下实现DAP协议的时候会用到
+ */
+// 设置JTAG扫描链中TAP的信息
+BOOL adapter_JTAG_Set_TAP_Info(AdapterObject *adapterObj, uint16_t tapCount, uint16_t *IR_Len);
+BOOL adapter_JTAG_Wirte_TAP_IR(AdapterObject *adapterObj, uint16_t tapIndex, uint32_t IR_Data);
+BOOL adapter_JTAG_Exchange_TAP_DR(AdapterObject *adapterObj, uint16_t tapIndex, uint8_t *DR_Data, int DR_BitCnt);
+
+/**
+ * DAP基础操作
+ */
+// 设置当前DAP所在的TAP
+#define adapter_DAP_Index(pa,n) (pa)->dap.DAP_Index = (n)
+// 获得当前AP
+#define adapter_DAP_CURR_AP(pa) ((pa)->SelectReg.info.AP_Sel)
+/**
+ * TODO 完善一些检查，比如在JTAG模式下不可以访问写ABORT寄存器和读IDCODE寄存器等等
+ */
+// 读DP寄存器
+BOOL adapter_DAP_Read_DP(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, BOOL updateSelect);
+// 写DP寄存器
+BOOL adapter_DAP_Write_DP(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t data, BOOL updateSelect);
+// 读AP寄存器
+BOOL adapter_DAP_Read_AP(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, BOOL updateSelect);
+// 写AP寄存器
+BOOL adapter_DAP_Write_AP(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t data, BOOL updateSelect);
+// 执行DAP队列中的指令
+BOOL adapter_DAP_Execute(AdapterObject *adapterObj);
+// 清空DAP队列指令
+void adapter_DAP_CleanCommandQueue(AdapterObject *adapterObj);
+
+// 同步操作 写ABORT寄存器或者ABORT扫描链
+BOOL adapter_DAP_WriteAbortReg(AdapterObject *adapterObj, uint32_t data);
+
 // 返回传输方式的字符串形式
 const char *adapter_Transport2Str(enum transportType type);
 
