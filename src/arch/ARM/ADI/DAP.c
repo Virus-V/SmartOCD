@@ -12,6 +12,8 @@
 #include "misc/log.h"
 #include "debugger/adapter.h"
 
+#define TRY(x,n) if((x) == FALSE) longjmp(exception, (n))
+
 /**
  * 初始化DAP
  * 上电，复位相关寄存等
@@ -69,29 +71,53 @@ BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx){
 	}
 	// 当前select寄存器备份
 	uint32_t selectBak = adapterObj->dap.SELECT_Reg.regData;
+
+	jmp_buf exception;
+	// 错误处理
+	switch(setjmp(exception)){
+	case 1:
+		log_warn("Add New Command Failed!");
+		adapterObj->dap.SELECT_Reg.regData = selectBak;
+		return FALSE;
+
+	case 2:
+		log_warn("Execute Command Failed!");
+		adapterObj->dap.SELECT_Reg.regData = selectBak;
+		return FALSE;
+
+	default:
+		log_warn("Unknow Error.");
+		adapterObj->dap.SELECT_Reg.regData = selectBak;
+		return FALSE;
+
+	case 0:break;
+	}
+
 	// 修改当前apSel值
 	adapterObj->dap.SELECT_Reg.regInfo.AP_Sel = apIdx;
 	// 写入SELECT寄存器
-	if(DAP_Write(dapObj, 0, DP_REG_SELECT, adapterObj->dap.SELECT_Reg.regData) == FALSE){
-		log_warn("AP Selection Failed.");
-		adapterObj->dap.SELECT_Reg.regData = selectBak;
-		return FALSE;
-	}
+	TRY(adapter_DAP_Write_DP(adapterObj, SELECT, adapterObj->dap.SELECT_Reg.regData, FALSE), 1);
+	TRY(adapter_DAP_Execute(adapterObj), 2);
+
 	// 获取AP相关信息：CFG
 	if(adapterObj->dap.AP[apIdx].ctrl_state.init == 0){	// 初始化ap相关参数
-		uint32_t tmp;
-		if(DAP_AP_ReadReg(dapObj, AP_REG_CFG, &tmp) == FALSE) return FALSE;
-		adapterObj->dap.AP[apIdx].ctrl_state.largeAddress = !!(tmp & 0x2);
-		adapterObj->dap.AP[apIdx].ctrl_state.largeData = !!(tmp & 0x4);
-		adapterObj->dap.AP[apIdx].ctrl_state.bigEndian = !!(tmp & 0x1);
-		// 写入之前先读取CSW寄存器
-		if(DAP_AP_ReadReg(dapObj, AP_REG_CSW, &adapterObj->dap.AP[apIdx].CSW.regData) == FALSE) return FALSE;
-		tmp = adapterObj->dap.AP[apIdx].CSW.regData;	// 备份到tmp
+		uint32_t tmp, cfg, csw;
+		TRY(adapter_DAP_Read_AP(adapterObj, CFG, &cfg, TRUE), 1);
+		TRY(adapter_DAP_Read_AP(adapterObj, CSW, &csw, TRUE), 1);
+		TRY(adapter_DAP_Execute(adapterObj), 2);
+
+		adapterObj->dap.AP[apIdx].ctrl_state.largeAddress = !!(cfg & 0x2);
+		adapterObj->dap.AP[apIdx].ctrl_state.largeData = !!(cfg & 0x4);
+		adapterObj->dap.AP[apIdx].ctrl_state.bigEndian = !!(cfg & 0x1);
+		// 写入到本地CSW
+		adapterObj->dap.AP[apIdx].CSW.regData = csw;
 		// 写入packed模式和8位模式
 		adapterObj->dap.AP[apIdx].CSW.regInfo.AddrInc = ADDRINC_PACKED;
 		adapterObj->dap.AP[apIdx].CSW.regInfo.Size = SIZE_8;
-		if(DAP_AP_WriteReg(dapObj, AP_REG_CSW, adapterObj->dap.AP[apIdx].CSW.regData) == FALSE) return FALSE;
-		if(DAP_AP_ReadReg(dapObj, AP_REG_CSW, &adapterObj->dap.AP[apIdx].CSW.regData) == FALSE) return FALSE;
+		TRY(adapter_DAP_Write_AP(adapterObj, CSW, adapterObj->dap.AP[apIdx].CSW.regData, TRUE), 1);
+		TRY(adapter_DAP_Read_AP(adapterObj, CSW, &adapterObj->dap.AP[apIdx].CSW.regData, TRUE), 1);
+		TRY(adapter_DAP_Execute(adapterObj), 2);
+
 		/**
 		 * ARM ID080813
 		 * 第7-133
@@ -108,7 +134,8 @@ BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx){
 			adapterObj->dap.AP[apIdx].ctrl_state.lessWordTransfers = adapterObj->dap.AP[apIdx].CSW.regInfo.Size == SIZE_8 ? 1 : 0;
 		}
 		// 恢复CSW寄存器的值
-		if(DAP_AP_WriteReg(dapObj, AP_REG_CSW, tmp) == FALSE) return FALSE;
+		TRY(adapter_DAP_Write_AP(adapterObj, CSW, csw, TRUE), 1);
+		TRY(adapter_DAP_Execute(adapterObj), 2);
 		// 赋值给CSW
 		adapterObj->dap.AP[apIdx].CSW.regData = tmp;
 		adapterObj->dap.AP[apIdx].ctrl_state.init = 1;
@@ -126,19 +153,27 @@ int DAP_Find_AP(AdapterObject *adapterObj, enum ap_type apType){
 
 	for(apIdx = 0; apIdx < 256; apIdx++){
 		// 选择AP
-		if(DAP_AP_Select(dapObj, apIdx) == FALSE){
+		if(DAP_AP_Select(adapterObj, apIdx) == FALSE){
 			log_info("DAP_AP_Select fail,apIdx:%d", apIdx);
 			return FALSE;
 		}
-		if(DAP_AP_ReadReg(dapObj, AP_REG_IDR, &ap_IDR.regData) == FALSE){
+		if(adapter_DAP_Read_AP(adapterObj, IDR, &ap_IDR.regData, TRUE) == FALSE){
 			log_info("DAP_AP_Read fail,apIdx:%d", apIdx);
 			return FALSE;
 		}
-		// 检查是否有错误
-		if(DAP_CheckError(dapObj) == FALSE){
-			log_warn("Some Error Flaged! apIdx:%d.", apIdx);
+//		if(adapter_DAP_Read_DP(adapterObj, CTRL_STAT, &ap_IDR.regData, TRUE) == FALSE){
+//			log_info("DAP_AP_Read fail,apIdx:%d", apIdx);
+//			return FALSE;
+//		}
+		if(adapter_DAP_Execute(adapterObj) == FALSE){
+			log_warn("Failed to Execute DAP Command.");
 			return FALSE;
 		}
+//		// 检查是否有错误
+//		if(DAP_CheckError(dapObj) == FALSE){
+//			log_warn("Some Error Flaged! apIdx:%d.", apIdx);
+//			return FALSE;
+//		}
 		// 检查厂商
 		if(ap_IDR.regInfo.JEP106Code == JEP106_CODE_ARM){
 			if(apType == AP_TYPE_JTAG && ap_IDR.regInfo.Class == 0){	// 选择JTAG-AP
