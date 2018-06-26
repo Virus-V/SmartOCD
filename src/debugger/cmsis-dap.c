@@ -995,7 +995,7 @@ static BOOL Execute_JTAG_Cmd(uint8_t *respBuff, AdapterObject *adapterObj){
 	}
 
 	// 创建内存空间
-	log_info("CMSIS-DAP JTAG Parsed buff length: %d, read buff length: %d.", writeBuffLen, readBuffLen);
+	log_trace("CMSIS-DAP JTAG Parsed buff length: %d, read buff length: %d.", writeBuffLen, readBuffLen);
 	uint8_t *writeBuff = malloc(writeBuffLen * sizeof(uint8_t));
 	if(writeBuff == NULL){
 		log_warn("CMSIS-DAP JTAG Instruct buff allocte failed.");
@@ -1022,8 +1022,6 @@ static BOOL Execute_JTAG_Cmd(uint8_t *respBuff, AdapterObject *adapterObj){
 			break;
 		}
 	}
-	//log_debug("WriteCnt:%d, writeBuffLen:%d, seqCnt:%d.", writeCnt, writeBuffLen, seqCnt);
-	//misc_PrintBulk(writeBuff, writeBuffLen, 16);
 	// 执行指令
 	if(DAP_JTAG_Sequence(respBuff, adapterObj, seqCnt, writeBuff, readBuff) == FALSE){
 		log_warn("Execute JTAG Instruction Failed.");
@@ -1094,7 +1092,7 @@ static BOOL Execute_DAP_Cmd(uint8_t *respBuff, AdapterObject *adapterObj){
 		}
 	}
 	// 分配内存空间
-	log_info("CMSIS-DAP DAP Parsed buff length: %d, read buff length: %d.", writeBuffLen, readBuffLen);
+	log_trace("CMSIS-DAP DAP Parsed buff length: %d, read buff length: %d.", writeBuffLen, readBuffLen);
 	uint8_t *writeBuff = malloc(writeBuffLen * sizeof(uint8_t));
 	if(writeBuff == NULL){
 		log_warn("CMSIS-DAP DAP Instruct buff allocte failed.");
@@ -1139,8 +1137,6 @@ static BOOL Execute_DAP_Cmd(uint8_t *respBuff, AdapterObject *adapterObj){
 			break;
 		}
 	}
-	//log_debug("writeCnt:%d, seqCnt:%d, data:", writeCnt, seqCnt);
-	//misc_PrintBulk(writeBuff, writeBuffLen, 16);
 	// 执行成功的Sequence个数
 	int okSeqCnt = 0;
 	BOOL result = TRUE;

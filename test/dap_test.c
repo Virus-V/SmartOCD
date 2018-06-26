@@ -11,7 +11,7 @@
 
 #include "misc/log.h"
 #include "debugger/cmsis-dap.h"
-#include "arch/ARM/ADI/DAP.h"
+#include "debugger/adapter.h"
 
 extern int print_bulk(char *data, int length, int rowLen);
 
@@ -47,177 +47,259 @@ static void printAPInfo(uint32_t APIDR){
 
 }
 
-// 打印组件信息
-static void printComponentInfo(DAPObject *dapObj, uint32_t startAddr){
-	uint32_t addr, tmp, size;
-	addr = (startAddr & ~0xfff) + 0xFF4;
-	//log_info("addr:0x%08X.", addr);
-	// 读取
-	DAP_AP_WriteReg(dapObj, AP_REG_TAR_LSB, addr);
-	DAP_AP_ReadReg(dapObj, AP_REG_DRW, &tmp);
-	//log_info("CIDR4:0x%08X.", tmp);
-	// 判断组件类型
-	switch(tmp>>4){
-	case 0x0:
-		printf("Generic verification componment");
-		break;
-	case 0x1:
-		printf("ROM Table");
-		break;
-	case 0x9:
-		printf("Debug componment");
-		break;
-	case 0xb:
-		printf("Peripheral Test Block(PTB)");
-		break;
-	case 0xd:
-		printf("OptimoDE Data Engine Subsystem (DESS) componment");
-		break;
-	case 0xe:
-		printf("Generic IP Componment");
-		break;
-	case 0xf:
-		printf("PrimeCell peripheral");
-		break;
-	default:
-		printf("Unknow componment");
-		break;
-	}
-	// 计算组件占用空间大小
-	addr = (startAddr & ~0xfff) + 0xFD0;
-	DAP_AP_WriteReg(dapObj, AP_REG_TAR_LSB, addr);
-	DAP_AP_ReadReg(dapObj, AP_REG_DRW, &tmp);
-	//log_info("PIDR4:0x%08X.", tmp);
-	tmp = (tmp >> 4);
-	size = pow(2, tmp);
-	printf(",occupies %d blocks.\n", size);
-}
-
-static BOOL run = TRUE;
-
-// 错误处理函数
-static void errorHandle(DAPObject *dapObj){
-	log_error("Error:CTRL/STATUS:0x%08X.", dapObj->CTRL_STAT_Reg);
-	uint32_t ctrl_status = dapObj->CTRL_STAT_Reg;
-	run = FALSE;
-	// 过载
-	if(ctrl_status & DP_STAT_STICKYORUN){
-		log_info("Over Run!");
-		DAP_ClearStickyFlag(dapObj, DP_STAT_STICKYORUN);
-	}
-	// push verify 错误
-	if(ctrl_status & DP_STAT_STICKYERR){
-		log_info("push verify!");
-		DAP_ClearStickyFlag(dapObj, DP_STAT_STICKYERR);
-	}
-	// push cmp 错误
-	if(ctrl_status & DP_STAT_STICKYCMP){
-		log_info("push cmp!");
-		DAP_ClearStickyFlag(dapObj, DP_STAT_STICKYCMP);
-	}
-	// 写入错误
-	if(ctrl_status & DP_STAT_WDATAERR){
-		log_info("wdata error!");
-		DAP_ClearStickyFlag(dapObj, DP_STAT_WDATAERR);
-	}
-}
-
+//// 打印组件信息
+//static void printComponentInfo(DAPObject *dapObj, uint32_t startAddr){
+//	uint32_t addr, tmp, size;
+//	addr = (startAddr & ~0xfff) + 0xFF4;
+//	//log_info("addr:0x%08X.", addr);
+//	// 读取
+//	DAP_AP_WriteReg(dapObj, AP_REG_TAR_LSB, addr);
+//	DAP_AP_ReadReg(dapObj, AP_REG_DRW, &tmp);
+//	//log_info("CIDR4:0x%08X.", tmp);
+//	// 判断组件类型
+//	switch(tmp>>4){
+//	case 0x0:
+//		printf("Generic verification componment");
+//		break;
+//	case 0x1:
+//		printf("ROM Table");
+//		break;
+//	case 0x9:
+//		printf("Debug componment");
+//		break;
+//	case 0xb:
+//		printf("Peripheral Test Block(PTB)");
+//		break;
+//	case 0xd:
+//		printf("OptimoDE Data Engine Subsystem (DESS) componment");
+//		break;
+//	case 0xe:
+//		printf("Generic IP Componment");
+//		break;
+//	case 0xf:
+//		printf("PrimeCell peripheral");
+//		break;
+//	default:
+//		printf("Unknow componment");
+//		break;
+//	}
+//	// 计算组件占用空间大小
+//	addr = (startAddr & ~0xfff) + 0xFD0;
+//	DAP_AP_WriteReg(dapObj, AP_REG_TAR_LSB, addr);
+//	DAP_AP_ReadReg(dapObj, AP_REG_DRW, &tmp);
+//	//log_info("PIDR4:0x%08X.", tmp);
+//	tmp = (tmp >> 4);
+//	size = pow(2, tmp);
+//	printf(",occupies %d blocks.\n", size);
+//}
+//#define USE_JTAG
 int main(){
-	DAPObject *dapObj;
 	struct cmsis_dap cmsis_dapObj;
+	AdapterObject *adapterObj = CAST(AdapterObject *, &cmsis_dapObj);
 	log_set_level(LOG_DEBUG);
-	dapObj = calloc(1, sizeof(DAPObject));
-	if(dapObj == NULL){
-		log_fatal("failed to new dap object.");
-		return 1;
-	}
+	uint32_t dpidr = 0;
+	// 初始化CMSIS-DAP对象
 	if(NewCMSIS_DAP(&cmsis_dapObj) == FALSE){
 		log_fatal("failed to new cmsis dap.");
-		goto EXIT_STEP_0;
+		return -1;
 	}
-	// 连接CMSIS-DAP
-	if(ConnectCMSIS_DAP(&cmsis_dapObj, vids, pids, NULL) == FALSE){
+	// 连接
+	if(Connect_CMSIS_DAP(&cmsis_dapObj, vids, pids, NULL) == FALSE){
 		log_fatal("failed to connect.");
-		goto EXIT_STEP_1;
+		return -1;
 	}
-	// 同时对cmsis-dap进行初始化
-	if(__CONSTRUCT(DAP)(dapObj, GET_ADAPTER(&cmsis_dapObj)) == FALSE){
-		log_fatal("Target initialization failed.");
-		goto EXIT_STEP_1;
+	// 初始化adapter
+	adapterObj->Init(adapterObj);
+	adapter_SetStatus(adapterObj, ADAPTER_STATUS_RUNING);
+	// 设置频率
+	adapter_SetClock(adapterObj, 5000000);	// 5MHz
+	// CMSIS-DAP专用函数
+	CMSIS_DAP_TransferConfigure(adapterObj,  5, 5, 5);
+	CMSIS_DAP_SWD_Configure(adapterObj, 0);
+#ifdef USE_JTAG
+	// 选择JTAG传输方式
+	if(adapter_SelectTransmission(adapterObj, JTAG) == FALSE){
+		log_fatal("failed to select JTAG.");
+		return -1;
 	}
-	// 设置SWJ频率，最大30MHz
-	adapter_SetClock(GET_ADAPTER(&cmsis_dapObj), 100000u);
-	// 切换到JTAG模式
-	adapter_SelectTransmission(GET_ADAPTER(&cmsis_dapObj), JTAG);
-	// 设置DAP在JTAG扫描链的索引值
-	DAP_Set_TAP_Index(dapObj, 0);
-	// 设置DAP WAIT响应的重试次数
-	DAP_SetRetry(dapObj, 10);
-	// 设置错误回调函数
-	DAP_SetErrorHandle(dapObj, errorHandle);
-	// 复位TAP
-	// TAP_Reset(dapObj, FALSE, 0);
-	// 声明TAP
-	uint16_t irLens[] = {4};
-	log_debug("target_JTAG_Set_TAP_Info:%d.", TAP_SetInfo(&dapObj->tapObj, 1, irLens));
-	// 写入Abort寄存器
-	//DAP_WriteAbort(dapObj, 0x1);
+	// 复位
+	adapter_Reset(adapterObj, FALSE, FALSE, 0);
+	uint32_t idcode[2] = {0,0};
+	adapter_JTAG_StatusChange(adapterObj, JTAG_TAP_DRSHIFT);
+	adapter_JTAG_Exchange_IO(adapterObj, CAST(uint8_t *, idcode), 64);
+	adapter_JTAG_StatusChange(adapterObj, JTAG_TAP_IDLE);	// 要保持在IDLE状态，JTAG模式下DAP_Transfer才能用
+	adapter_JTAG_Execute(adapterObj);
+	log_debug("Origin Method read IDCODE: 0x%08X, 0x%08X.", idcode[0], idcode[1]);
 
-	DAP_DP_WriteReg(dapObj, DP_REG_SELECT, 0);
-	// 上电
-	DAP_DP_WriteReg(dapObj, DP_REG_CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ);
-	// 等待上电完成
-	do {
-		if(DAP_DP_ReadReg(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData) == FALSE){
-			log_fatal("Read CTRL_STAT Failed.");
-			goto EXIT_STEP_2;
-		}
-	} while((dapObj->CTRL_STAT_Reg.regData & (DP_STAT_CDBGPWRUPACK | DP_STAT_CSYSPWRUPACK)) != (DP_STAT_CDBGPWRUPACK | DP_STAT_CSYSPWRUPACK));
-	log_info("Power up.");
-	log_debug("CTRL/STAT: 0x%08X.", dapObj->CTRL_STAT_Reg.regData);
-	// 读取DPIDR寄存器
-	uint32_t dpidr = 0;
-	DAP_DP_ReadReg(dapObj, DP_REG_DPIDR, &dpidr);
-	log_debug("IDR: 0x%08X.", dpidr);
-	DAP_DP_ReadReg(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
-	log_debug("CTRL/STAT: 0x%08X.", dapObj->CTRL_STAT_Reg.regData);
-
-	// 写入初始化数据
-	DAP_DP_WriteReg(dapObj,  DP_REG_CTRL_STAT, dapObj->CTRL_STAT_Reg.regData | DP_CTRL_TRNNORMAL | DP_CTRL_MASKLANEMSK);	// 不启用过载检测
-
-	// 读取AP的IDR
-	time_t t_start, t_end;
-	uint32_t romtable = 0;
-	uint32_t tmp = 0, addr;
-	int32_t componentOffset;	// 组件偏移地址
-	uint32_t componentAddr;
-
-	BOOL result;
-	t_start = time(NULL) ;
-	for(int ap=0;ap<3;ap++){
-		// 修改select选中ap
-		if(DAP_AP_Select(dapObj, ap) == FALSE) {
-			// write abort;
-			DAP_DP_ReadReg(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
-			log_warn("Write SELECT Failed, CTRL : 0x%08X.", dapObj->CTRL_STAT_Reg.regData);
-			goto EXIT_STEP_2;
-		}
-		// 读取AP的IDR
-		result = DAP_AP_ReadReg(dapObj, AP_REG_IDR, &tmp);
-		DAP_CheckStatus(dapObj, FALSE);
-		if(!run){
-			goto EXIT_STEP_2;
-		}
-		if(tmp != 0){
-			printf("probe AP: 0x%X => 0x%08X\n", ap, tmp);
-			printAPInfo(tmp);
-			printf("---------------------------\n");
-		}
+	uint8_t irs[2] = {4, 5};
+	// 设置JTAG信息
+	CMSIS_DAP_JTAG_Configure(adapterObj, 2, irs);
+	CMSIS_DAP_TransferConfigure(adapterObj, 5, 5, 5);
+	// 选中第0个TAP为DAP
+	adapter_DAP_Index(adapterObj, 0);
+#else
+	// 选择SWD传输方式
+	if(adapter_SelectTransmission(adapterObj, SWD) == FALSE){
+		log_fatal("failed to select SWD.");
+		return -1;
+	}
+#endif
+	// 初始化DAP
+	if(DAP_Init(adapterObj) == FALSE){
+		log_fatal("Failed To Init DAP!");
+		return -1;
+	}
+	// 寻找AP
+	int apIdx = DAP_Find_AP(adapterObj, AP_TYPE_AMBA_AHB);
+	if(apIdx == -1){
+		log_fatal("Find APB-AP Failed!");
+		return -1;
+	}else{
+		log_info("APB-AP in %d.", apIdx);
+	}
+	// 写入TAR
+//	if(DAP_Write_TAR(adapterObj, 0x08000000u) == FALSE){
+//		log_fatal("Write TAR Failed!");
+//		return -1;
+//	}
+	// 读取数据测试
+	uint32_t data_tmp;
+	uint8_t char_tmp;
+	log_info("Word Read Test.");
+	if(DAP_ReadMem32(adapterObj, 0x08000000u, &data_tmp) == FALSE){
+		log_fatal("Read 0x08000000 Failed!");
+		return -1;
+	}else{
+		log_info("0x08000000 => 0x%08X.", data_tmp);
 	}
 
+	if(DAP_ReadMem32(adapterObj, 0x08000010u, &data_tmp) == FALSE){
+		log_fatal("Read 0x08000010 Failed!");
+		return -1;
+	}else{
+		log_info("0x08000010 => 0x%08X.", data_tmp);
+	}
+	log_info("Byte Read Test.");
+	// 读取字节
+	if(DAP_ReadMem8(adapterObj, 0x08000000u, &char_tmp) == FALSE){
+		log_fatal("Read 0x08000000 Failed!");
+		return -1;
+	}else{
+		log_info("0x08000000 => 0x%08X.", char_tmp);
+	}
+	if(DAP_ReadMem8(adapterObj, 0x08000011u, &char_tmp) == FALSE){
+		log_fatal("Read 0x08000011 Failed!");
+		return -1;
+	}else{
+		log_info("0x08000011 => 0x%08X.", char_tmp);
+	}
+	if(DAP_ReadMem8(adapterObj, 0x08000002u, &char_tmp) == FALSE){
+		log_fatal("Read 0x08000002 Failed!");
+		return -1;
+	}else{
+		log_info("0x08000002 => 0x%08X.", char_tmp);
+	}
+	if(DAP_ReadMem8(adapterObj, 0x08000013u, &char_tmp) == FALSE){
+		log_fatal("Read 0x08000013 Failed!");
+		return -1;
+	}else{
+		log_info("0x08000013 => 0x%08X.", char_tmp);
+	}
 
-	t_end = time(NULL);
-	printf("time: %.0f s\n", difftime(t_end,t_start));
+	uint16_t hword_tmp;
+	// 读取半字
+	log_info("Half word Read Test.");
+	if(DAP_ReadMem16(adapterObj, 0x08000000u, &hword_tmp) == FALSE){
+		log_fatal("Read 0x08000000 Failed!");
+		return -1;
+	}else{
+		log_info("0x08000000 => 0x%08X.", hword_tmp);
+	}
+	if(DAP_ReadMem16(adapterObj, 0x08000002u, &hword_tmp) == FALSE){
+		log_fatal("Read 0x08000002 Failed!");
+		return -1;
+	}else{
+		log_info("0x08000002 => 0x%08X.", hword_tmp);
+	}
+
+	if(DAP_ReadMem16(adapterObj, 0x08000010u, &hword_tmp) == FALSE){
+		log_fatal("Read 0x08000010 Failed!");
+		return -1;
+	}else{
+		log_info("0x08000010 => 0x%08X.", hword_tmp);
+	}
+	if(DAP_ReadMem16(adapterObj, 0x08000012u, &hword_tmp) == FALSE){
+		log_fatal("Read 0x08000012 Failed!");
+		return -1;
+	}else{
+		log_info("0x08000012 => 0x%08X.", hword_tmp);
+	}
+
+	log_info("Word Write Test.");
+	// 写入数据测试
+	if(DAP_WriteMem32(adapterObj, 0x20000000u, 0x12345678u) == FALSE){
+		log_fatal("Write 0x20000000 Failed!");
+		return -1;
+	}
+	// 读取结果
+	if(DAP_ReadMem32(adapterObj, 0x20000000u, &data_tmp) == FALSE){
+		log_fatal("Read 0x20000000 Failed!");
+		return -1;
+	}else{
+		log_info("0x20000000 => 0x%08X.", data_tmp);
+	}
+
+	log_info("Byte Write Test.");
+	// 清零
+	if(DAP_WriteMem32(adapterObj, 0x20000000u, 0x0u) == FALSE){
+		log_fatal("Write 0x20000000 Failed!");
+		return -1;
+	}
+	// 写入字节
+	if(DAP_WriteMem8(adapterObj, 0x20000000u, 0x12u) == FALSE){
+		log_fatal("Write 0x20000000 Failed!");
+		return -1;
+	}
+	if(DAP_WriteMem8(adapterObj, 0x20000001u, 0x34u) == FALSE){
+		log_fatal("Write 0x20000001 Failed!");
+		return -1;
+	}
+	if(DAP_WriteMem8(adapterObj, 0x20000002u, 0x56u) == FALSE){
+		log_fatal("Write 0x20000002 Failed!");
+		return -1;
+	}
+	if(DAP_WriteMem8(adapterObj, 0x20000003u, 0x78u) == FALSE){
+		log_fatal("Write 0x20000003 Failed!");
+		return -1;
+	}
+	// 读取结果
+	if(DAP_ReadMem32(adapterObj, 0x20000000u, &data_tmp) == FALSE){
+		log_fatal("Read 0x20000000 Failed!");
+		return -1;
+	}else{
+		log_info("0x20000000 => 0x%08X.", data_tmp);
+	}
+
+	log_info("Half Word Write Test.");
+	if(DAP_WriteMem16(adapterObj, 0x20000000u, 0xdeadu) == FALSE){
+		log_fatal("Write 0x20000000 Failed!");
+		return -1;
+	}
+	if(DAP_WriteMem16(adapterObj, 0x20000002u, 0xbeefu) == FALSE){
+		log_fatal("Write 0x20000002 Failed!");
+		return -1;
+	}
+	// 读取结果
+	if(DAP_ReadMem32(adapterObj, 0x20000000u, &data_tmp) == FALSE){
+		log_fatal("Read 0x20000000 Failed!");
+		return -1;
+	}else{
+		log_info("0x20000000 => 0x%08X.", data_tmp);
+	}
+	adapterObj->Deinit(adapterObj);	// 断开连接
+	adapterObj->Destroy(adapterObj);	// 销毁结构
+	return 0;
+
 
 	/**
 	 *  probe AP: 0x0 => 0x24770004
@@ -233,60 +315,5 @@ int main(){
 		Revision:0x1, Manufacturer:0x23b, Variant:0x1.
 		---------------------------
 	 */
-	if(DAP_AP_Select(dapObj, 1) == FALSE) {
-		// write abort;
-		DAP_DP_ReadReg(dapObj, DP_REG_CTRL_STAT, &dapObj->CTRL_STAT_Reg.regData);
-		log_warn("Write SELECT Failed, CTRL : 0x%08X.", dapObj->CTRL_STAT_Reg.regData);
-		goto EXIT_STEP_2;
-	}
-	// 读取ROM Table的基址
-	DAP_AP_ReadReg(dapObj, AP_REG_ROM_LSB, &romtable);
-	// 读取CFG寄存器
-	DAP_AP_ReadReg(dapObj, AP_REG_CFG, &tmp);
-	log_info("CFG [LD,LA,BE]:%X.", tmp);
-	// 写入CSW。Privileged,Data, TAR not INC
-	DAP_AP_WriteReg(dapObj, AP_REG_CSW, 0xB0000040u | AP_CSW_SIZE32);
-	// ROM Table的首地址
-	romtable = romtable & ~0xfff;
-	addr = romtable;
-	log_info("ROM Table Base: 0x%08X.", addr);
-	uint32_t ROM_TableEntry;
-	do{
-		// ROM Table[11:0]不在BaseAddr里面，[1]为1代表该寄存器是ADIv5的类型，[0]代表是否存在DebugEntry
-		// 注意还有Lagacy format要看一下资料
-		DAP_AP_WriteReg(dapObj, AP_REG_TAR_LSB, addr);	// 将ROM TABLE写入到TAR寄存器
-		DAP_AP_ReadReg(dapObj, AP_REG_DRW, &ROM_TableEntry);
-		//log_info("ROM Table Entry:0x%08X.", ROM_TableEntry);
-		// 求出偏移地址
-		componentOffset = 0xfffff000 & ROM_TableEntry;
-		// 计算组件的地址
-		componentAddr = romtable + componentOffset;
-		if(ROM_TableEntry != 0){
-			//log_info("Component Base Addr: 0x%08X.", componentAddr);
-			printComponentInfo(dapObj, componentAddr);
-		}
-		addr += 4;
-	}while(ROM_TableEntry != 0);
-	/*
-	addr = (romtable & ~0xfff) | 0xFCC;
-	adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_TAR_LSB, addr);
-	adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &int_val);
-	log_info("Mem Type: %x.", int_val);
-	for(idx=0xFD0; idx < 0xFFF; idx += 4){
-		addr = (romtable & ~0xfff) | idx;
-		adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_TAR_LSB, addr);
-		adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &int_val);
-		log_info("0x%03X:0x%08X.", idx, int_val);
-	}
-	 */
 
-
-EXIT_STEP_2:
-	// 释放对象
-	__DESTORY(DAP)(dapObj);
-EXIT_STEP_1:
-	GET_ADAPTER(&cmsis_dapObj)->Destroy(&cmsis_dapObj);
-EXIT_STEP_0:
-	free(dapObj);
-	return 0;
 }

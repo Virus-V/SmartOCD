@@ -231,6 +231,10 @@ union PackedTransferData{
 	uint8_t data_8[4];
 };
 
+// 获得当前AP
+#define DAP_CURR_AP(pa) (pa)->dap.SELECT_Reg.regInfo.AP_Sel
+
+typedef struct AdapterObject AdapterObject;
 /**
  * DAP初始化
  * Find AP
@@ -242,5 +246,16 @@ union PackedTransferData{
  * 打印ROM Table
  */
 BOOL DAP_Init(AdapterObject *adapterObj);
-
+BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx);
+int DAP_Find_AP(AdapterObject *adapterObj, enum ap_type apType);
+BOOL DAP_Read_TAR(AdapterObject *adapterObj, uint64_t *address_out);
+BOOL DAP_Write_TAR(AdapterObject *adapterObj, uint64_t address_in);
+BOOL DAP_ReadMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t *data_out);
+BOOL DAP_ReadMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t *data_out);
+BOOL DAP_ReadMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t *data_out);
+BOOL DAP_ReadMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t *data_out);
+BOOL DAP_WriteMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t data_in);
+BOOL DAP_WriteMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t data_in);
+BOOL DAP_WriteMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t data_in);
+BOOL DAP_WriteMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t data_in);
 #endif /* SRC_ARCH_ARM_ADI_DAP_H_ */
