@@ -195,7 +195,7 @@ struct ap{
 	struct {
 		uint8_t init:1;	// 该AP是否初始化过
 		uint8_t largeAddress:1;	// 该AP是否支持64位地址访问，如果支持，则TAR和ROM寄存器是64位
-		uint8_t largeData:1;	// 是否支持大于32位数据
+		uint8_t largeData:1;	// 是否支持大于32位数据传输
 		uint8_t bigEndian:1;	// 是否是大端字节序，ADI5.2废弃该功能，所以该位必须为0
 		uint8_t packedTransfers:1;	// 是否支持packed传输
 		uint8_t lessWordTransfers:1;	// 是否支持小于1个字的传输

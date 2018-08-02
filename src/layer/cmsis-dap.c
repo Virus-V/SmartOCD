@@ -79,9 +79,14 @@ static int cmsis_dap_connect(lua_State *L){
 	return 0;	// 1个参数，布尔值
 }
 
+
+
 static const luaL_Reg lib_cmsis_dap_f[] = {
 	{"new", cmsis_dap_new},
 	{"connect", cmsis_dap_connect},
+	{"dap_jtag_configure", NULL},
+	{"dap_transferConfigure", NULL},
+	{"dap_swd_configure", NULL},
 	{NULL, NULL}
 };
 
