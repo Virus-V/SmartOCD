@@ -197,11 +197,11 @@ BOOL DAP_Read_TAR(AdapterObject *adapterObj, uint64_t *address_out){
 	// 如果支持Large Address
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1 &&
 			adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.largeAddress == 1){
-		if(adapter_DAP_Read_AP(adapterObj, TAR_MSB, &tmp, TRUE) == FALSE) return FALSE;
+		if(adapter_DAP_Read_AP_Single(adapterObj, TAR_MSB, &tmp, TRUE) == FALSE) return FALSE;
 		addr = tmp;
 		addr <<= 32;	// 移到高32位
 	}
-	if(adapter_DAP_Read_AP(adapterObj, TAR_LSB, &tmp, TRUE) == FALSE) return FALSE;
+	if(adapter_DAP_Read_AP_Single(adapterObj, TAR_LSB, &tmp, TRUE) == FALSE) return FALSE;
 	// 执行指令
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
 		adapter_DAP_CleanCommandQueue(adapterObj);
@@ -222,10 +222,10 @@ BOOL DAP_Write_TAR(AdapterObject *adapterObj, uint64_t address_in){
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1 &&
 			adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.largeAddress == 1){
 		// 将地址的高32位写入TAR_MSB
-		if(adapter_DAP_Write_AP(adapterObj, TAR_MSB, (uint32_t)(address_in >> 32), TRUE) == FALSE) return FALSE;
+		if(adapter_DAP_Write_AP_Single(adapterObj, TAR_MSB, (uint32_t)(address_in >> 32), TRUE) == FALSE) return FALSE;
 	}
 	// 将低32位写入TAR_LSB
-	if(adapter_DAP_Write_AP(adapterObj, TAR_LSB, (uint32_t)(address_in & 0xffffffffu), TRUE) == FALSE) return FALSE;
+	if(adapter_DAP_Write_AP_Single(adapterObj, TAR_LSB, (uint32_t)(address_in & 0xffffffffu), TRUE) == FALSE) return FALSE;
 	// 执行指令
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
 		adapter_DAP_CleanCommandQueue(adapterObj);
@@ -254,7 +254,7 @@ BOOL DAP_ReadMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t *data_out){
 	}
 	// 是否需要更新CSW寄存器？
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData != cswTmp.regData){
-		if(adapter_DAP_Write_AP(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
+		if(adapter_DAP_Write_AP_Single(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
 			return FALSE;
 		}
 	}
@@ -264,7 +264,7 @@ BOOL DAP_ReadMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t *data_out){
 	adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = cswTmp.regData;
 	uint32_t data_tmp = 0;
 	// 读取数据，根据byte lane获得数据
-	if(adapter_DAP_Read_AP(adapterObj, DRW, &data_tmp, TRUE) == FALSE) return FALSE;
+	if(adapter_DAP_Read_AP_Single(adapterObj, DRW, &data_tmp, TRUE) == FALSE) return FALSE;
 	// 执行指令队列
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
 		return FALSE;
@@ -298,7 +298,7 @@ BOOL DAP_ReadMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t *data_out)
 	}
 	// 是否需要更新CSW寄存器？
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData != cswTmp.regData){
-		if(adapter_DAP_Write_AP(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
+		if(adapter_DAP_Write_AP_Single(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
 			return FALSE;
 		}
 	}
@@ -308,7 +308,7 @@ BOOL DAP_ReadMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t *data_out)
 	adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = cswTmp.regData;
 	uint32_t data_tmp = 0;
 	// 读取数据，根据byte lane获得数据
-	if(adapter_DAP_Read_AP(adapterObj, DRW, &data_tmp, TRUE) == FALSE) return FALSE;
+	if(adapter_DAP_Read_AP_Single(adapterObj, DRW, &data_tmp, TRUE) == FALSE) return FALSE;
 	// 执行指令队列
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
 		return FALSE;
@@ -338,7 +338,7 @@ BOOL DAP_ReadMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t *data_out)
 	cswTmp.regInfo.Size = SIZE_32;	// Word
 	// 是否需要更新CSW寄存器？
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData != cswTmp.regData){
-		if(adapter_DAP_Write_AP(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
+		if(adapter_DAP_Write_AP_Single(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
 			return FALSE;
 		}
 	}
@@ -348,7 +348,7 @@ BOOL DAP_ReadMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t *data_out)
 	adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = cswTmp.regData;
 
 	// 读取数据，根据byte lane获得数据
-	if(adapter_DAP_Read_AP(adapterObj, DRW, data_out, TRUE) == FALSE) return FALSE;
+	if(adapter_DAP_Read_AP_Single(adapterObj, DRW, data_out, TRUE) == FALSE) return FALSE;
 	// 执行指令队列
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
 		return FALSE;
@@ -383,7 +383,7 @@ BOOL DAP_ReadMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t *data_out)
 	}
 	// 是否需要更新CSW寄存器？
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData != cswTmp.regData){
-		if(adapter_DAP_Write_AP(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
+		if(adapter_DAP_Write_AP_Single(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
 			return FALSE;
 		}
 	}
@@ -393,8 +393,8 @@ BOOL DAP_ReadMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t *data_out)
 	adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = cswTmp.regData;
 	uint32_t data_tmp[2];	// 定义64位数据
 	// 读取数据，第一次读取的是低位，接下来读取高位，必须两次读取后才能完成本次AP Memory access
-	if(adapter_DAP_Read_AP(adapterObj, DRW, data_tmp, TRUE) == FALSE) return FALSE;
-	if(adapter_DAP_Read_AP(adapterObj, DRW, data_tmp + 1, TRUE) == FALSE) return FALSE;
+	if(adapter_DAP_Read_AP_Single(adapterObj, DRW, data_tmp, TRUE) == FALSE) return FALSE;
+	if(adapter_DAP_Read_AP_Single(adapterObj, DRW, data_tmp + 1, TRUE) == FALSE) return FALSE;
 	// 执行指令队列
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
 		return FALSE;
@@ -422,7 +422,7 @@ BOOL DAP_WriteMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t data_in){
 	}
 	// 是否需要更新CSW寄存器？
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData != cswTmp.regData){
-		if(adapter_DAP_Write_AP(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
+		if(adapter_DAP_Write_AP_Single(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
 			return FALSE;
 		}
 	}
@@ -433,7 +433,7 @@ BOOL DAP_WriteMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t data_in){
 	// 放到Byte Lane确定的位置
 	uint32_t data_tmp = data_in << ((addr & 3) << 3);
 	// 读取数据，根据byte lane获得数据
-	if(adapter_DAP_Write_AP(adapterObj, DRW, data_tmp, TRUE) == FALSE) return FALSE;
+	if(adapter_DAP_Write_AP_Single(adapterObj, DRW, data_tmp, TRUE) == FALSE) return FALSE;
 	// 执行指令队列
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
 		return FALSE;
@@ -465,7 +465,7 @@ BOOL DAP_WriteMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t data_in){
 	}
 	// 是否需要更新CSW寄存器？
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData != cswTmp.regData){
-		if(adapter_DAP_Write_AP(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
+		if(adapter_DAP_Write_AP_Single(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
 			return FALSE;
 		}
 	}
@@ -476,7 +476,7 @@ BOOL DAP_WriteMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t data_in){
 	// 放到Byte Lane确定的位置
 	uint32_t data_tmp = data_in << ((addr & 3) << 3);
 	// 读取数据，根据byte lane获得数据
-	if(adapter_DAP_Write_AP(adapterObj, DRW, data_tmp, TRUE) == FALSE) return FALSE;
+	if(adapter_DAP_Write_AP_Single(adapterObj, DRW, data_tmp, TRUE) == FALSE) return FALSE;
 	// 执行指令队列
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
 		return FALSE;
@@ -504,7 +504,7 @@ BOOL DAP_WriteMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t data_in){
 	cswTmp.regInfo.Size = SIZE_32;	// Word
 	// 是否需要更新CSW寄存器？
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData != cswTmp.regData){
-		if(adapter_DAP_Write_AP(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
+		if(adapter_DAP_Write_AP_Single(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
 			return FALSE;
 		}
 	}
@@ -514,7 +514,7 @@ BOOL DAP_WriteMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t data_in){
 	adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = cswTmp.regData;
 
 	// 读取数据，根据byte lane获得数据
-	if(adapter_DAP_Write_AP(adapterObj, DRW, data_in, TRUE) == FALSE) return FALSE;
+	if(adapter_DAP_Write_AP_Single(adapterObj, DRW, data_in, TRUE) == FALSE) return FALSE;
 	// 执行指令队列
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
 		return FALSE;
@@ -549,7 +549,7 @@ BOOL DAP_WriteMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t data_in){
 	}
 	// 是否需要更新CSW寄存器？
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData != cswTmp.regData){
-		if(adapter_DAP_Write_AP(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
+		if(adapter_DAP_Write_AP_Single(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
 			return FALSE;
 		}
 	}
@@ -558,8 +558,8 @@ BOOL DAP_WriteMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t data_in){
 	// TAR已更新，同步CSW
 	adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = cswTmp.regData;
 	// XXX 写入数据，先写低位，再写高位，最后一个高位写完后才初始化Memory access
-	if(adapter_DAP_Write_AP(adapterObj, DRW, data_in & 0xffffffffu, TRUE) == FALSE) return FALSE;
-	if(adapter_DAP_Write_AP(adapterObj, DRW, data_in >> 32, TRUE) == FALSE) return FALSE;
+	if(adapter_DAP_Write_AP_Single(adapterObj, DRW, data_in & 0xffffffffu, TRUE) == FALSE) return FALSE;
+	if(adapter_DAP_Write_AP_Single(adapterObj, DRW, data_in >> 32, TRUE) == FALSE) return FALSE;
 	// 执行指令队列
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
 		return FALSE;
