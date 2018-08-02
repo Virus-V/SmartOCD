@@ -231,6 +231,7 @@ union PackedTransferData{
 	uint8_t data_8[4];
 };
 
+typedef struct AdapterObject AdapterObject;
 /**
  * DAP初始化
  * Find AP

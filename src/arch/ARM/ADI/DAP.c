@@ -22,8 +22,8 @@ BOOL DAP_Init(AdapterObject *adapterObj){
 	assert(adapterObj != NULL);
 	if(adapterObj->currTrans == SWD){
 		uint32_t dpidr = 0;
-		adapter_DAP_Read_DP(adapterObj, DPIDR, &dpidr, FALSE);
-		adapter_DAP_Write_DP(adapterObj, ABORT, 0x1e, FALSE);	// 清空ERROR
+		adapter_DAP_Read_DP_Single(adapterObj, DPIDR, &dpidr, FALSE);
+		adapter_DAP_Write_DP_Single(adapterObj, ABORT, 0x1e, FALSE);	// 清空ERROR
 		adapter_DAP_Execute(adapterObj);
 		log_info("DAP DPIDR:0x%08X.", dpidr);
 	}else if(adapterObj->currTrans == JTAG){
@@ -37,23 +37,23 @@ BOOL DAP_Init(AdapterObject *adapterObj){
 	}
 	uint32_t ctrl_stat = 0;
 	// 清零SELECT寄存器
-	adapter_DAP_Write_DP(adapterObj, SELECT, 0, FALSE);
+	adapter_DAP_Write_DP_Single(adapterObj, SELECT, 0, FALSE);
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
 		log_fatal("SELECT Register Clean Failed.");
 		return -1;
 	}
 	// 读取SELECT寄存器
-	adapter_DAP_Read_DP(adapterObj, SELECT, &adapterObj->dap.SELECT_Reg.regData, FALSE);
+	adapter_DAP_Read_DP_Single(adapterObj, SELECT, &adapterObj->dap.SELECT_Reg.regData, FALSE);
 	adapter_DAP_Execute(adapterObj);
 
 	// 写0x20到CTRL，并读取
-	adapter_DAP_Write_DP(adapterObj, CTRL_STAT, 0x20, TRUE);
-	adapter_DAP_Read_DP(adapterObj, CTRL_STAT, &ctrl_stat, TRUE);
+	adapter_DAP_Write_DP_Single(adapterObj, CTRL_STAT, 0x20, TRUE);
+	adapter_DAP_Read_DP_Single(adapterObj, CTRL_STAT, &ctrl_stat, TRUE);
 	// 写上电请求
-	adapter_DAP_Write_DP(adapterObj, CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ, TRUE);
+	adapter_DAP_Write_DP_Single(adapterObj, CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ, TRUE);
 	adapter_DAP_Execute(adapterObj);
 	do{
-		adapter_DAP_Read_DP(adapterObj, CTRL_STAT, &ctrl_stat, TRUE);
+		adapter_DAP_Read_DP_Single(adapterObj, CTRL_STAT, &ctrl_stat, TRUE);
 		adapter_DAP_Execute(adapterObj);
 	}while((ctrl_stat & (DP_STAT_CDBGPWRUPACK | DP_STAT_CSYSPWRUPACK)) != (DP_STAT_CDBGPWRUPACK | DP_STAT_CSYSPWRUPACK));
 	log_debug("DAP Power up. CTRL_STAT:0x%08X.", ctrl_stat);
@@ -96,14 +96,14 @@ BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx){
 	// 修改当前apSel值
 	adapterObj->dap.SELECT_Reg.regInfo.AP_Sel = apIdx;
 	// 写入SELECT寄存器
-	TRY(adapter_DAP_Write_DP(adapterObj, SELECT, adapterObj->dap.SELECT_Reg.regData, FALSE), 1);
+	TRY(adapter_DAP_Write_DP_Single(adapterObj, SELECT, adapterObj->dap.SELECT_Reg.regData, FALSE), 1);
 	TRY(adapter_DAP_Execute(adapterObj), 2);
 
 	// 获取AP相关信息：CFG
 	if(adapterObj->dap.AP[apIdx].ctrl_state.init == 0){	// 初始化ap相关参数
 		uint32_t tmp, cfg, csw;
-		TRY(adapter_DAP_Read_AP(adapterObj, CFG, &cfg, TRUE), 1);
-		TRY(adapter_DAP_Read_AP(adapterObj, CSW, &csw, TRUE), 1);
+		TRY(adapter_DAP_Read_AP_Single(adapterObj, CFG, &cfg, TRUE), 1);
+		TRY(adapter_DAP_Read_AP_Single(adapterObj, CSW, &csw, TRUE), 1);
 		TRY(adapter_DAP_Execute(adapterObj), 2);
 
 		adapterObj->dap.AP[apIdx].ctrl_state.largeAddress = !!(cfg & 0x2);
@@ -114,8 +114,8 @@ BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx){
 		// 写入packed模式和8位模式
 		adapterObj->dap.AP[apIdx].CSW.regInfo.AddrInc = ADDRINC_PACKED;
 		adapterObj->dap.AP[apIdx].CSW.regInfo.Size = SIZE_8;
-		TRY(adapter_DAP_Write_AP(adapterObj, CSW, adapterObj->dap.AP[apIdx].CSW.regData, TRUE), 1);
-		TRY(adapter_DAP_Read_AP(adapterObj, CSW, &adapterObj->dap.AP[apIdx].CSW.regData, TRUE), 1);
+		TRY(adapter_DAP_Write_AP_Single(adapterObj, CSW, adapterObj->dap.AP[apIdx].CSW.regData, TRUE), 1);
+		TRY(adapter_DAP_Read_AP_Single(adapterObj, CSW, &adapterObj->dap.AP[apIdx].CSW.regData, TRUE), 1);
 		TRY(adapter_DAP_Execute(adapterObj), 2);
 
 		/**
@@ -134,7 +134,7 @@ BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx){
 			adapterObj->dap.AP[apIdx].ctrl_state.lessWordTransfers = adapterObj->dap.AP[apIdx].CSW.regInfo.Size == SIZE_8 ? 1 : 0;
 		}
 		// 恢复CSW寄存器的值
-		TRY(adapter_DAP_Write_AP(adapterObj, CSW, csw, TRUE), 1);
+		TRY(adapter_DAP_Write_AP_Single(adapterObj, CSW, csw, TRUE), 1);
 		TRY(adapter_DAP_Execute(adapterObj), 2);
 		// 赋值给CSW
 		adapterObj->dap.AP[apIdx].CSW.regData = tmp;
@@ -157,7 +157,7 @@ int DAP_Find_AP(AdapterObject *adapterObj, enum ap_type apType){
 			log_info("DAP_AP_Select fail,apIdx:%d", apIdx);
 			return FALSE;
 		}
-		if(adapter_DAP_Read_AP(adapterObj, IDR, &ap_IDR.regData, TRUE) == FALSE){
+		if(adapter_DAP_Read_AP_Single(adapterObj, IDR, &ap_IDR.regData, TRUE) == FALSE){
 			log_info("DAP_AP_Read fail,apIdx:%d", apIdx);
 			return FALSE;
 		}

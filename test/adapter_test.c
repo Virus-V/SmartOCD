@@ -67,36 +67,42 @@ int main(){
 	CMSIS_DAP_SWD_Configure(adapterObj, 0);
 	// SWD模式下第一个读取的寄存器必须要是DPIDR，这样才能读取其他的寄存器
 	// 否则其他寄存器无法读取
-	adapter_DAP_Read_DP(adapterObj, DPIDR, &dpidr, FALSE);
-	adapter_DAP_Write_DP(adapterObj, ABORT, 0x1e, FALSE);	// 清空ERROR
+	adapter_DAP_Read_DP_Single(adapterObj, DPIDR, &dpidr, FALSE);
+	adapter_DAP_Write_DP_Single(adapterObj, ABORT, 0x1e, FALSE);	// 清空ERROR
 #endif
 	// 初始化动作
 	int ctrl_stat = 0;
-	adapter_DAP_Write_DP(adapterObj, SELECT, 0, FALSE);
+	adapter_DAP_Write_DP_Single(adapterObj, SELECT, 0, FALSE);
 
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
 		log_fatal("SELECT Register Clean Failed.");
 		return -1;
 	}
 
-	adapter_DAP_Read_DP(adapterObj, SELECT, &adapterObj->dap.SELECT_Reg.regData, FALSE);
+	adapter_DAP_Read_DP_Single(adapterObj, SELECT, &adapterObj->dap.SELECT_Reg.regData, FALSE);
 	adapter_DAP_Execute(adapterObj);
 	log_debug("DPIDR:0x%08X, SELECT:0x%08X.", dpidr, adapterObj->dap.SELECT_Reg.regData);
 
-	adapter_DAP_Write_DP(adapterObj, CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ, TRUE);
+	adapter_DAP_Write_DP_Single(adapterObj, CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ, TRUE);
 	adapter_DAP_Execute(adapterObj);
 	do{
-		adapter_DAP_Read_DP(adapterObj, CTRL_STAT, &ctrl_stat, TRUE);
+		adapter_DAP_Read_DP_Single(adapterObj, CTRL_STAT, &ctrl_stat, TRUE);
 		adapter_DAP_Execute(adapterObj);
 	}while((ctrl_stat & (DP_STAT_CDBGPWRUPACK | DP_STAT_CSYSPWRUPACK)) != (DP_STAT_CDBGPWRUPACK | DP_STAT_CSYSPWRUPACK));
 	log_debug("Power up. CTRL_STAT:0x%08X.", ctrl_stat);
 
 	// 读AP0的CSW寄存器
-	uint32_t ap_csw = 0,apidr = 0;
-	adapter_DAP_Read_AP(adapterObj, SELECT, &ap_csw, TRUE);
-	adapter_DAP_Read_AP(adapterObj, IDR, &apidr, TRUE);
+	uint32_t ap_csw = 0,apidr = 0, rom_data = 0;
+	adapter_DAP_Read_AP_Single(adapterObj, CSW, &ap_csw, TRUE);
+	adapter_DAP_Read_AP_Single(adapterObj, IDR, &apidr, TRUE);
+	//adapter_DAP_Execute(adapterObj);
+	log_debug("CSW:0x%08X, APIDR:0x%08X.", ap_csw, apidr);
+	// 写入AP的TAR_LSB，读取一个字
+	adapter_DAP_Write_AP_Single(adapterObj, TAR_LSB, 0x08000004u, TRUE);
+	adapter_DAP_Read_AP_Single(adapterObj, DRW, &rom_data, TRUE);
 	adapter_DAP_Execute(adapterObj);
 	log_debug("CSW:0x%08X, APIDR:0x%08X.", ap_csw, apidr);
+	log_debug("0x08000000: 0x%08X.");
 	//05 00 02 02 00 1E 00 00 00	// 读DPIDR，写ABORT
 	//05 00 02 08 00 00 00 00 06	// 清零SELECT，读CTRL/STAT
 	//05 00 04 04 20 00 00 00 06 04 00 00 00 50 06 00 00 00 00 写CTRL/STAT 0x20，读CTRL，写CTRL/STAT：上电，读CTRL_STAT

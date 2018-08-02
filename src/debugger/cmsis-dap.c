@@ -158,7 +158,7 @@ static int DAPWrite(AdapterObject *adapterObj, uint8_t *data, int len){
 	assert(adapterObj != NULL);
 	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	int length =  cmsis_dapObj->usbObj.Write(&cmsis_dapObj->usbObj, data, len, 0);
-	//misc_PrintBulk(data, len, 16);
+	misc_PrintBulk(data, len, 16);
 	log_trace("Write %d byte(s) to %s.", length, adapterObj->DeviceDesc);
 	return length;
 }
@@ -803,6 +803,106 @@ MAKE_PACKT:
 }
 
 /**
+ * DAP_TransferBlock
+ * 对单个寄存器进行多次读写，常配合地址自增使用
+ * 参数列表和意义与DAP_Transfer相同
+ */
+static BOOL DAP_TransferBlock(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t index,
+		int sequenceCnt, uint8_t *data, uint8_t *response, int *okSeqCnt)
+{
+	assert(adapterObj != NULL && okSeqCnt != NULL);
+	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
+	assert(cmsis_dapObj->PacketSize != 0);
+	BOOL result = FALSE;
+	// 本次传输长度
+	int restCnt = 0, readCnt = 0, writeCnt = 0;
+	int sentPacketMaxCnt = (cmsis_dapObj->PacketSize - 5) >> 2;	// 发送数据包可以装填的数据个数
+	int readPacketMaxCnt = (cmsis_dapObj->PacketSize - 4) >> 2;	// 接收数据包可以装填的数据个数
+
+	// 开辟本次数据包的空间
+	uint8_t *buff = calloc(cmsis_dapObj->PacketSize, sizeof(uint8_t));
+	if(buff == NULL){
+		log_warn("Unable to allocate send packet buffer, the heap may be full.");
+		return FALSE;
+	}
+	// 构造数据包头部
+	buff[0] = ID_DAP_TransferBlock;
+	buff[1] = index;	// DAP index, JTAG ScanChain 中的位置，在SWD模式下忽略该参数
+
+	for(*okSeqCnt = 0; *okSeqCnt < sequenceCnt; (*okSeqCnt)++){
+		restCnt = *CAST(int *, data + readCnt); readCnt += sizeof(int);
+		uint8_t seq = *CAST(uint8_t *, data + readCnt++);
+		if(seq & DAP_TRANSFER_RnW){	// 读操作
+			while(restCnt > 0){
+				if(restCnt > readPacketMaxCnt){
+					*CAST(uint16_t *, buff + 2) = readPacketMaxCnt;
+					buff[4] = seq;
+					// 交换数据
+					DAP_EXCHANGE_DATA(adapterObj, buff, 5, respBuff);
+					// 判断操作成功，写回数据 XXX 小端字节序
+					if(*CAST(uint16_t *, respBuff + 1) == readPacketMaxCnt && respBuff[3] == DAP_TRANSFER_OK){	// 成功
+						memcpy(response + writeCnt, respBuff + 4, readPacketMaxCnt << 2);	// 将数据拷贝到
+						writeCnt += readPacketMaxCnt << 2;
+						restCnt -= readPacketMaxCnt;	// 成功读取readPacketMaxCnt个字
+					}else{	// 失败
+						goto END;
+					}
+				}else{
+					*CAST(uint16_t *, buff + 2) = restCnt;
+					buff[4] = seq;
+					// 交换数据
+					DAP_EXCHANGE_DATA(adapterObj, buff, 5, respBuff);
+					// 判断操作成功，写回数据 XXX 小端字节序
+					if(*CAST(uint16_t *, respBuff + 1) == restCnt && respBuff[3] == DAP_TRANSFER_OK){	// 成功
+						memcpy(response + writeCnt, respBuff + 4, restCnt << 2);	// 将数据拷贝到
+						writeCnt += restCnt << 2;
+						restCnt = 0;	// 全部发送完了
+					}else{	// 失败
+						goto END;
+					}
+				}
+			}
+		}else{	// 写操作
+			while(restCnt > 0){
+				if(restCnt > sentPacketMaxCnt){
+					*CAST(uint16_t *, buff + 2) = sentPacketMaxCnt;
+					buff[4] = seq;
+					// 拷贝数据
+					memcpy(buff + 5, data + readCnt, sentPacketMaxCnt << 2);	// 将数据拷贝到
+					readCnt += sentPacketMaxCnt << 2;
+					// 交换数据
+					DAP_EXCHANGE_DATA(adapterObj, buff, 5 + sentPacketMaxCnt << 2, respBuff);
+					// 判断操作成功 XXX 小端字节序
+					if(*CAST(uint16_t *, respBuff + 1) == sentPacketMaxCnt && respBuff[3] == DAP_TRANSFER_OK){	// 成功
+						restCnt -= readPacketMaxCnt;
+					}else{	// 失败
+						goto END;
+					}
+				}else{
+					*CAST(uint16_t *, buff + 2) = restCnt;
+					buff[4] = seq;
+					// 拷贝数据
+					memcpy(buff + 5, data + readCnt, restCnt << 2);	// 将数据拷贝到
+					readCnt += restCnt << 2;
+					// 交换数据
+					DAP_EXCHANGE_DATA(adapterObj, buff, 5 + restCnt << 2, respBuff);
+					// 判断操作成功 XXX 小端字节序
+					if(*CAST(uint16_t *, respBuff + 1) == restCnt && respBuff[3] == DAP_TRANSFER_OK){	// 成功
+						restCnt = 0;
+					}else{	// 失败
+						goto END;
+					}
+				}
+			}
+		}
+	}
+	result = TRUE;
+END:
+	free(buff);
+	return result;
+}
+
+/**
  * 复位操作
  * hard：是否硬复位（nTRST、nSRST）
  * srst：系统复位nRESET
@@ -1077,21 +1177,34 @@ static BOOL Execute_DAP_Cmd(uint8_t *respBuff, AdapterObject *adapterObj){
 		log_warn("DAP TAP Index Too large.");
 		return FALSE;
 	}
-
+REEXEC:;
+	// 本次处理的指令类型，找到指令队列中第一个指令的类型
+	enum DAP_InstrType thisType = container_of(adapterObj->dap.instrQueue.next, struct DAP_Command, list_entry)->type;
 	// 第一次遍历，计算所占用的空间
 	list_for_each_entry(cmd, &adapterObj->dap.instrQueue, list_entry){
-		switch(cmd->type){
-		case DAP_INS_READ_AP_REG:
-		case DAP_INS_READ_DP_REG:
-			writeBuffLen += 1;
-			readBuffLen += 4;
-			break;
-
-		case DAP_INS_WRITE_AP_REG:
-		case DAP_INS_WRITE_DP_REG:
-			writeBuffLen += 5;
+		if(cmd->type != thisType){
 			break;
 		}
+		switch(cmd->type){
+		case DAP_INS_RW_REG_SINGLE:	// 单次读写寄存器
+			writeBuffLen += 1;
+			if(cmd->instr.RWRegSingle.RnW == 1){	// 读操作
+				readBuffLen += 4;
+			}else{
+				writeBuffLen += 4;
+			}
+			break;
+
+		case DAP_INS_RW_REG_BLOCK:	// 多次读写寄存器
+			writeBuffLen += 1 + sizeof(int);	// int:blockCnt, byte:seq
+			if(cmd->instr.RWRegBlock.RnW == 1){	// 读操作
+				readBuffLen += cmd->instr.RWRegBlock.blockCnt << 2;
+			}else{
+				writeBuffLen += cmd->instr.RWRegBlock.blockCnt << 2;
+			}
+			break;
+		}
+		
 	}
 	// 分配内存空间
 	log_info("CMSIS-DAP DAP Parsed buff length: %d, read buff length: %d.", writeBuffLen, readBuffLen);
@@ -1109,33 +1222,37 @@ static BOOL Execute_DAP_Cmd(uint8_t *respBuff, AdapterObject *adapterObj){
 
 	// 第二次遍历 生成指令数据
 	list_for_each_entry(cmd, &adapterObj->dap.instrQueue, list_entry){
+		if(cmd->type != thisType){
+			break;
+		}
 		switch(cmd->type){
-		case DAP_INS_READ_AP_REG:
-			// 读AP寄存器
-			*(writeBuff + writeCnt++) = cmd->instr.RWReg.reg.ap | DAP_TRANSFER_RnW | DAP_TRANSFER_APnDP;
+		case DAP_INS_RW_REG_SINGLE:
+			*(writeBuff + writeCnt++) = cmd->instr.RWRegSingle.reg
+				| (cmd->instr.RWRegSingle.RnW ? DAP_TRANSFER_RnW : 0)
+				| (cmd->instr.RWRegSingle.APnDP ? DAP_TRANSFER_APnDP : 0);
+			// 如果是写操作
+			if(cmd->instr.RWRegSingle.RnW == 0){
+				// XXX 小端字节序
+				memcpy(writeBuff + writeCnt, CAST(uint8_t *, &cmd->instr.RWRegSingle.data.write), 4);
+				writeCnt += 4;
+			}
 			seqCnt++;
 			break;
 
-		case DAP_INS_READ_DP_REG:
-			// 读DP寄存器
-			*(writeBuff + writeCnt++) = cmd->instr.RWReg.reg.dp | DAP_TRANSFER_RnW;
+		case DAP_INS_RW_REG_BLOCK:
+			// 写入本次操作的次数
+			*CAST(int *, writeBuff + writeCnt) = cmd->instr.RWRegBlock.blockCnt;
+			writeCnt += sizeof(int);
+			*(writeBuff + writeCnt++) = cmd->instr.RWRegBlock.reg
+				| (cmd->instr.RWRegBlock.RnW ? DAP_TRANSFER_RnW : 0)
+				| (cmd->instr.RWRegBlock.APnDP ? DAP_TRANSFER_APnDP : 0);
+			// 如果是写操作
+			if(cmd->instr.RWRegBlock.RnW == 0){
+				// XXX 小端字节序
+				memcpy(writeBuff + writeCnt, CAST(uint8_t *, &cmd->instr.RWRegBlock.data.write), cmd->instr.RWRegBlock.blockCnt << 2);
+				writeCnt += cmd->instr.RWRegBlock.blockCnt << 2;
+			}
 			seqCnt++;
-			break;
-
-		case DAP_INS_WRITE_AP_REG:
-			// 写AP寄存器
-			*(writeBuff + writeCnt++) = cmd->instr.RWReg.reg.ap | DAP_TRANSFER_APnDP;
-			// XXX 小端字节序
-			memcpy(writeBuff + writeCnt, CAST(uint8_t *, &cmd->instr.RWReg.data.write), 4);
-			writeCnt += 4; seqCnt++;
-			break;
-
-		case DAP_INS_WRITE_DP_REG:
-			// 写DP寄存器
-			*(writeBuff + writeCnt++) = cmd->instr.RWReg.reg.dp;
-			// XXX 小端字节序
-			memcpy(writeBuff + writeCnt, CAST(uint8_t *, &cmd->instr.RWReg.data.write), 4);
-			writeCnt += 4; seqCnt++;
 			break;
 		}
 	}
@@ -1144,27 +1261,50 @@ static BOOL Execute_DAP_Cmd(uint8_t *respBuff, AdapterObject *adapterObj){
 	// 执行成功的Sequence个数
 	int okSeqCnt = 0;
 	BOOL result = TRUE;
-	// 执行指令
-	if(DAP_Transfer(respBuff, adapterObj, adapterObj->dap.DAP_Index, seqCnt, writeBuff, readBuff, &okSeqCnt) == FALSE){
-		log_warn("Some DAP Instruction Execute Failed. Success:%d, All:%d,", okSeqCnt, seqCnt);
-		result = FALSE;
+	switch(thisType){
+	case DAP_INS_RW_REG_SINGLE:
+		// 执行指令 DAP_Transfer
+		if(DAP_Transfer(respBuff, adapterObj, adapterObj->dap.DAP_Index, seqCnt, writeBuff, readBuff, &okSeqCnt) == FALSE){
+			log_warn("DAP_Transfer:Some DAP Instruction Execute Failed. Success:%d, All:%d,", okSeqCnt, seqCnt);
+			result = FALSE;
+		}
+	break;
+
+	case DAP_INS_RW_REG_BLOCK:
+		// transfer block
+		if(DAP_TransferBlock(respBuff, adapterObj, adapterObj->dap.DAP_Index, seqCnt, writeBuff, readBuff, &okSeqCnt) == FALSE){
+			log_warn("DAP_TransferBlock:Some DAP Instruction Execute Failed. Success:%d, All:%d,", okSeqCnt, seqCnt);
+			result = FALSE;
+		}
+	break;
 	}
+	
 	// 第三次遍历：同步数据
 	list_for_each_entry_safe(cmd, cmd_t, &adapterObj->dap.instrQueue, list_entry){
+		if(cmd->type != thisType){
+			break;
+		}
 		if(okSeqCnt <= 0){
 			// 未执行的指令保存在指令队列中
 			break;
 		}
 		okSeqCnt--;	// 只同步执行成功的Seq个数
-		if(cmd->type == DAP_INS_READ_AP_REG || cmd->type == DAP_INS_READ_DP_REG){
-			memcpy(cmd->instr.RWReg.data.read, readBuff + readCnt, 4);
+		if(cmd->type == DAP_INS_RW_REG_SINGLE && cmd->instr.RWRegSingle.RnW == 1){	// 单次读寄存器
+			memcpy(cmd->instr.RWRegSingle.data.read, readBuff + readCnt, 4);
 			readCnt += 4;
+		}else if(cmd->type == DAP_INS_RW_REG_BLOCK && cmd->instr.RWRegSingle.RnW == 1){	// 多次读寄存器
+			memcpy(cmd->instr.RWRegBlock.data.read, readBuff + readCnt, cmd->instr.RWRegBlock.blockCnt << 2);
+			readCnt += cmd->instr.RWRegBlock.blockCnt << 2;
 		}
 		list_del(&cmd->list_entry);	// 将链表中删除
 		free(cmd);
 	}
 	free(writeBuff);
 	free(readBuff);
+	// 判断是否继续执行
+	if(result && !list_empty(&adapterObj->dap.instrQueue)){
+		goto REEXEC;
+	}
 	return result;
 }
 

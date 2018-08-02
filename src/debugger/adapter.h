@@ -50,13 +50,13 @@ enum JTAG_InstrType{
 // DAP指令类型
 enum DAP_InstrType{
 	/**
-	 * 读写nP寄存器
+	 * 读写单个nP寄存器
 	 */
-	DAP_INS_READ_AP_REG,
-	DAP_INS_WRITE_AP_REG,
-	DAP_INS_READ_DP_REG,
-	DAP_INS_WRITE_DP_REG,
-	// TODO 增加TransferBlock的指令
+	DAP_INS_RW_REG_SINGLE,
+	/**
+	 * 读写多个寄存器
+	 */
+	DAP_INS_RW_REG_BLOCK,
 };
 
 // JTAG状态机切换指令
@@ -87,17 +87,28 @@ struct JTAG_Command{
 	} instr;
 };
 
-// DAP读写寄存器指令结构体
-struct DAP_RW_Register{
-	union {
-		enum AP_Regs ap;
-		enum DP_Regs dp;
-	} reg;
+// DAP读写单个寄存器指令结构体
+struct DAP_RW_RegisterSingle{
+	uint32_t RnW:1;	// 读或者写
+	uint32_t APnDP:1;	// AP或者DP
+	int reg;	// 寄存器
 	// 指令的数据
 	union {
-		uint32_t write;
+		uint32_t write;	// 写单个寄存器
 		uint32_t *read;
 	} data;
+};
+
+// DAP读写多个寄存器指令结构体
+struct DAP_RW_RegisterBlock{
+	uint32_t RnW:1;	// 读或者写
+	uint32_t APnDP:1;	// AP或者DP
+	int reg;
+	// 指令的数据
+	union {
+		uint32_t *read, *write;
+	} data;
+	int blockCnt;	// 块传输个数
 };
 
 // DAP指令
@@ -106,8 +117,8 @@ struct DAP_Command{
 	struct list_head list_entry;
 	// 指令结构共用体
 	union {
-		// TODO 增加TransferBlock的指令
-		struct DAP_RW_Register RWReg;
+		struct DAP_RW_RegisterSingle RWRegSingle;	// 读写单个寄存器
+		struct DAP_RW_RegisterBlock RWRegBlock;	// 读写多个寄存器
 	} instr;
 };
 
@@ -312,17 +323,29 @@ BOOL adapter_JTAG_Exchange_TAP_DR(AdapterObject *adapterObj, uint16_t tapIndex, 
 #define adapter_DAP_CURR_AP(pa) ((pa)->SelectReg.info.AP_Sel)
 /**
  * TODO 完善一些检查，比如在JTAG模式下不可以访问写ABORT寄存器和读IDCODE寄存器等等
+ * TODO 将下面函数合并成单个函数
  */
 // 读DP寄存器
-BOOL adapter_DAP_Read_DP(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, BOOL updateSelect);
+BOOL adapter_DAP_Read_DP_Single(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, BOOL updateSelect);
 // 写DP寄存器
-BOOL adapter_DAP_Write_DP(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t data, BOOL updateSelect);
+BOOL adapter_DAP_Write_DP_Single(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t data, BOOL updateSelect);
 // 读AP寄存器
-BOOL adapter_DAP_Read_AP(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, BOOL updateSelect);
+BOOL adapter_DAP_Read_AP_Single(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, BOOL updateSelect);
 // 写AP寄存器
-BOOL adapter_DAP_Write_AP(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t data, BOOL updateSelect);
+BOOL adapter_DAP_Write_AP_Single(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t data, BOOL updateSelect);
+
+// 多次读DP寄存器
+BOOL adapter_DAP_Read_DP_Block(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect);
+// 多次写DP寄存器
+BOOL adapter_DAP_Write_DP_Block(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect);
+// 多次读AP寄存器
+BOOL adapter_DAP_Read_AP_Block(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect);
+// 多次写AP寄存器
+BOOL adapter_DAP_Write_AP_Block(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect);
+
 // 执行DAP队列中的指令
 BOOL adapter_DAP_Execute(AdapterObject *adapterObj);
+
 // 清空DAP队列指令
 void adapter_DAP_CleanCommandQueue(AdapterObject *adapterObj);
 
