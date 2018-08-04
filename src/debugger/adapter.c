@@ -31,7 +31,6 @@ BOOL __CONSTRUCT(Adapter)(AdapterObject *adapterObj, const char *desc){
 	assert(adapterObj != NULL);
 	memset(adapterObj, 0x0, sizeof(AdapterObject));
 	adapterObj->DeviceDesc = strdup(desc);
-
 	// 初始化默认函数
 	adapterObj->isInit = FALSE;
 	adapterObj->Init = init;

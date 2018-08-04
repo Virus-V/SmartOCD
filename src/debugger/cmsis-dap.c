@@ -158,7 +158,7 @@ static int DAPWrite(AdapterObject *adapterObj, uint8_t *data, int len){
 	assert(adapterObj != NULL);
 	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
 	int length =  cmsis_dapObj->usbObj.Write(&cmsis_dapObj->usbObj, data, len, 0);
-	misc_PrintBulk(data, len, 16);
+	//misc_PrintBulk(data, len, 16);
 	log_trace("Write %d byte(s) to %s.", length, adapterObj->DeviceDesc);
 	return length;
 }

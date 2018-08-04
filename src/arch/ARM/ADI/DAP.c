@@ -101,7 +101,13 @@ BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx){
 	adapterObj->dap.SELECT_Reg.regData = selectTmp.regData;
 	// 获取AP相关信息：CFG
 	if(adapterObj->dap.AP[apIdx].ctrl_state.init == 0){	// 初始化ap相关参数
-		uint32_t tmp, cfg, csw;
+		/**
+		 * FIX: Valgrind 会在类似
+		 * if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData != cswTmp.regData){...}
+		 * 的判断中报“根据未初始化的值跳转”错误
+		 * 所以在这儿为tmp,cfg,csw赋初值
+		 */
+		uint32_t tmp=0, cfg=0, csw=0;
 		TRY(adapter_DAP_Read_AP_Single(adapterObj, CFG, &cfg, TRUE), 1);
 		TRY(adapter_DAP_Read_AP_Single(adapterObj, CSW, &csw, TRUE), 1);
 		TRY(adapter_DAP_Execute(adapterObj), 2);
@@ -112,8 +118,8 @@ BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx){
 		// 写入到本地CSW
 		adapterObj->dap.AP[apIdx].CSW.regData = csw;
 		// 写入packed模式和8位模式
-		adapterObj->dap.AP[apIdx].CSW.regInfo.AddrInc = ADDRINC_PACKED;
-		adapterObj->dap.AP[apIdx].CSW.regInfo.Size = SIZE_8;
+		adapterObj->dap.AP[apIdx].CSW.regInfo.AddrInc = DAP_ADDRINC_PACKED;
+		adapterObj->dap.AP[apIdx].CSW.regInfo.Size = AP_CSW_SIZE8;
 		TRY(adapter_DAP_Write_AP_Single(adapterObj, CSW, adapterObj->dap.AP[apIdx].CSW.regData, TRUE), 1);
 		TRY(adapter_DAP_Read_AP_Single(adapterObj, CSW, &adapterObj->dap.AP[apIdx].CSW.regData, TRUE), 1);
 		TRY(adapter_DAP_Execute(adapterObj), 2);
@@ -131,7 +137,7 @@ BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx){
 			adapterObj->dap.AP[apIdx].ctrl_state.packedTransfers = 1;
 			adapterObj->dap.AP[apIdx].ctrl_state.lessWordTransfers = 1;
 		}else{
-			adapterObj->dap.AP[apIdx].ctrl_state.lessWordTransfers = adapterObj->dap.AP[apIdx].CSW.regInfo.Size == SIZE_8 ? 1 : 0;
+			adapterObj->dap.AP[apIdx].ctrl_state.lessWordTransfers = adapterObj->dap.AP[apIdx].CSW.regInfo.Size == AP_CSW_SIZE8 ? 1 : 0;
 		}
 		// 恢复CSW寄存器的值
 		TRY(adapter_DAP_Write_AP_Single(adapterObj, CSW, csw, TRUE), 1);
@@ -245,9 +251,9 @@ BOOL DAP_ReadMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t *data_out){
 	MEM_AP_CSW_Parse cswTmp;
 	cswTmp.regData = adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData;
 	// 设置CSW：Size=Word，AddrInc=off
-	cswTmp.regInfo.AddrInc = ADDRINC_OFF;	// AddrInc Off
+	cswTmp.regInfo.AddrInc = DAP_ADDRINC_OFF;	// AddrInc Off
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.lessWordTransfers == 1){	// 支持lessWordTransfer
-		cswTmp.regInfo.Size = SIZE_8;	// Byte
+		cswTmp.regInfo.Size = AP_CSW_SIZE8;	// Byte
 	}else{
 		log_warn("Don't Support Less Word Transfers.");
 		return FALSE;
@@ -289,9 +295,9 @@ BOOL DAP_ReadMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t *data_out)
 	MEM_AP_CSW_Parse cswTmp;
 	cswTmp.regData = adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData;
 	// 设置CSW：Size=Word，AddrInc=off
-	cswTmp.regInfo.AddrInc = ADDRINC_OFF;	// AddrInc Off
+	cswTmp.regInfo.AddrInc = DAP_ADDRINC_OFF;	// AddrInc Off
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.lessWordTransfers == 1){	// 支持lessWordTransfer
-		cswTmp.regInfo.Size = SIZE_16;	// Half Word
+		cswTmp.regInfo.Size = AP_CSW_SIZE16;	// Half Word
 	}else{
 		log_warn("Don't Support Less Word Transfers.");
 		return FALSE;
@@ -334,8 +340,8 @@ BOOL DAP_ReadMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t *data_out)
 	MEM_AP_CSW_Parse cswTmp;
 	cswTmp.regData = adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData;
 	// 设置CSW：Size=Word，AddrInc=off
-	cswTmp.regInfo.AddrInc = ADDRINC_OFF;	// AddrInc Off
-	cswTmp.regInfo.Size = SIZE_32;	// Word
+	cswTmp.regInfo.AddrInc = DAP_ADDRINC_OFF;	// AddrInc Off
+	cswTmp.regInfo.Size = AP_CSW_SIZE32;	// Word
 	// 是否需要更新CSW寄存器？
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData != cswTmp.regData){
 		if(adapter_DAP_Write_AP_Single(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
@@ -373,10 +379,10 @@ BOOL DAP_ReadMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t *data_out)
 	MEM_AP_CSW_Parse cswTmp;
 	cswTmp.regData = adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData;
 	// 设置CSW：Size=Word，AddrInc=off
-	cswTmp.regInfo.AddrInc = ADDRINC_OFF;	// AddrInc Off
+	cswTmp.regInfo.AddrInc = DAP_ADDRINC_OFF;	// AddrInc Off
 	// 判断是否支持Big Data
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.largeData == 1){
-		cswTmp.regInfo.Size = SIZE_64;	// Double Word
+		cswTmp.regInfo.Size = AP_CSW_SIZE64;	// Double Word
 	}else{
 		log_warn("Don't Support Big Data Transfers.");
 		return FALSE;
@@ -413,9 +419,9 @@ BOOL DAP_WriteMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t data_in){
 	MEM_AP_CSW_Parse cswTmp;
 	cswTmp.regData = adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData;
 	// 设置CSW：Size=Word，AddrInc=off
-	cswTmp.regInfo.AddrInc = ADDRINC_OFF;	// AddrInc Off
+	cswTmp.regInfo.AddrInc = DAP_ADDRINC_OFF;	// AddrInc Off
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.lessWordTransfers == 1){	// 支持lessWordTransfer
-		cswTmp.regInfo.Size = SIZE_8;	// Byte
+		cswTmp.regInfo.Size = AP_CSW_SIZE8;	// Byte
 	}else{
 		log_warn("Don't Support Less Word Transfers.");
 		return FALSE;
@@ -456,9 +462,9 @@ BOOL DAP_WriteMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t data_in){
 	MEM_AP_CSW_Parse cswTmp;
 	cswTmp.regData = adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData;
 	// 设置CSW：Size=Word，AddrInc=off
-	cswTmp.regInfo.AddrInc = ADDRINC_OFF;	// AddrInc Off
+	cswTmp.regInfo.AddrInc = DAP_ADDRINC_OFF;	// AddrInc Off
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.lessWordTransfers == 1){	// 支持lessWordTransfer
-		cswTmp.regInfo.Size = SIZE_16;	// Half Word
+		cswTmp.regInfo.Size = AP_CSW_SIZE16;	// Half Word
 	}else{
 		log_warn("Don't Support Less Word Transfers.");
 		return FALSE;
@@ -500,8 +506,8 @@ BOOL DAP_WriteMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t data_in){
 	MEM_AP_CSW_Parse cswTmp;
 	cswTmp.regData = adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData;
 	// 设置CSW：Size=Word，AddrInc=off
-	cswTmp.regInfo.AddrInc = ADDRINC_OFF;	// AddrInc Off
-	cswTmp.regInfo.Size = SIZE_32;	// Word
+	cswTmp.regInfo.AddrInc = DAP_ADDRINC_OFF;	// AddrInc Off
+	cswTmp.regInfo.Size = AP_CSW_SIZE32;	// Word
 	// 是否需要更新CSW寄存器？
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData != cswTmp.regData){
 		if(adapter_DAP_Write_AP_Single(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
@@ -539,10 +545,10 @@ BOOL DAP_WriteMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t data_in){
 	MEM_AP_CSW_Parse cswTmp;
 	cswTmp.regData = adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData;
 	// 设置CSW：Size=Word，AddrInc=off
-	cswTmp.regInfo.AddrInc = ADDRINC_OFF;	// AddrInc Off
+	cswTmp.regInfo.AddrInc = DAP_ADDRINC_OFF;	// AddrInc Off
 	// 判断是否支持Big Data
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.largeData == 1){
-		cswTmp.regInfo.Size = SIZE_64;	// Double Word
+		cswTmp.regInfo.Size = AP_CSW_SIZE64;	// Double Word
 	}else{
 		log_warn("Don't Support Big Data Transfers.");
 		return FALSE;
@@ -566,3 +572,154 @@ BOOL DAP_WriteMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t data_in){
 	}
 	return TRUE;
 }
+
+/**
+ * 批量读取数据
+ * addr：要读取的地址
+ * addrIncMode：是否启用地址自增或者模式
+ * 可取的值有：
+ * DAP_ADDRINC_OFF：在每次传输之后TAR中的地址不自增
+ * DAP_ADDRINC_SINGLE：每次传输成功后，TAR的地址增加传输数据的大小
+ * DAP_ADDRINC_PACKED：当设置此参数时，启动packed传送模式；每次传输成功后，TAR增加传输的数据大小。
+ * 注意，在启用地址自增的时候，只保证操作TAR寄存器中地址的低10位[9:0]，如果自增到[10]位或者超过[10]时，自增动作
+ * 是视不同实现而定的（IMPLEMENTATION DEFINED）。也就是说地址自增在1kb的内存边界内进行，超过1kb的边界自增动作是视不同实现而定的（IMPLEMENTATION DEFINED）。
+ * transSize：传输数据大小（在非packed模式下注意byte lane）
+ * transCnt：传输数据的个数，单位为字
+ * data_out：读取的数据存放地址
+ */
+BOOL DAP_ReadMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode, int transSize, int transCnt, uint32_t *data_out){
+	assert(adapterObj != NULL && adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1);
+	// 设置csw
+	MEM_AP_CSW_Parse cswTmp;
+	cswTmp.regData = adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData;
+	// some checks
+	switch(transSize){
+	case AP_CSW_SIZE8:
+		// 检查是否支持less word Transfer
+		if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.lessWordTransfers == 1){	// 支持lessWordTransfer
+			cswTmp.regInfo.Size = AP_CSW_SIZE8;	// Half Word
+		}else{
+			log_warn("Don't Support Less Word Transfers.");
+			return FALSE;
+		}
+		break;
+	case AP_CSW_SIZE16:
+		// 检查是否对齐
+		if(addr & 0x1){
+			log_warn("Memory address is not half word aligned!");
+			return FALSE;
+		}
+		// 检查是否支持less word Transfer
+		if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.lessWordTransfers == 1){	// 支持lessWordTransfer
+			cswTmp.regInfo.Size = AP_CSW_SIZE16;	// Half Word
+		}else{
+			log_warn("Don't Support Less Word Transfers.");
+			return FALSE;
+		}
+		break;
+	case AP_CSW_SIZE32:
+		if(addr & 0x3){
+			log_warn("Memory address is not word aligned!");
+			return FALSE;
+		}
+		cswTmp.regInfo.Size = AP_CSW_SIZE32;	// Word
+		break;
+	case AP_CSW_SIZE64:
+	case AP_CSW_SIZE128:
+	case AP_CSW_SIZE256:
+		log_warn("Specified Data Size is not support.");
+		return FALSE;
+		break;
+	default: break;
+	}
+	cswTmp.regInfo.AddrInc = addrIncMode;	// 地址自增模式
+	// XXX 是否需要判断自增会不会超过1kb的区域？
+	// 是否需要更新CSW寄存器？
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData != cswTmp.regData){
+		if(adapter_DAP_Write_AP_Single(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
+			return FALSE;
+		}
+	}
+	// 写入TAR
+	if(DAP_Write_TAR(adapterObj, addr) == FALSE) return FALSE;
+	// TAR已更新，同步CSW
+	adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = cswTmp.regData;
+	// 读取block
+	if(adapter_DAP_Read_AP_Block(adapterObj, DRW, data_out, transCnt, TRUE) == FALSE){
+		return FALSE;
+	}
+	// 执行指令队列
+	if(adapter_DAP_Execute(adapterObj) == FALSE){
+		return FALSE;
+	}
+	return TRUE;
+}
+
+BOOL DAP_WriteMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode, int transSize, int transCnt, uint32_t *data_in){
+	assert(adapterObj != NULL && adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1);
+	// 设置csw
+	MEM_AP_CSW_Parse cswTmp;
+	cswTmp.regData = adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData;
+	// some checks
+	switch(transSize){
+	case AP_CSW_SIZE8:
+		// 检查是否支持less word Transfer
+		if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.lessWordTransfers == 1){	// 支持lessWordTransfer
+			cswTmp.regInfo.Size = AP_CSW_SIZE8;	// Half Word
+		}else{
+			log_warn("Don't Support Less Word Transfers.");
+			return FALSE;
+		}
+		break;
+	case AP_CSW_SIZE16:
+		// 检查是否对齐
+		if(addr & 0x1){
+			log_warn("Memory address is not half word aligned!");
+			return FALSE;
+		}
+		// 检查是否支持less word Transfer
+		if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.lessWordTransfers == 1){	// 支持lessWordTransfer
+			cswTmp.regInfo.Size = AP_CSW_SIZE16;	// Half Word
+		}else{
+			log_warn("Don't Support Less Word Transfers.");
+			return FALSE;
+		}
+		break;
+	case AP_CSW_SIZE32:
+		if(addr & 0x3){
+			log_warn("Memory address is not word aligned!");
+			return FALSE;
+		}
+		cswTmp.regInfo.Size = AP_CSW_SIZE32;	// Word
+		break;
+	case AP_CSW_SIZE64:
+	case AP_CSW_SIZE128:
+	case AP_CSW_SIZE256:
+		log_warn("Specified Data Size is not support.");
+		return FALSE;
+		break;
+	default: break;
+	}
+	cswTmp.regInfo.AddrInc = addrIncMode;	// 地址自增模式
+	// XXX 是否需要判断自增会不会超过1kb的区域？
+	// 是否需要更新CSW寄存器？
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData != cswTmp.regData){
+		if(adapter_DAP_Write_AP_Single(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
+			return FALSE;
+		}
+	}
+	// 写入TAR
+	if(DAP_Write_TAR(adapterObj, addr) == FALSE) return FALSE;
+	// TAR已更新，同步CSW
+	adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = cswTmp.regData;
+	// 读取block
+	if(adapter_DAP_Write_AP_Block(adapterObj, DRW, data_in, transCnt, TRUE) == FALSE){
+		return FALSE;
+	}
+	// 执行指令队列
+	if(adapter_DAP_Execute(adapterObj) == FALSE){
+		return FALSE;
+	}
+	return TRUE;
+}
+

@@ -83,25 +83,31 @@
 // AP Control and Status Word definitions
 #define AP_CSW_SIZEMSK			0x00000007  // Access Size: Selection Mask
 #define AP_CSW_SIZE8			0x00000000  // Access Size: 8-bit
-#define SIZE_8					0x0
 #define AP_CSW_SIZE16			0x00000001  // Access Size: 16-bit
-#define SIZE_16					0x1
 #define AP_CSW_SIZE32			0x00000002  // Access Size: 32-bit
-#define SIZE_32					0x2
 #define AP_CSW_SIZE64			0x00000003	// Access Size: 64-bit
-#define SIZE_64					0x3
 #define AP_CSW_SIZE128			0x00000004	// Access Size: 128-bit
-#define SIZE_128				0x4
 #define AP_CSW_SIZE256			0x00000005	// Access Size: 256-bit
-#define SIZE_256				0x5
+// MEM-AP传输数据大小参数
+enum dataSizeParam{
+	DAP_DATA_SIZE_8 = 0,
+	DAP_DATA_SIZE_16,
+	DAP_DATA_SIZE_32,
+	DAP_DATA_SIZE_64,
+	DAP_DATA_SIZE_128,
+	DAP_DATA_SIZE_256,
+};
 
 #define AP_CSW_ADDRINCMSK		0x00000030  // Auto Address Increment Mask
 #define AP_CSW_NADDRINC			0x00000000  // No Address Increment
-#define ADDRINC_OFF				0x0
 #define AP_CSW_SADDRINC			0x00000010  // Single Address Increment
-#define ADDRINC_SINGLE			0x1
 #define AP_CSW_PADDRINC			0x00000020  // Packed Address Increment
-#define ADDRINC_PACKED			0x2
+// MEM-AP 地址自增模式参数
+enum addrIncParam {
+	DAP_ADDRINC_OFF = 0,
+	DAP_ADDRINC_SINGLE,
+	DAP_ADDRINC_PACKED,
+};
 
 #define AP_CSW_DBGSTAT			0x00000040  // Debug Status
 #define AP_CSW_TINPROG			0x00000080  // Transfer in progress
@@ -258,4 +264,7 @@ BOOL DAP_WriteMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t data_in);
 BOOL DAP_WriteMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t data_in);
 BOOL DAP_WriteMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t data_in);
 BOOL DAP_WriteMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t data_in);
+
+BOOL DAP_ReadMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode, int transSize, int transCnt, uint32_t *data_out);
+BOOL DAP_WriteMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode, int transSize, int transCnt, uint32_t *data_in);
 #endif /* SRC_ARCH_ARM_ADI_DAP_H_ */

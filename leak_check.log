@@ -1,45 +1,45 @@
-==29278== Memcheck, a memory error detector
-==29278== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
-==29278== Using Valgrind-3.13.0 and LibVEX; rerun with -h for copyright info
-==29278== Command: ./test/adapter_test
-==29278== Parent PID: 29277
-==29278== 
-==29278== 
-==29278== HEAP SUMMARY:
-==29278==     in use at exit: 8,192 bytes in 2 blocks
-==29278==   total heap usage: 2,478 allocs, 2,476 frees, 737,725 bytes allocated
-==29278== 
-==29278== 4,096 bytes in 1 blocks are still reachable in loss record 1 of 2
-==29278==    at 0x4C2CB13: malloc (vg_replace_malloc.c:299)
-==29278==    by 0x5BE666C: ??? (in /usr/lib/libudev.so.1.6.10)
-==29278==    by 0x5BE9730: ??? (in /usr/lib/libudev.so.1.6.10)
-==29278==    by 0x4E48232: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
-==29278==    by 0x4E469AB: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
-==29278==    by 0x4E3DD11: libusb_init (in /usr/lib/libusb-1.0.so.0.1.0)
-==29278==    by 0x10E448: __construct_USBObject (usb.c:39)
-==29278==    by 0x109FD2: NewCMSIS_DAP (cmsis-dap.c:72)
-==29278==    by 0x115226: main (adapter_test.c:20)
-==29278== 
-==29278== 4,096 bytes in 1 blocks are still reachable in loss record 2 of 2
-==29278==    at 0x4C2CB13: malloc (vg_replace_malloc.c:299)
-==29278==    by 0x5BE666C: ??? (in /usr/lib/libudev.so.1.6.10)
-==29278==    by 0x5BE99FC: ??? (in /usr/lib/libudev.so.1.6.10)
-==29278==    by 0x5BEE00B: ??? (in /usr/lib/libudev.so.1.6.10)
-==29278==    by 0x5BEE479: ??? (in /usr/lib/libudev.so.1.6.10)
-==29278==    by 0x5BF07A3: ??? (in /usr/lib/libudev.so.1.6.10)
-==29278==    by 0x5BF0B54: ??? (in /usr/lib/libudev.so.1.6.10)
-==29278==    by 0x5BF21BE: udev_enumerate_scan_devices (in /usr/lib/libudev.so.1.6.10)
-==29278==    by 0x4E48252: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
-==29278==    by 0x4E469AB: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
-==29278==    by 0x4E3DD11: libusb_init (in /usr/lib/libusb-1.0.so.0.1.0)
-==29278==    by 0x10E448: __construct_USBObject (usb.c:39)
-==29278== 
-==29278== LEAK SUMMARY:
-==29278==    definitely lost: 0 bytes in 0 blocks
-==29278==    indirectly lost: 0 bytes in 0 blocks
-==29278==      possibly lost: 0 bytes in 0 blocks
-==29278==    still reachable: 8,192 bytes in 2 blocks
-==29278==         suppressed: 0 bytes in 0 blocks
-==29278== 
-==29278== For counts of detected and suppressed errors, rerun with: -v
-==29278== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+==5263== Memcheck, a memory error detector
+==5263== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
+==5263== Using Valgrind-3.13.0 and LibVEX; rerun with -h for copyright info
+==5263== Command: ./test/dap_test
+==5263== Parent PID: 5262
+==5263== 
+==5263== 
+==5263== HEAP SUMMARY:
+==5263==     in use at exit: 8,192 bytes in 2 blocks
+==5263==   total heap usage: 2,825 allocs, 2,823 frees, 841,377 bytes allocated
+==5263== 
+==5263== 4,096 bytes in 1 blocks are still reachable in loss record 1 of 2
+==5263==    at 0x4C2CB13: malloc (vg_replace_malloc.c:299)
+==5263==    by 0x5BE667E: ??? (in /usr/lib/libudev.so.1.6.11)
+==5263==    by 0x5BE96C0: ??? (in /usr/lib/libudev.so.1.6.11)
+==5263==    by 0x4E48232: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
+==5263==    by 0x4E469AB: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
+==5263==    by 0x4E3DD11: libusb_init (in /usr/lib/libusb-1.0.so.0.1.0)
+==5263==    by 0x110DC3: __construct_USBObject (usb.c:39)
+==5263==    by 0x10C068: NewCMSIS_DAP (cmsis-dap.c:72)
+==5263==    by 0x118A08: main (dap_test.c:102)
+==5263== 
+==5263== 4,096 bytes in 1 blocks are still reachable in loss record 2 of 2
+==5263==    at 0x4C2CB13: malloc (vg_replace_malloc.c:299)
+==5263==    by 0x5BE667E: ??? (in /usr/lib/libudev.so.1.6.11)
+==5263==    by 0x5BE998C: ??? (in /usr/lib/libudev.so.1.6.11)
+==5263==    by 0x5BEDFCB: ??? (in /usr/lib/libudev.so.1.6.11)
+==5263==    by 0x5BEE419: ??? (in /usr/lib/libudev.so.1.6.11)
+==5263==    by 0x5BF0743: ??? (in /usr/lib/libudev.so.1.6.11)
+==5263==    by 0x5BF0AF4: ??? (in /usr/lib/libudev.so.1.6.11)
+==5263==    by 0x5BF215E: udev_enumerate_scan_devices (in /usr/lib/libudev.so.1.6.11)
+==5263==    by 0x4E48252: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
+==5263==    by 0x4E469AB: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
+==5263==    by 0x4E3DD11: libusb_init (in /usr/lib/libusb-1.0.so.0.1.0)
+==5263==    by 0x110DC3: __construct_USBObject (usb.c:39)
+==5263== 
+==5263== LEAK SUMMARY:
+==5263==    definitely lost: 0 bytes in 0 blocks
+==5263==    indirectly lost: 0 bytes in 0 blocks
+==5263==      possibly lost: 0 bytes in 0 blocks
+==5263==    still reachable: 8,192 bytes in 2 blocks
+==5263==         suppressed: 0 bytes in 0 blocks
+==5263== 
+==5263== For counts of detected and suppressed errors, rerun with: -v
+==5263== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
