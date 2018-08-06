@@ -7,6 +7,7 @@
 
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 
 #include "misc/log.h"
@@ -298,41 +299,44 @@ int main(){
 	}
 	// block读取测试
 	do{
-		uint64_t baseAddr = 0x08000004u;
-		uint32_t block_tmp[16];
-		memset(block_tmp, 0x0, sizeof(block_tmp));
+		uint64_t baseAddr = 0x08000000u;
+		uint32_t *block_tmp;
+		block_tmp = calloc(2056, sizeof(uint32_t));
+		assert(block_tmp != NULL);
+
 		log_info("Block Read Test.");
 //		DAP_Write_TAR(adapterObj, 0x08000000u);
 //		adapter_DAP_Read_AP_Block(adapterObj, DRW, block_tmp, 16, TRUE);
 //		adapter_DAP_Execute(adapterObj);
 		log_info("Read size 8, result:%d.",
-				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_8, 16, block_tmp));
+				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_8, 2056, block_tmp));
 		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
 
 		memset(block_tmp, 0x0, sizeof(block_tmp));
 		log_info("Read size 16, result:%d.",
-				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_16, 16, block_tmp));
+				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_16, 2056, block_tmp));
 		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
 
-		memset(block_tmp, 0x0, sizeof(block_tmp));
-		log_info("Read size 32, result:%d.",
-				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_32, 16, block_tmp));
-		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
-
-		log_info("AddrInc packed\n Read size 8, result:%d.",
-				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_PACKED, DAP_DATA_SIZE_8, 16, block_tmp));
-		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
-
-		memset(block_tmp, 0x0, sizeof(block_tmp));
-		log_info("Read size 16, result:%d.",
-				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_PACKED, DAP_DATA_SIZE_16, 16, block_tmp));
-		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
-
-		memset(block_tmp, 0x0, sizeof(block_tmp));
-		log_info("Read size 32, result:%d.",
-				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_PACKED, DAP_DATA_SIZE_32, 16, block_tmp));
-		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
-
+//		memset(block_tmp, 0x0, sizeof(block_tmp));
+//		log_info("Read size 32, result:%d.",
+//				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_32, 2056, block_tmp));
+//		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
+//
+//		log_info("AddrInc packed\n Read size 8, result:%d.",
+//				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_PACKED, DAP_DATA_SIZE_8, 2056, block_tmp));
+//		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
+//
+//		memset(block_tmp, 0x0, sizeof(block_tmp));
+//		log_info("Read size 16, result:%d.",
+//				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_PACKED, DAP_DATA_SIZE_16, 2056, block_tmp));
+//		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
+//
+//		memset(block_tmp, 0x0, sizeof(block_tmp));
+//		log_info("Read size 32, result:%d.",
+//				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_PACKED, DAP_DATA_SIZE_32, 2056, block_tmp));
+//		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
+		// block 写入测试
+		//block_tmp
 		//memset(block_tmp, 0x0, sizeof(block_tmp));
 		//DAP_ReadMemBlock(adapterObj, 0x08000000u, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_32, 16, block_tmp);
 		//misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
