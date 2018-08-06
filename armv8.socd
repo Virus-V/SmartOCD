@@ -6,7 +6,12 @@
 -- 使用CMSIS-DAP
 dofile("cmsis_dap.socd")
 -- 选择访问AHB总线的MEM-AP
-local APB_AP_Idx = dapObj:find_AP("AHB")   -- 这里先选择AHB总线，测试用
+local APB_AP_Idx = dapObj:find_AP("APB")   -- 这里先选择AHB总线，测试用
+
+local csw = dapObj:read_AP(DAP_Reg.AP_CSW)
+print(string.format( "CSW Register: %08X", csw ))
+-- 设置AP控制字,32位读取
+dapObj:write_AP(DAP_Reg.AP_CSW, csw | 0x2)
 --[[
     读取当前AP信息
     PT:Packed Transfer
@@ -247,4 +252,5 @@ function display_ROM(dap, addr, depth)
     end
 end
 -- 打印ROM Table
-display_ROM(dapObj, ROM_Table_Addr, 0) 
+display_ROM(dapObj, 0x80020000, 0) 
+display_ROM(dapObj, 0x80040000, 0) 

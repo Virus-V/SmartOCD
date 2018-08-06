@@ -761,4 +761,3 @@ BOOL DAP_WriteMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode
 	}
 	return TRUE;
 }
-
