@@ -640,7 +640,7 @@ BOOL DAP_ReadMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode,
 			addrNextBoundary = ((addrCurr >> 10) + 1) << 10;	// 找到下一个1kb边界
 			// 写入地址
 			if(DAP_Write_TAR(adapterObj, addrCurr) == FALSE) return FALSE;
-			log_debug("SINGLE:CurrAddr:0x%08X;next boundary:0x%08X.", addrCurr, addrNextBoundary);
+			//log_debug("SINGLE:CurrAddr:0x%08X;next boundary:0x%08X.", addrCurr, addrNextBoundary);
 			// 如果下一个边界大于结束地址
 			if(addrNextBoundary > addrEnd){
 				thisTimeTransCnt = (addrEnd - addrCurr) >> transSize;
@@ -649,7 +649,7 @@ BOOL DAP_ReadMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode,
 				thisTimeTransCnt = (addrNextBoundary - addrCurr) >> transSize;
 				addrCurr = addrNextBoundary;
 			}
-			log_debug("SINGLE:dataPos:%d;thisTimeTransCnt:%d.", dataPos, thisTimeTransCnt);
+			//log_debug("SINGLE:dataPos:%d;thisTimeTransCnt:%d.", dataPos, thisTimeTransCnt);
 			// 读取block
 			if(adapter_DAP_Read_AP_Block(adapterObj, DRW, data_out + dataPos, thisTimeTransCnt, TRUE) == FALSE){
 				return FALSE;
@@ -662,7 +662,7 @@ BOOL DAP_ReadMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode,
 			addrNextBoundary = ((addrCurr >> 10) + 1) << 10;	// 找到下一个1kb边界
 			// 写入地址
 			if(DAP_Write_TAR(adapterObj, addrCurr) == FALSE) return FALSE;
-			log_debug("PACKED:CurrAddr:0x%08X;next boundary:0x%08X.", addrCurr, addrNextBoundary);
+			//log_debug("PACKED:CurrAddr:0x%08X;next boundary:0x%08X.", addrCurr, addrNextBoundary);
 			// 如果下一个边界大于结束地址
 			if(addrNextBoundary > addrEnd){
 				thisTimeTransCnt = (addrEnd - addrCurr) >> 2;
@@ -671,7 +671,7 @@ BOOL DAP_ReadMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode,
 				thisTimeTransCnt = (addrNextBoundary - addrCurr) >> 2;
 				addrCurr = addrNextBoundary;
 			}
-			log_debug("PACKED:dataPos:%d;thisTimeTransCnt:%d.", dataPos, thisTimeTransCnt);
+			//log_debug("PACKED:dataPos:%d;thisTimeTransCnt:%d.", dataPos, thisTimeTransCnt);
 			// 读取block
 			if(adapter_DAP_Read_AP_Block(adapterObj, DRW, data_out + dataPos, thisTimeTransCnt, TRUE) == FALSE){
 				return FALSE;
@@ -679,12 +679,6 @@ BOOL DAP_ReadMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode,
 			dataPos += thisTimeTransCnt;
 		}
 	}
-//	// 写入TAR
-//	if(DAP_Write_TAR(adapterObj, addr) == FALSE) return FALSE;
-//	// 读取block
-//	if(adapter_DAP_Read_AP_Block(adapterObj, DRW, data_out, transCnt, TRUE) == FALSE){
-//		return FALSE;
-//	}
 	// 执行指令队列
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
 		return FALSE;
@@ -740,24 +734,68 @@ BOOL DAP_WriteMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode
 	default: break;
 	}
 	cswTmp.regInfo.AddrInc = addrIncMode;	// 地址自增模式
-	// XXX 是否需要判断自增会不会超过1kb的区域？
 	// 是否需要更新CSW寄存器？
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData != cswTmp.regData){
 		if(adapter_DAP_Write_AP_Single(adapterObj, CSW, cswTmp.regData, TRUE) == FALSE){
 			return FALSE;
 		}
 	}
-	// 写入TAR
-	if(DAP_Write_TAR(adapterObj, addr) == FALSE) return FALSE;
-	// TAR已更新，同步CSW
-	adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = cswTmp.regData;
-	// 读取block
-	if(adapter_DAP_Write_AP_Block(adapterObj, DRW, data_in, transCnt, TRUE) == FALSE){
-		return FALSE;
+
+	// TODO 处理地址自增模式下超过1kb边界的情况，超过1kb的边界了需要拆分，每次地址自增控制在1kb以内
+	uint64_t addrCurr = addr, addrEnd;	// 当前地址，结束地址
+	uint64_t addrNextBoundary;	// 地址的下一个1kb边界
+	int thisTimeTransCnt,dataPos = 0;// 指向data_out的偏移
+
+	if(addrIncMode == DAP_ADDRINC_SINGLE){
+		addrEnd = addr + (transCnt << transSize);	// 每次写DRW，发起一次memory access，之后自增TAR
+		while(addrCurr < addrEnd){
+			addrNextBoundary = ((addrCurr >> 10) + 1) << 10;	// 找到下一个1kb边界
+			// 写入地址
+			if(DAP_Write_TAR(adapterObj, addrCurr) == FALSE) return FALSE;
+			//log_debug("SINGLE:CurrAddr:0x%08X;next boundary:0x%08X.", addrCurr, addrNextBoundary);
+			// 如果下一个边界大于结束地址
+			if(addrNextBoundary > addrEnd){
+				thisTimeTransCnt = (addrEnd - addrCurr) >> transSize;
+				addrCurr = addrEnd;
+			}else{
+				thisTimeTransCnt = (addrNextBoundary - addrCurr) >> transSize;
+				addrCurr = addrNextBoundary;
+			}
+			//log_debug("SINGLE:dataPos:%d;thisTimeTransCnt:%d.", dataPos, thisTimeTransCnt);
+			// 读取block
+			if(adapter_DAP_Write_AP_Block(adapterObj, DRW, data_in + dataPos, thisTimeTransCnt, TRUE) == FALSE){
+				return FALSE;
+			}
+			dataPos += thisTimeTransCnt;
+		}
+	}else if(addrIncMode == DAP_ADDRINC_PACKED){
+		addrEnd = addr + (transCnt << 2);	// 每次写DRW，发起多次memory access，每次Memory access成功后自增TAR
+		while(addrCurr < addrEnd){
+			addrNextBoundary = ((addrCurr >> 10) + 1) << 10;	// 找到下一个1kb边界
+			// 写入地址
+			if(DAP_Write_TAR(adapterObj, addrCurr) == FALSE) return FALSE;
+			//log_debug("PACKED:CurrAddr:0x%08X;next boundary:0x%08X.", addrCurr, addrNextBoundary);
+			// 如果下一个边界大于结束地址
+			if(addrNextBoundary > addrEnd){
+				thisTimeTransCnt = (addrEnd - addrCurr) >> 2;
+				addrCurr = addrEnd;
+			}else{
+				thisTimeTransCnt = (addrNextBoundary - addrCurr) >> 2;
+				addrCurr = addrNextBoundary;
+			}
+			//log_debug("PACKED:dataPos:%d;thisTimeTransCnt:%d.", dataPos, thisTimeTransCnt);
+			// 读取block
+			if(adapter_DAP_Write_AP_Block(adapterObj, DRW, data_in + dataPos, thisTimeTransCnt, TRUE) == FALSE){
+				return FALSE;
+			}
+			dataPos += thisTimeTransCnt;
+		}
 	}
 	// 执行指令队列
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
 		return FALSE;
 	}
+	// 指令执行成功，同步CSW
+	adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = cswTmp.regData;
 	return TRUE;
 }

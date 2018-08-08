@@ -13,10 +13,9 @@
 
 #include "smart_ocd.h"
 #include "misc/log.h"
+#include "misc/misc.h"
 #include "debugger/cmsis-dap.h"
 #include "arch/ARM/ADI/DAP.h"
-
-extern int print_bulk(char *data, int length, int rowLen);
 
 uint16_t vids[] = {0xc251, 0};
 uint16_t pids[] = {0xf001, 0};
@@ -98,158 +97,128 @@ static void printComponentInfo(AdapterObject *adapterObj, uint32_t startAddr){
 }
 */
 
+static BOOL DAP_TransferBlock(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t index,
+		int sequenceCnt, uint8_t *data, uint8_t *response, int *okSeqCnt)
+{
+	BOOL result = FALSE;
+	// 本次传输长度
+	int restCnt = 0, readCnt = 0, writeCnt = 0;
+	int sentPacketMaxCnt = (1024 - 5) >> 2;	// 发送数据包可以装填的数据个数
+	int readPacketMaxCnt = (1024 - 4) >> 2;	// 接收数据包可以装填的数据个数
+
+	log_debug("send max:%d,read max:%d.", sentPacketMaxCnt, readPacketMaxCnt);
+	// 开辟本次数据包的空间
+	uint8_t *buff = calloc(1024, sizeof(uint8_t));
+	if(buff == NULL){
+		log_warn("Unable to allocate send packet buffer, the heap may be full.");
+		return FALSE;
+	}
+	// 构造数据包头部
+	buff[0] = ID_DAP_TransferBlock;
+	buff[1] = index;	// DAP index, JTAG ScanChain 中的位置，在SWD模式下忽略该参数
+
+	for(*okSeqCnt = 0; *okSeqCnt < sequenceCnt; (*okSeqCnt)++){
+		restCnt = *CAST(int *, data + readCnt); readCnt += sizeof(int);
+		log_debug("restCnt:%d.", restCnt);
+		uint8_t seq = *CAST(uint8_t *, data + readCnt++);
+		if(seq & DAP_TRANSFER_RnW){	// 读操作
+			log_debug("Read");
+			while(restCnt > 0){
+				log_debug("restCnt:%d.", restCnt);
+				if(restCnt > readPacketMaxCnt){
+					*CAST(uint16_t *, buff + 2) = readPacketMaxCnt;
+					buff[4] = seq;
+					// 交换数据
+					//DAP_EXCHANGE_DATA(adapterObj, buff, 5, respBuff);
+					misc_PrintBulk(buff, 5, 25);
+					// 判断操作成功，写回数据 XXX 小端字节序
+					//if(*CAST(uint16_t *, respBuff + 1) == readPacketMaxCnt && respBuff[3] == DAP_TRANSFER_OK){	// 成功
+					if(1){	// 成功
+						//memcpy(response + writeCnt, respBuff + 4, readPacketMaxCnt << 2);	// 将数据拷贝到
+						log_info("memcpy(response + %d, respBuff + 4, %d)", writeCnt, readPacketMaxCnt << 2);
+						writeCnt += readPacketMaxCnt << 2;
+						restCnt -= readPacketMaxCnt;	// 成功读取readPacketMaxCnt个字
+					}else{	// 失败
+						goto END;
+					}
+				}else{
+					*CAST(uint16_t *, buff + 2) = restCnt;
+					buff[4] = seq;
+					// 交换数据
+					//DAP_EXCHANGE_DATA(adapterObj, buff, 5, respBuff);
+					misc_PrintBulk(buff, 5, 25);
+					// 判断操作成功，写回数据 XXX 小端字节序
+					//if(*CAST(uint16_t *, respBuff + 1) == restCnt && respBuff[3] == DAP_TRANSFER_OK){	// 成功
+					if(1){	// 成功
+						//memcpy(response + writeCnt, respBuff + 4, restCnt << 2);	// 将数据拷贝到
+						log_info("memcpy(response + %d, respBuff + 4, %d)", writeCnt, restCnt << 2);
+						writeCnt += restCnt << 2;
+						restCnt = 0;	// 全部发送完了
+					}else{	// 失败
+						goto END;
+					}
+				}
+			}
+		}else{	// 写操作
+			log_debug("write");
+			while(restCnt > 0){
+				log_debug("restCnt:%d.", restCnt);
+				if(restCnt > sentPacketMaxCnt){
+					*CAST(uint16_t *, buff + 2) = sentPacketMaxCnt;
+					buff[4] = seq;
+					// 拷贝数据
+					//memcpy(buff + 5, data + readCnt, sentPacketMaxCnt << 2);	// 将数据拷贝到
+					log_info("memcpy(buff + 5, data + %d, %d), %d", readCnt, sentPacketMaxCnt << 2, sentPacketMaxCnt);
+					readCnt += sentPacketMaxCnt << 2;
+					// 交换数据
+					//DAP_EXCHANGE_DATA(adapterObj, buff, 5 + sentPacketMaxCnt << 2, respBuff);
+					log_debug("read buff size:%d.", 5 + (sentPacketMaxCnt << 2));
+					misc_PrintBulk(buff, 5 + (sentPacketMaxCnt << 2), 25);   // FIXME
+					// 判断操作成功 XXX 小端字节序
+					//if(*CAST(uint16_t *, respBuff + 1) == sentPacketMaxCnt && respBuff[3] == DAP_TRANSFER_OK){	// 成功
+					if(1){	// 成功
+						restCnt -= sentPacketMaxCnt;
+					}else{	// 失败
+						goto END;
+					}
+				}else{
+					*CAST(uint16_t *, buff + 2) = restCnt;
+					buff[4] = seq;
+					// 拷贝数据
+					//memcpy(buff + 5, data + readCnt, restCnt << 2);	// 将数据拷贝到
+					log_info("memcpy(buff + 5, data + %d, %d), %d", readCnt, restCnt << 2, restCnt);
+					readCnt += restCnt << 2;
+					// 交换数据
+					//DAP_EXCHANGE_DATA(adapterObj, buff, 5 + restCnt << 2, respBuff);
+					log_debug("read buff size:%d.", 5 + (restCnt << 2));
+					misc_PrintBulk(buff, 5 + (restCnt << 2), 25);
+					// 判断操作成功 XXX 小端字节序
+					if(1){	// 成功
+					//if(*CAST(uint16_t *, respBuff + 1) == restCnt && respBuff[3] == DAP_TRANSFER_OK){	// 成功
+						restCnt = 0;
+					}else{	// 失败
+						//goto END;
+					}
+				}
+			}
+		}
+	}
+	result = TRUE;
+END:
+	free(buff);
+	return result;
+}
+
+
 // 测试入口点
 int main(){
-	DAPObject *dapObj;
-	struct cmsis_dap cmsis_dapObj;
-	log_set_level(LOG_DEBUG);
-	if( NewCMSIS_DAP(&cmsis_dapObj) == FALSE){
-		log_fatal("failed to new.");
-		exit(1);
-	}
-	// 连接CMSIS-DAP
-	if(ConnectCMSIS_DAP(&cmsis_dapObj, vids, pids, NULL) == FALSE){
-		log_fatal("failed to connect.");
-		exit(1);
-	}
-	AdapterObject *adapterObj = CAST(AdapterObject *, &cmsis_dapObj);
-	// 初始化
-	adapterObj->Init(adapterObj);
-	// 配置传输参数
-	adapterObj->Operate(adapterObj, CMDAP_TRANSFER_CONFIG, 5, 10, 10);
-
-//#define USE_SWD
-#ifdef USE_SWD
-	// 设置SWJ频率，最大30MHz
-	adapterObj->Operate(adapterObj, AINS_SET_CLOCK, 1000u);
-	// 切换到SWD模式
-	adapterObj->SelectTrans(adapterObj, SWD);
-	// 读取id code 寄存器
-	adapterObj->Operate(adapterObj, CMDAP_READ_DP_REG, 0, DP_IDCODE, &idcode);
-	log_info("SWD-DP with ID :0x%08X.", idcode);
-	// 清除上次的stick error （SW Only）
-	// 写Abort寄存器请用CMDAP_WRITE_ABORT命令
-	adapterObj->Operate(adapterObj, CMDAP_WRITE_ABORT, 0, STKCMPCLR | STKERRCLR | WDERRCLR | ORUNERRCLR);
-#else
-	// 设置SWJ频率，最大30MHz
-	adapterObj->Operate(adapterObj, AINS_SET_CLOCK, 1000u);
-	// 切换到JTAG模式
-	adapterObj->SelectTrans(adapterObj, JTAG);
-	uint16_t irLen[2] = {4, 5};
-	//adapterObj->Operate(adapterObj, CMDAP_JTAG_CONFIGURE, 2, irLen);
-	//adapterObj->Operate(adapterObj, CMDAP_JTAG_IDCODE, 0, &idcode);
-	//log_info("JTAG-DP with ID:0x%08X.", idcode);
-	uint8_t datas[] = {
-			0x45, 0x00,	//复位TAP
-			0x01, 0x00, // run-test/idle
-			0x42, 0x00, 0x02, 0x00,	// select-ir, shift-ir
-			0x08, 0xFE, // 1111 1110 lsb first tms=0,
-			0x41, 0x01, // 1 lsb first,tms=1 跳到IR exit1
-			0x42, 0x00, // update ir select dr
-			// 41 00 多了个41 00 是什么情况
-			0x02, 0x00, // capture dr shift dr
-			0xA0, 0x00, 0x00, 0x00, 0x00,
-			0x41 ,0x00, // tms=1, 跳到exit1-dr
-			0x42, 0x00	// update dr
-	}, result[32];
-	adapterObj->Operate(adapterObj, AINS_JTAG_SEQUENCE, 0x0B, datas, result);
-	print_bulk(result, sizeof(result), 8);
-
-#endif
-	/*
-	// 确保DPBANKSEL = 0，选中CTRL/STAT寄存器
-	adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, 0);
-	// 上电
-	adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_CTRL_STAT, CSYSPWRUPREQ | CDBGPWRUPREQ);
-	// 等待上电完成
-	do {
-		if(adapterObj->Operate(adapterObj, CMDAP_READ_DP_REG, 0, DP_CTRL_STAT, &tmp) == FALSE){
-			log_fatal("Read CTRL_STAT Failed.");
-			goto EXIT;
-		}
-	} while((tmp & (CDBGPWRUPACK | CSYSPWRUPACK)) != (CDBGPWRUPACK | CSYSPWRUPACK));
-	log_info("Power up.");
-	// 写入一些初始化数据
-	adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_CTRL_STAT, CSYSPWRUPREQ | CDBGPWRUPREQ | TRNNORMAL | MASKLANE | ORUNDETECT);
-	// 读取AP的IDR
-	do{
-		time_t t_start, t_end;
-		uint16_t apsel = 0;
-		uint32_t select = 0xf0;
-		uint32_t romtable = 0;
-		uint32_t tmp = 0, addr;
-
-		BOOL result;
-		t_start = time(NULL) ;
-		for(;apsel < 3; apsel ++){
-			select &= ~0xff000000u;
-			select |= apsel << 24;
-			// 修改select选中ap
-			result = adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, select);
-			if(result == FALSE) {
-				// write abort;
-				adapterObj->Operate(adapterObj, CMDAP_WRITE_ABORT, 0, DAPABORT);
-				// SWD下错误标志在CTRL/STAT寄存器，清除错误标志是在ABORT寄存器
-				// JTAG下错误标志是在CTRL/STAT寄存器，清除错误标志直接向CTRL/STAT寄存器错误标志位写0
-				adapterObj->Operate(adapterObj, CMDAP_READ_DP_REG, 0, DP_CTRL_STAT, &tmp);
-				log_warn("Write SELECT Failed, CTRL : 0x%08X.", tmp);
-				break;
-			}
-			// 读取AP的IDR
-			result = adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_IDR, &tmp);
-			if(result == FALSE) {
-				if(adapterObj->Operate(adapterObj, CMDAP_READ_DP_REG, 0, DP_CTRL_STAT, &tmp)==FALSE){
-					log_error("Read CTRL/STAT Register Failed!!!");
-				}
-				log_warn("Read AP_IDR Failed, CTRL : 0x%08X.", tmp);
-				// write abort;
-				if(adapterObj->Operate(adapterObj, CMDAP_WRITE_ABORT, 0, DAPABORT)== FALSE){
-					log_error("Write Abort Failed!!!");
-					goto EXIT;
-				}
-				break;
-			}
-			if(tmp != 0){
-				printf("probe Address: 0x%08X => 0x%08X\n", select, tmp);
-				printAPInfo(tmp);
-				// 读取ROM Table
-				//adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, 0xf0);
-				adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_ROM_LSB, &romtable);
-				adapterObj->Operate(adapterObj, CMDAP_WRITE_DP_REG, 0, DP_SELECT, 0x0);	// 选择AP bank0
-				adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_CSW, 0x23000050 | CSW_SIZE32);
-				// ROM Table的首地址
-				addr = romtable & ~0xfff;
-				log_info("ROM Table Base: 0x%08X.", addr);
-				do{
-					// ROM Table[11:0]不在BaseAddr里面，[1]为1代表该寄存器是ADIv5的类型，[0]代表是否存在DebugEntry
-					// 注意还有Lagacy format要看一下资料
-					adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_TAR_LSB, addr);
-					adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &int_val);
-					if(int_val == 0) break;
-					int_val &= 0xfffff000u;	// Address Offset
-					int_val = (int32_t)addr + int_val;
-					log_info("Component Base Addr: 0x%08X.", int_val);
-					printComponentInfo(adapterObj, int_val);
-					addr += 4;
-				}while(1);
-				addr = (romtable & ~0xfff) | 0xFCC;
-				adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_TAR_LSB, addr);
-				adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &int_val);
-				log_info("Mem Type: %x.", int_val);
-				for(idx=0xFD0; idx < 0xFFF; idx += 4){
-					addr = (romtable & ~0xfff) | idx;
-					adapterObj->Operate(adapterObj, CMDAP_WRITE_AP_REG, 0, AP_TAR_LSB, addr);
-					adapterObj->Operate(adapterObj, CMDAP_READ_AP_REG, 0, AP_DRW, &int_val);
-					log_info("0x%03X:0x%08X.", idx, int_val);
-				}
-			}
-		}
-		t_end = time(NULL);
-		printf("time: %.0f s\n", difftime(t_end,t_start));
-	}while(0);
-	*/
-EXIT:
-	adapterObj->Deinit(adapterObj);
-	adapterObj->Destroy(adapterObj);
+	uint8_t *data = calloc(20480, sizeof(uint32_t));
+	int okNum = 0;
+	assert(data != NULL);
+	*CAST(int *, data) = 1000;
+	//data[sizeof(int)] = 0xA;
+	data[sizeof(int)] = 0x8;
+	DAP_TransferBlock(NULL, NULL, 0, 1, data, NULL, &okNum);
+	free(data);
 	exit(0);
 }

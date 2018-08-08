@@ -1,96 +1,49 @@
-==1254== Memcheck, a memory error detector
-==1254== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
-==1254== Using Valgrind-3.13.0 and LibVEX; rerun with -h for copyright info
-==1254== Command: ./test/dap_test
-==1254== Parent PID: 1253
-==1254== 
-==1254== Conditional jump or move depends on uninitialised value(s)
-==1254==    at 0x10E832: DAP_TransferBlock (cmsis-dap.c:835)
-==1254==    by 0x10FC3E: Execute_DAP_Cmd (cmsis-dap.c:1271)
-==1254==    by 0x1109D1: operate (cmsis-dap.c:1386)
-==1254==    by 0x11566C: adapter_DAP_Execute (adapter.c:899)
-==1254==    by 0x10C0AD: DAP_ReadMemBlock (DAP.c:689)
-==1254==    by 0x119C23: main (dap_test.c:311)
-==1254== 
-==1254== Conditional jump or move depends on uninitialised value(s)
-==1254==    at 0x10EB1E: DAP_TransferBlock (cmsis-dap.c:866)
-==1254==    by 0x10FC3E: Execute_DAP_Cmd (cmsis-dap.c:1271)
-==1254==    by 0x1109D1: operate (cmsis-dap.c:1386)
-==1254==    by 0x11566C: adapter_DAP_Execute (adapter.c:899)
-==1254==    by 0x10C0AD: DAP_ReadMemBlock (DAP.c:689)
-==1254==    by 0x119C23: main (dap_test.c:311)
-==1254== 
-==1254== Conditional jump or move depends on uninitialised value(s)
-==1254==    at 0x10E431: DAP_Transfer (cmsis-dap.c:726)
-==1254==    by 0x10FBB4: Execute_DAP_Cmd (cmsis-dap.c:1263)
-==1254==    by 0x1109D1: operate (cmsis-dap.c:1386)
-==1254==    by 0x11566C: adapter_DAP_Execute (adapter.c:899)
-==1254==    by 0x10C0AD: DAP_ReadMemBlock (DAP.c:689)
-==1254==    by 0x119C23: main (dap_test.c:311)
-==1254== 
-==1254== Syscall param ioctl(USBDEVFS_SUBMITURB).buffer points to uninitialised byte(s)
-==1254==    at 0x5913667: ioctl (in /usr/lib/libc-2.27.so)
-==1254==    by 0x4E43FB4: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
-==1254==    by 0x4E40D2C: libusb_submit_transfer (in /usr/lib/libusb-1.0.so.0.1.0)
-==1254==    by 0x4E42FC4: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
-==1254==    by 0x4E433CE: libusb_interrupt_transfer (in /usr/lib/libusb-1.0.so.0.1.0)
-==1254==    by 0x111C29: USBInterruptTransfer (usb.c:228)
-==1254==    by 0x111B1A: interruptWrite (usb.c:208)
-==1254==    by 0x10CA3B: DAPWrite (cmsis-dap.c:160)
-==1254==    by 0x10E50F: DAP_Transfer (cmsis-dap.c:761)
-==1254==    by 0x10FBB4: Execute_DAP_Cmd (cmsis-dap.c:1263)
-==1254==    by 0x1109D1: operate (cmsis-dap.c:1386)
-==1254==    by 0x11566C: adapter_DAP_Execute (adapter.c:899)
-==1254==  Address 0x6105dcb is 11 bytes inside a block of size 1,032 alloc'd
-==1254==    at 0x4C2E9C6: calloc (vg_replace_malloc.c:711)
-==1254==    by 0x10E361: DAP_Transfer (cmsis-dap.c:700)
-==1254==    by 0x10FBB4: Execute_DAP_Cmd (cmsis-dap.c:1263)
-==1254==    by 0x1109D1: operate (cmsis-dap.c:1386)
-==1254==    by 0x11566C: adapter_DAP_Execute (adapter.c:899)
-==1254==    by 0x10C0AD: DAP_ReadMemBlock (DAP.c:689)
-==1254==    by 0x119C23: main (dap_test.c:311)
-==1254== 
-==1254== 
-==1254== HEAP SUMMARY:
-==1254==     in use at exit: 16,416 bytes in 3 blocks
-==1254==   total heap usage: 2,752 allocs, 2,749 frees, 881,937 bytes allocated
-==1254== 
-==1254== 4,096 bytes in 1 blocks are still reachable in loss record 1 of 3
-==1254==    at 0x4C2CB13: malloc (vg_replace_malloc.c:299)
-==1254==    by 0x5BE667E: ??? (in /usr/lib/libudev.so.1.6.11)
-==1254==    by 0x5BE96C0: ??? (in /usr/lib/libudev.so.1.6.11)
-==1254==    by 0x4E48232: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
-==1254==    by 0x4E469AB: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
-==1254==    by 0x4E3DD11: libusb_init (in /usr/lib/libusb-1.0.so.0.1.0)
-==1254==    by 0x111284: __construct_USBObject (usb.c:39)
-==1254==    by 0x10C529: NewCMSIS_DAP (cmsis-dap.c:72)
-==1254==    by 0x118EC9: main (dap_test.c:103)
-==1254== 
-==1254== 4,096 bytes in 1 blocks are still reachable in loss record 2 of 3
-==1254==    at 0x4C2CB13: malloc (vg_replace_malloc.c:299)
-==1254==    by 0x5BE667E: ??? (in /usr/lib/libudev.so.1.6.11)
-==1254==    by 0x5BE998C: ??? (in /usr/lib/libudev.so.1.6.11)
-==1254==    by 0x5BEDFCB: ??? (in /usr/lib/libudev.so.1.6.11)
-==1254==    by 0x5BEE419: ??? (in /usr/lib/libudev.so.1.6.11)
-==1254==    by 0x5BF0743: ??? (in /usr/lib/libudev.so.1.6.11)
-==1254==    by 0x5BF0AF4: ??? (in /usr/lib/libudev.so.1.6.11)
-==1254==    by 0x5BF215E: udev_enumerate_scan_devices (in /usr/lib/libudev.so.1.6.11)
-==1254==    by 0x4E48252: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
-==1254==    by 0x4E469AB: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
-==1254==    by 0x4E3DD11: libusb_init (in /usr/lib/libusb-1.0.so.0.1.0)
-==1254==    by 0x111284: __construct_USBObject (usb.c:39)
-==1254== 
-==1254== 8,224 bytes in 1 blocks are definitely lost in loss record 3 of 3
-==1254==    at 0x4C2E9C6: calloc (vg_replace_malloc.c:711)
-==1254==    by 0x119B9E: main (dap_test.c:304)
-==1254== 
-==1254== LEAK SUMMARY:
-==1254==    definitely lost: 8,224 bytes in 1 blocks
-==1254==    indirectly lost: 0 bytes in 0 blocks
-==1254==      possibly lost: 0 bytes in 0 blocks
-==1254==    still reachable: 8,192 bytes in 2 blocks
-==1254==         suppressed: 0 bytes in 0 blocks
-==1254== 
-==1254== For counts of detected and suppressed errors, rerun with: -v
-==1254== Use --track-origins=yes to see where uninitialised values come from
-==1254== ERROR SUMMARY: 123 errors from 5 contexts (suppressed: 0 from 0)
+==6431== Memcheck, a memory error detector
+==6431== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
+==6431== Using Valgrind-3.13.0 and LibVEX; rerun with -h for copyright info
+==6431== Command: ./test/dap_test
+==6431== Parent PID: 6430
+==6431== 
+==6431== 
+==6431== HEAP SUMMARY:
+==6431==     in use at exit: 18,432 bytes in 3 blocks
+==6431==   total heap usage: 2,967 allocs, 2,964 frees, 867,876 bytes allocated
+==6431== 
+==6431== 4,096 bytes in 1 blocks are still reachable in loss record 1 of 3
+==6431==    at 0x4C2CB13: malloc (vg_replace_malloc.c:299)
+==6431==    by 0x5BE667E: ??? (in /usr/lib/libudev.so.1.6.11)
+==6431==    by 0x5BE96C0: ??? (in /usr/lib/libudev.so.1.6.11)
+==6431==    by 0x4E48232: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
+==6431==    by 0x4E469AB: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
+==6431==    by 0x4E3DD11: libusb_init (in /usr/lib/libusb-1.0.so.0.1.0)
+==6431==    by 0x11135B: __construct_USBObject (usb.c:39)
+==6431==    by 0x10C615: NewCMSIS_DAP (cmsis-dap.c:72)
+==6431==    by 0x118FA0: main (dap_test.c:103)
+==6431== 
+==6431== 4,096 bytes in 1 blocks are still reachable in loss record 2 of 3
+==6431==    at 0x4C2CB13: malloc (vg_replace_malloc.c:299)
+==6431==    by 0x5BE667E: ??? (in /usr/lib/libudev.so.1.6.11)
+==6431==    by 0x5BE998C: ??? (in /usr/lib/libudev.so.1.6.11)
+==6431==    by 0x5BEDFCB: ??? (in /usr/lib/libudev.so.1.6.11)
+==6431==    by 0x5BEE419: ??? (in /usr/lib/libudev.so.1.6.11)
+==6431==    by 0x5BF0743: ??? (in /usr/lib/libudev.so.1.6.11)
+==6431==    by 0x5BF0AF4: ??? (in /usr/lib/libudev.so.1.6.11)
+==6431==    by 0x5BF215E: udev_enumerate_scan_devices (in /usr/lib/libudev.so.1.6.11)
+==6431==    by 0x4E48252: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
+==6431==    by 0x4E469AB: ??? (in /usr/lib/libusb-1.0.so.0.1.0)
+==6431==    by 0x4E3DD11: libusb_init (in /usr/lib/libusb-1.0.so.0.1.0)
+==6431==    by 0x11135B: __construct_USBObject (usb.c:39)
+==6431== 
+==6431== 10,240 bytes in 1 blocks are definitely lost in loss record 3 of 3
+==6431==    at 0x4C2E9C6: calloc (vg_replace_malloc.c:711)
+==6431==    by 0x119C75: main (dap_test.c:304)
+==6431== 
+==6431== LEAK SUMMARY:
+==6431==    definitely lost: 10,240 bytes in 1 blocks
+==6431==    indirectly lost: 0 bytes in 0 blocks
+==6431==      possibly lost: 0 bytes in 0 blocks
+==6431==    still reachable: 8,192 bytes in 2 blocks
+==6431==         suppressed: 0 bytes in 0 blocks
+==6431== 
+==6431== For counts of detected and suppressed errors, rerun with: -v
+==6431== ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)

@@ -299,24 +299,37 @@ int main(){
 	}
 	// block读取测试
 	do{
-		uint64_t baseAddr = 0x08000000u;
+		uint64_t baseAddr = 0x20000204u;
 		uint32_t *block_tmp;
-		block_tmp = calloc(2056, sizeof(uint32_t));
+		block_tmp = calloc(2560, sizeof(uint32_t));	// 2560 * sizeof(uint32_t) = 10k//192K = sizeof(SRAM)
 		assert(block_tmp != NULL);
 
 		log_info("Block Read Test.");
 //		DAP_Write_TAR(adapterObj, 0x08000000u);
 //		adapter_DAP_Read_AP_Block(adapterObj, DRW, block_tmp, 16, TRUE);
 //		adapter_DAP_Execute(adapterObj);
-		log_info("Read size 8, result:%d.",
-				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_8, 2056, block_tmp));
-		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
+		// 192kb
+//		log_info("Read size 8, result:%d.",
+//				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_8, 2056, block_tmp));
+//		misc_PrintBulk(CAST(uint8_t *, block_tmp), 2056*sizeof(uint32_t), 32);
 
-		memset(block_tmp, 0x0, sizeof(block_tmp));
-		log_info("Read size 16, result:%d.",
-				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_16, 2056, block_tmp));
-		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
-
+		// 初始化空间
+		for(int i=0;i<2560;i++){
+			//block_tmp[i] = i << ((i&1)<<4);
+			block_tmp[i] = ((i+1) << 16) + i;
+		}
+		misc_PrintBulk(CAST(uint8_t *, block_tmp), 2560*sizeof(uint32_t), 32);
+		//memset(block_tmp, 0x0, sizeof(block_tmp));
+		log_info("Write size 32, result:%d.",
+				DAP_WriteMemBlock(adapterObj, baseAddr, DAP_ADDRINC_PACKED, DAP_DATA_SIZE_16, 2560, block_tmp));
+		//misc_PrintBulk(CAST(uint8_t *, block_tmp), 49152*sizeof(uint32_t), 32);
+		memset(block_tmp, 0x0, 2560*sizeof(uint32_t));
+		log_info("Read size 32, result:%d.",
+				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_PACKED, DAP_DATA_SIZE_16, 2560, block_tmp));
+		misc_PrintBulk(CAST(uint8_t *, block_tmp), 2560*sizeof(uint32_t), 32);
+		//for(int i=0;i<2560;i++){
+		//	log_debug("%d,%x:%x.",i,i, block_tmp[i] & (0xFFFF << ((i&1)<<4)));
+		//}
 //		memset(block_tmp, 0x0, sizeof(block_tmp));
 //		log_info("Read size 32, result:%d.",
 //				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_32, 2056, block_tmp));
