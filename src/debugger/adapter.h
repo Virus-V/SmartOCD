@@ -123,7 +123,6 @@ struct DAP_Command{
 };
 
 // 仿真器的公共操作命令，每个仿真器都必须实现这些
-// XXX 提取出来公共操作
 enum commonOperation {
 	/**
 	 * 设置仿真器状态
@@ -323,25 +322,66 @@ BOOL adapter_JTAG_Exchange_TAP_DR(AdapterObject *adapterObj, uint16_t tapIndex, 
 #define adapter_DAP_CURR_AP(pa) ((pa)->SelectReg.info.AP_Sel)
 /**
  * TODO 完善一些检查，比如在JTAG模式下不可以访问写ABORT寄存器和读IDCODE寄存器等等
- * TODO 将下面函数合并成单个函数
  */
+// Single方式读写寄存器
+BOOL adapter_DAP_RW_nP_Single(AdapterObject *adapterObj, int reg, BOOL read, BOOL ap, uint32_t data_in, uint32_t *data_out, BOOL updateSelect);
 // 读DP寄存器
-BOOL adapter_DAP_Read_DP_Single(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, BOOL updateSelect);
-// 写DP寄存器
-BOOL adapter_DAP_Write_DP_Single(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t data, BOOL updateSelect);
-// 读AP寄存器
-BOOL adapter_DAP_Read_AP_Single(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, BOOL updateSelect);
-// 写AP寄存器
-BOOL adapter_DAP_Write_AP_Single(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t data, BOOL updateSelect);
+//BOOL adapter_DAP_Read_DP_Single(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, BOOL updateSelect);
+#define adapter_DAP_Read_DP_Single(ao,reg,data_out,update) ({\
+		assert(IS_DP_REG(reg));	\
+		adapter_DAP_RW_nP_Single((ao),(reg),TRUE,FALSE,0,(data_out),(update));	\
+})
 
+// 写DP寄存器
+//BOOL adapter_DAP_Write_DP_Single(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t data, BOOL updateSelect);
+#define adapter_DAP_Write_DP_Single(ao,reg,data_in,update) ({\
+		assert(IS_DP_REG(reg));	\
+		adapter_DAP_RW_nP_Single((ao),(reg),FALSE,FALSE,(data_in),NULL,(update));	\
+})
+
+// 读AP寄存器
+//BOOL adapter_DAP_Read_AP_Single(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, BOOL updateSelect);
+#define adapter_DAP_Read_AP_Single(ao,reg,data_out,update) ({\
+		assert(IS_AP_REG(reg));	\
+		adapter_DAP_RW_nP_Single((ao),(reg),TRUE,TRUE,0,(data_out),(update));	\
+})
+
+// 写AP寄存器
+//BOOL adapter_DAP_Write_AP_Single(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t data, BOOL updateSelect);
+#define adapter_DAP_Write_AP_Single(ao,reg,data_in,update) ({\
+		assert(IS_AP_REG(reg));	\
+		adapter_DAP_RW_nP_Single((ao),(reg),FALSE,TRUE,(data_in),NULL,(update));	\
+})
+
+// Block方式读写寄存器
+BOOL adapter_DAP_RW_nP_Block(AdapterObject *adapterObj, int reg, BOOL read, BOOL ap, uint32_t *dataIO, int blockCnt, BOOL updateSelect);
 // 多次读DP寄存器
-BOOL adapter_DAP_Read_DP_Block(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect);
+//BOOL adapter_DAP_Read_DP_Block(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect);
+#define adapter_DAP_Read_DP_Block(ao,reg,data_out,cnt,update) ({\
+		assert(IS_DP_REG(reg));	\
+		adapter_DAP_RW_nP_Block((ao),(reg),TRUE,FALSE,(data_out),(cnt),(update));	\
+})
+
 // 多次写DP寄存器
-BOOL adapter_DAP_Write_DP_Block(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect);
+//BOOL adapter_DAP_Write_DP_Block(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect);
+#define adapter_DAP_Write_DP_Block(ao,reg,data_in,cnt,update) ({\
+		assert(IS_DP_REG(reg));	\
+		adapter_DAP_RW_nP_Block((ao),(reg),FALSE,FALSE,(data_in),(cnt),(update));	\
+})
+
 // 多次读AP寄存器
-BOOL adapter_DAP_Read_AP_Block(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect);
+//BOOL adapter_DAP_Read_AP_Block(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect);
+#define adapter_DAP_Read_AP_Block(ao,reg,data_out,cnt,update) ({\
+		assert(IS_AP_REG(reg));	\
+		adapter_DAP_RW_nP_Block((ao),(reg),TRUE,TRUE,(data_out),(cnt),(update));	\
+})
+
 // 多次写AP寄存器
-BOOL adapter_DAP_Write_AP_Block(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect);
+//BOOL adapter_DAP_Write_AP_Block(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect);
+#define adapter_DAP_Write_AP_Block(ao,reg,data_in,cnt,update) ({\
+		assert(IS_AP_REG(reg));	\
+		adapter_DAP_RW_nP_Block((ao),(reg),FALSE,TRUE,(data_in),(cnt),(update));	\
+})
 
 // 执行DAP队列中的指令
 BOOL adapter_DAP_Execute(AdapterObject *adapterObj);

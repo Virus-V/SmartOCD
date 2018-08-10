@@ -557,10 +557,10 @@ static BOOL add_DAP_RW_RegSingle(
 // 对单个寄存器进行多次读写
 static BOOL add_DAP_RW_RegBlock(
 	struct list_head *list, int reg, BOOL read, BOOL ap, 
-	uint32_t *dataR, uint32_t *dataW, int count)
+	uint32_t *dataIO, int count)
 {
 	assert(list != NULL);
-	assert((read == TRUE && dataR != NULL) || read == FALSE);
+	assert((read == TRUE && dataIO != NULL) || read == FALSE);
 	// 创建指令并插入队列
 	struct DAP_Command *command = new_DAP_Command(list);
 	if(command == NULL){
@@ -573,132 +573,171 @@ static BOOL add_DAP_RW_RegBlock(
 	command->instr.RWRegBlock.APnDP = ap;
 	command->instr.RWRegBlock.blockCnt = count;	// 读写寄存器次数
 	if(read == TRUE){
-		command->instr.RWRegBlock.data.read = dataR;
+		command->instr.RWRegBlock.data.read = dataIO;
 	}else{
-		command->instr.RWRegBlock.data.write = dataW;
+		command->instr.RWRegBlock.data.write = dataIO;
 	}
 	return TRUE;
 }
+
+///**
+// * 读DP寄存器
+// * updateSelect:是否自动更新UPDATE寄存器
+// */
+//BOOL adapter_DAP_Read_DP_Single(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, BOOL updateSelect){
+//	assert(adapterObj != NULL);
+//	assert(IS_DP_REG(reg));
+//	// 自动插入更新SELECT寄存器的指令
+//	if(updateSelect == TRUE){
+//		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
+//		LIST_HEAD(list_tmp);
+//		if(adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel != (reg >> 4)){
+//			// 更新本地DP BankSel部分
+//			adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel = reg >> 4;
+//			// 写SELECT寄存器
+//			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData) == FALSE){
+//				log_warn("Update SELECT Register Failed!");
+//				adapterObj->dap.SELECT_Reg.regData = select_bak;
+//				return FALSE;
+//			}
+//		}
+//		// 读reg
+//		if(add_DAP_RW_RegSingle(&list_tmp, reg, TRUE, FALSE, data, 0) == FALSE){
+//			adapterObj->dap.SELECT_Reg.regData = select_bak;
+//			// 释放队列指令数据
+//			struct DAP_Command *cmd, *cmd_t;
+//			list_for_each_entry_safe(cmd, cmd_t, &list_tmp, list_entry){
+//				list_del(&cmd->list_entry);	// 将链表中删除
+//				free(cmd);
+//			}
+//			return FALSE;
+//		}
+//		// 并入指令队列
+//		list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
+//	}else{
+//		if(add_DAP_RW_RegSingle(&adapterObj->dap.instrQueue, reg, TRUE, FALSE, data, 0) == FALSE){
+//			return FALSE;
+//		}
+//	}
+//	return TRUE;
+//}
+//
+//BOOL adapter_DAP_Write_DP_Single(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t data, BOOL updateSelect){
+//	assert(adapterObj != NULL);
+//	assert(IS_DP_REG(reg));
+//	if(updateSelect == TRUE){
+//		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
+//		LIST_HEAD(list_tmp);
+//		if(adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel != (reg >> 4)){
+//			// 更新本地DP BankSel部分
+//			adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel = reg >> 4;
+//			// 写SELECT寄存器
+//			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData) == FALSE){
+//				log_warn("Update SELECT Register Failed!");
+//				adapterObj->dap.SELECT_Reg.regData = select_bak;
+//				return FALSE;
+//			}
+//		}
+//		// 写reg
+//		if(add_DAP_RW_RegSingle(&list_tmp, reg, FALSE, FALSE, NULL, data) == FALSE){
+//			adapterObj->dap.SELECT_Reg.regData = select_bak;
+//			// 释放队列指令数据
+//			struct DAP_Command *cmd, *cmd_t;
+//			list_for_each_entry_safe(cmd, cmd_t, &list_tmp, list_entry){
+//				list_del(&cmd->list_entry);	// 将链表中删除
+//				free(cmd);
+//			}
+//			return FALSE;
+//		}
+//		// 并入指令队列
+//		list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
+//	}else{
+//		if(add_DAP_RW_RegSingle(&adapterObj->dap.instrQueue, reg, FALSE, FALSE, NULL, data) == FALSE){
+//			return FALSE;
+//		}
+//	}
+//	return TRUE;
+//}
+//
+//BOOL adapter_DAP_Read_AP_Single(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, BOOL updateSelect){
+//	assert(adapterObj != NULL);
+//	assert(IS_AP_REG(reg));
+//	if(updateSelect == TRUE){
+//		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
+//		LIST_HEAD(list_tmp);
+//		if(adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel != (reg >> 4)){
+//			// 更新本地AP BankSel部分
+//			adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel = reg >> 4;
+//			// 写SELECT寄存器
+//			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData) == FALSE){
+//				log_warn("Update SELECT Register Failed!");
+//				adapterObj->dap.SELECT_Reg.regData = select_bak;
+//				return FALSE;
+//			}
+//		}
+//		// 读 AP reg
+//		if(add_DAP_RW_RegSingle(&list_tmp, reg, TRUE, TRUE, data, 0) == FALSE){
+//			adapterObj->dap.SELECT_Reg.regData = select_bak;
+//			// 释放队列指令数据
+//			struct DAP_Command *cmd, *cmd_t;
+//			list_for_each_entry_safe(cmd, cmd_t, &list_tmp, list_entry){
+//				list_del(&cmd->list_entry);	// 将链表中删除
+//				free(cmd);
+//			}
+//			return FALSE;
+//		}
+//		// 并入DAP指令队列
+//		list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
+//	}else{
+//		if(add_DAP_RW_RegSingle(&adapterObj->dap.instrQueue, reg, TRUE, TRUE, data, 0) == FALSE){
+//			return FALSE;
+//		}
+//	}
+//	return TRUE;
+//}
+//
+//BOOL adapter_DAP_Write_AP_Single(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t data, BOOL updateSelect){
+//	assert(adapterObj != NULL);
+//	assert(IS_AP_REG(reg));
+//	if(updateSelect == TRUE){
+//		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
+//		LIST_HEAD(list_tmp);
+//		if(adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel != (reg >> 4)){
+//			// 更新本地AP BankSel部分
+//			adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel = reg >> 4;
+//			// 写SELECT寄存器
+//			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData) == FALSE){
+//				log_warn("Update SELECT Register Failed!");
+//				adapterObj->dap.SELECT_Reg.regData = select_bak;
+//				return FALSE;
+//			}
+//		}
+//		// 写 AP reg
+//		if(add_DAP_RW_RegSingle(&list_tmp, reg, FALSE, TRUE, NULL, data) == FALSE){
+//			adapterObj->dap.SELECT_Reg.regData = select_bak;
+//			// 释放队列指令数据
+//			struct DAP_Command *cmd, *cmd_t;
+//			list_for_each_entry_safe(cmd, cmd_t, &list_tmp, list_entry){
+//				list_del(&cmd->list_entry);	// 将链表中删除
+//				free(cmd);
+//			}
+//			return FALSE;
+//		}
+//		// 并入DAP指令队列
+//		list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
+//	}else{
+//		if(add_DAP_RW_RegSingle(&adapterObj->dap.instrQueue, reg, FALSE, TRUE, NULL, data) == FALSE){
+//			return FALSE;
+//		}
+//	}
+//	return TRUE;
+//}
 
 /**
- * 读DP寄存器
- * updateSelect:是否自动更新UPDATE寄存器
+ * Single 方式读写nP寄存器
  */
-BOOL adapter_DAP_Read_DP_Single(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, BOOL updateSelect){
+BOOL adapter_DAP_RW_nP_Single(AdapterObject *adapterObj, int reg, BOOL read, BOOL ap, uint32_t data_in, uint32_t *data_out, BOOL updateSelect){
 	assert(adapterObj != NULL);
-	assert(IS_DP_REG(reg));
-	// 自动插入更新SELECT寄存器的指令
-	if(updateSelect == TRUE){
-		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
-		LIST_HEAD(list_tmp);
-		if(adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel != (reg >> 4)){
-			// 更新本地DP BankSel部分
-			adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel = reg >> 4;
-			// 写SELECT寄存器
-			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData) == FALSE){
-				log_warn("Update SELECT Register Failed!");
-				adapterObj->dap.SELECT_Reg.regData = select_bak;
-				return FALSE;
-			}
-		}
-		// 读reg
-		if(add_DAP_RW_RegSingle(&list_tmp, reg, TRUE, FALSE, data, 0) == FALSE){
-			adapterObj->dap.SELECT_Reg.regData = select_bak;
-			// 释放队列指令数据
-			struct DAP_Command *cmd, *cmd_t;
-			list_for_each_entry_safe(cmd, cmd_t, &list_tmp, list_entry){
-				list_del(&cmd->list_entry);	// 将链表中删除
-				free(cmd);
-			}
-			return FALSE;
-		}
-		// 并入指令队列
-		list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
-	}else{
-		if(add_DAP_RW_RegSingle(&adapterObj->dap.instrQueue, reg, TRUE, FALSE, data, 0) == FALSE){
-			return FALSE;
-		}
-	}
-	return TRUE;
-}
-
-BOOL adapter_DAP_Write_DP_Single(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t data, BOOL updateSelect){
-	assert(adapterObj != NULL);
-	assert(IS_DP_REG(reg));
-	if(updateSelect == TRUE){
-		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
-		LIST_HEAD(list_tmp);
-		if(adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel != (reg >> 4)){
-			// 更新本地DP BankSel部分
-			adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel = reg >> 4;
-			// 写SELECT寄存器
-			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData) == FALSE){
-				log_warn("Update SELECT Register Failed!");
-				adapterObj->dap.SELECT_Reg.regData = select_bak;
-				return FALSE;
-			}
-		}
-		// 写reg
-		if(add_DAP_RW_RegSingle(&list_tmp, reg, FALSE, FALSE, NULL, data) == FALSE){
-			adapterObj->dap.SELECT_Reg.regData = select_bak;
-			// 释放队列指令数据
-			struct DAP_Command *cmd, *cmd_t;
-			list_for_each_entry_safe(cmd, cmd_t, &list_tmp, list_entry){
-				list_del(&cmd->list_entry);	// 将链表中删除
-				free(cmd);
-			}
-			return FALSE;
-		}
-		// 并入指令队列
-		list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
-	}else{
-		if(add_DAP_RW_RegSingle(&adapterObj->dap.instrQueue, reg, FALSE, FALSE, NULL, data) == FALSE){
-			return FALSE;
-		}
-	}
-	return TRUE;
-}
-
-BOOL adapter_DAP_Read_AP_Single(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, BOOL updateSelect){
-	assert(adapterObj != NULL);
-	assert(IS_AP_REG(reg));
-	if(updateSelect == TRUE){
-		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
-		LIST_HEAD(list_tmp);
-		if(adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel != (reg >> 4)){
-			// 更新本地AP BankSel部分
-			adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel = reg >> 4;
-			// 写SELECT寄存器
-			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData) == FALSE){
-				log_warn("Update SELECT Register Failed!");
-				adapterObj->dap.SELECT_Reg.regData = select_bak;
-				return FALSE;
-			}
-		}
-		// 读 AP reg
-		if(add_DAP_RW_RegSingle(&list_tmp, reg, TRUE, TRUE, data, 0) == FALSE){
-			adapterObj->dap.SELECT_Reg.regData = select_bak;
-			// 释放队列指令数据
-			struct DAP_Command *cmd, *cmd_t;
-			list_for_each_entry_safe(cmd, cmd_t, &list_tmp, list_entry){
-				list_del(&cmd->list_entry);	// 将链表中删除
-				free(cmd);
-			}
-			return FALSE;
-		}
-		// 并入DAP指令队列
-		list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
-	}else{
-		if(add_DAP_RW_RegSingle(&adapterObj->dap.instrQueue, reg, TRUE, TRUE, data, 0) == FALSE){
-			return FALSE;
-		}
-	}
-	return TRUE;
-}
-
-BOOL adapter_DAP_Write_AP_Single(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t data, BOOL updateSelect){
-	assert(adapterObj != NULL);
-	assert(IS_AP_REG(reg));
 	if(updateSelect == TRUE){
 		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
 		LIST_HEAD(list_tmp);
@@ -713,7 +752,7 @@ BOOL adapter_DAP_Write_AP_Single(AdapterObject *adapterObj, enum AP_Regs reg, ui
 			}
 		}
 		// 写 AP reg
-		if(add_DAP_RW_RegSingle(&list_tmp, reg, FALSE, TRUE, NULL, data) == FALSE){
+		if(add_DAP_RW_RegSingle(&list_tmp, reg, read, ap, data_out, data_in) == FALSE){
 			adapterObj->dap.SELECT_Reg.regData = select_bak;
 			// 释放队列指令数据
 			struct DAP_Command *cmd, *cmd_t;
@@ -726,96 +765,172 @@ BOOL adapter_DAP_Write_AP_Single(AdapterObject *adapterObj, enum AP_Regs reg, ui
 		// 并入DAP指令队列
 		list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
 	}else{
-		if(add_DAP_RW_RegSingle(&adapterObj->dap.instrQueue, reg, FALSE, TRUE, NULL, data) == FALSE){
+		if(add_DAP_RW_RegSingle(&adapterObj->dap.instrQueue, reg, read, ap, data_out, data_in) == FALSE){
 			return FALSE;
 		}
 	}
 	return TRUE;
 }
+
+///**
+// * 多次读取DP寄存器
+// * data：读取结果，空间要大于等于blockCnt*sizeof(uint32_t)
+// * blockCnt：读取次数
+// */
+//BOOL adapter_DAP_Read_DP_Block(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect){
+//	assert(adapterObj != NULL);
+//	assert(IS_DP_REG(reg));
+//	// 自动插入更新SELECT寄存器的指令
+//	if(updateSelect == TRUE){
+//		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
+//		LIST_HEAD(list_tmp);
+//		if(adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel != (reg >> 4)){
+//			// 更新本地DP BankSel部分
+//			adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel = reg >> 4;
+//			// 写SELECT寄存器
+//			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData) == FALSE){
+//				log_warn("Update SELECT Register Failed!");
+//				adapterObj->dap.SELECT_Reg.regData = select_bak;
+//				return FALSE;
+//			}
+//		}
+//		// 读reg
+//		if(add_DAP_RW_RegBlock(&list_tmp, reg, TRUE, FALSE, data, blockCnt) == FALSE){
+//			adapterObj->dap.SELECT_Reg.regData = select_bak;
+//			// 释放队列指令数据
+//			struct DAP_Command *cmd, *cmd_t;
+//			list_for_each_entry_safe(cmd, cmd_t, &list_tmp, list_entry){
+//				list_del(&cmd->list_entry);	// 将链表中删除
+//				free(cmd);
+//			}
+//			return FALSE;
+//		}
+//		// 并入指令队列
+//		list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
+//	}else{
+//		if(add_DAP_RW_RegBlock(&adapterObj->dap.instrQueue, reg, TRUE, FALSE, data, blockCnt) == FALSE){
+//			return FALSE;
+//		}
+//	}
+//	return TRUE;
+//}
+//
+//BOOL adapter_DAP_Write_DP_Block(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect){
+//	assert(adapterObj != NULL);
+//	assert(IS_DP_REG(reg));
+//	if(updateSelect == TRUE){
+//		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
+//		LIST_HEAD(list_tmp);
+//		if(adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel != (reg >> 4)){
+//			// 更新本地DP BankSel部分
+//			adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel = reg >> 4;
+//			// 写SELECT寄存器
+//			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData) == FALSE){
+//				log_warn("Update SELECT Register Failed!");
+//				adapterObj->dap.SELECT_Reg.regData = select_bak;
+//				return FALSE;
+//			}
+//		}
+//		// 写reg
+//		if(add_DAP_RW_RegBlock(&list_tmp, reg, FALSE, FALSE, data, blockCnt) == FALSE){
+//			adapterObj->dap.SELECT_Reg.regData = select_bak;
+//			// 释放队列指令数据
+//			struct DAP_Command *cmd, *cmd_t;
+//			list_for_each_entry_safe(cmd, cmd_t, &list_tmp, list_entry){
+//				list_del(&cmd->list_entry);	// 将链表中删除
+//				free(cmd);
+//			}
+//			return FALSE;
+//		}
+//		// 并入指令队列
+//		list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
+//	}else{
+//		if(add_DAP_RW_RegBlock(&adapterObj->dap.instrQueue, reg, FALSE, FALSE, data, blockCnt) == FALSE){
+//			return FALSE;
+//		}
+//	}
+//	return TRUE;
+//}
+//
+//BOOL adapter_DAP_Read_AP_Block(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect){
+//	assert(adapterObj != NULL);
+//	assert(IS_AP_REG(reg));
+//	if(updateSelect == TRUE){
+//		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
+//		LIST_HEAD(list_tmp);
+//		if(adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel != (reg >> 4)){
+//			// 更新本地AP BankSel部分
+//			adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel = reg >> 4;
+//			// 写SELECT寄存器
+//			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData) == FALSE){
+//				log_warn("Update SELECT Register Failed!");
+//				adapterObj->dap.SELECT_Reg.regData = select_bak;
+//				return FALSE;
+//			}
+//		}
+//		// 读 AP reg
+//		if(add_DAP_RW_RegBlock(&list_tmp, reg, TRUE, TRUE, data, blockCnt) == FALSE){
+//			adapterObj->dap.SELECT_Reg.regData = select_bak;
+//			// 释放队列指令数据
+//			struct DAP_Command *cmd, *cmd_t;
+//			list_for_each_entry_safe(cmd, cmd_t, &list_tmp, list_entry){
+//				list_del(&cmd->list_entry);	// 将链表中删除
+//				free(cmd);
+//			}
+//			return FALSE;
+//		}
+//		// 并入DAP指令队列
+//		list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
+//	}else{
+//		if(add_DAP_RW_RegBlock(&adapterObj->dap.instrQueue, reg, TRUE, TRUE, data, blockCnt) == FALSE){
+//			return FALSE;
+//		}
+//	}
+//	return TRUE;
+//}
+//
+//BOOL adapter_DAP_Write_AP_Block(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect){
+//	assert(adapterObj != NULL);
+//	assert(IS_AP_REG(reg));
+//	if(updateSelect == TRUE){
+//		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
+//		LIST_HEAD(list_tmp);
+//		if(adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel != (reg >> 4)){
+//			// 更新本地AP BankSel部分
+//			adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel = reg >> 4;
+//			// 写SELECT寄存器
+//			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData) == FALSE){
+//				log_warn("Update SELECT Register Failed!");
+//				adapterObj->dap.SELECT_Reg.regData = select_bak;
+//				return FALSE;
+//			}
+//		}
+//		// 写 AP reg
+//		if(add_DAP_RW_RegBlock(&list_tmp, reg, FALSE, TRUE, data, blockCnt) == FALSE){
+//			adapterObj->dap.SELECT_Reg.regData = select_bak;
+//			// 释放队列指令数据
+//			struct DAP_Command *cmd, *cmd_t;
+//			list_for_each_entry_safe(cmd, cmd_t, &list_tmp, list_entry){
+//				list_del(&cmd->list_entry);	// 将链表中删除
+//				free(cmd);
+//			}
+//			return FALSE;
+//		}
+//		// 并入DAP指令队列
+//		list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
+//	}else{
+//		if(add_DAP_RW_RegBlock(&adapterObj->dap.instrQueue, reg, FALSE, TRUE, data, blockCnt) == FALSE){
+//			return FALSE;
+//		}
+//	}
+//	return TRUE;
+//}
 
 /**
- * 多次读取DP寄存器
- * data：读取结果，空间要大于等于blockCnt*sizeof(uint32_t)
- * blockCnt：读取次数
+ * Block方式读写nP寄存器
  */
-BOOL adapter_DAP_Read_DP_Block(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect){
+BOOL adapter_DAP_RW_nP_Block(AdapterObject *adapterObj, int reg, BOOL read, BOOL ap, uint32_t *dataIO, int blockCnt, BOOL updateSelect){
 	assert(adapterObj != NULL);
-	assert(IS_DP_REG(reg));
-	// 自动插入更新SELECT寄存器的指令
-	if(updateSelect == TRUE){
-		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
-		LIST_HEAD(list_tmp);
-		if(adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel != (reg >> 4)){
-			// 更新本地DP BankSel部分
-			adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel = reg >> 4;
-			// 写SELECT寄存器
-			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData) == FALSE){
-				log_warn("Update SELECT Register Failed!");
-				adapterObj->dap.SELECT_Reg.regData = select_bak;
-				return FALSE;
-			}
-		}
-		// 读reg
-		if(add_DAP_RW_RegBlock(&list_tmp, reg, TRUE, FALSE, data, NULL, blockCnt) == FALSE){
-			adapterObj->dap.SELECT_Reg.regData = select_bak;
-			// 释放队列指令数据
-			struct DAP_Command *cmd, *cmd_t;
-			list_for_each_entry_safe(cmd, cmd_t, &list_tmp, list_entry){
-				list_del(&cmd->list_entry);	// 将链表中删除
-				free(cmd);
-			}
-			return FALSE;
-		}
-		// 并入指令队列
-		list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
-	}else{
-		if(add_DAP_RW_RegBlock(&adapterObj->dap.instrQueue, reg, TRUE, FALSE, data, NULL, blockCnt) == FALSE){
-			return FALSE;
-		}
-	}
-	return TRUE;
-}
-
-BOOL adapter_DAP_Write_DP_Block(AdapterObject *adapterObj, enum DP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect){
-	assert(adapterObj != NULL);
-	assert(IS_DP_REG(reg));
-	if(updateSelect == TRUE){
-		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
-		LIST_HEAD(list_tmp);
-		if(adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel != (reg >> 4)){
-			// 更新本地DP BankSel部分
-			adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel = reg >> 4;
-			// 写SELECT寄存器
-			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData) == FALSE){
-				log_warn("Update SELECT Register Failed!");
-				adapterObj->dap.SELECT_Reg.regData = select_bak;
-				return FALSE;
-			}
-		}
-		// 写reg
-		if(add_DAP_RW_RegBlock(&list_tmp, reg, FALSE, FALSE, NULL, data, blockCnt) == FALSE){
-			adapterObj->dap.SELECT_Reg.regData = select_bak;
-			// 释放队列指令数据
-			struct DAP_Command *cmd, *cmd_t;
-			list_for_each_entry_safe(cmd, cmd_t, &list_tmp, list_entry){
-				list_del(&cmd->list_entry);	// 将链表中删除
-				free(cmd);
-			}
-			return FALSE;
-		}
-		// 并入指令队列
-		list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
-	}else{
-		if(add_DAP_RW_RegBlock(&adapterObj->dap.instrQueue, reg, FALSE, FALSE, NULL, data, blockCnt) == FALSE){
-			return FALSE;
-		}
-	}
-	return TRUE;
-}
-
-BOOL adapter_DAP_Read_AP_Block(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect){
-	assert(adapterObj != NULL);
-	assert(IS_AP_REG(reg));
 	if(updateSelect == TRUE){
 		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
 		LIST_HEAD(list_tmp);
@@ -829,8 +944,8 @@ BOOL adapter_DAP_Read_AP_Block(AdapterObject *adapterObj, enum AP_Regs reg, uint
 				return FALSE;
 			}
 		}
-		// 读 AP reg
-		if(add_DAP_RW_RegBlock(&list_tmp, reg, TRUE, TRUE, data, NULL, blockCnt) == FALSE){
+		// 加入block 指令
+		if(add_DAP_RW_RegBlock(&list_tmp, reg, read, ap, dataIO, blockCnt) == FALSE){
 			adapterObj->dap.SELECT_Reg.regData = select_bak;
 			// 释放队列指令数据
 			struct DAP_Command *cmd, *cmd_t;
@@ -843,44 +958,8 @@ BOOL adapter_DAP_Read_AP_Block(AdapterObject *adapterObj, enum AP_Regs reg, uint
 		// 并入DAP指令队列
 		list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
 	}else{
-		if(add_DAP_RW_RegBlock(&adapterObj->dap.instrQueue, reg, TRUE, TRUE, data, NULL, blockCnt) == FALSE){
-			return FALSE;
-		}
-	}
-	return TRUE;
-}
-
-BOOL adapter_DAP_Write_AP_Block(AdapterObject *adapterObj, enum AP_Regs reg, uint32_t *data, int blockCnt, BOOL updateSelect){
-	assert(adapterObj != NULL);
-	assert(IS_AP_REG(reg));
-	if(updateSelect == TRUE){
-		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
-		LIST_HEAD(list_tmp);
-		if(adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel != (reg >> 4)){
-			// 更新本地AP BankSel部分
-			adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel = reg >> 4;
-			// 写SELECT寄存器
-			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData) == FALSE){
-				log_warn("Update SELECT Register Failed!");
-				adapterObj->dap.SELECT_Reg.regData = select_bak;
-				return FALSE;
-			}
-		}
-		// 写 AP reg
-		if(add_DAP_RW_RegBlock(&list_tmp, reg, FALSE, TRUE, NULL, data, blockCnt) == FALSE){
-			adapterObj->dap.SELECT_Reg.regData = select_bak;
-			// 释放队列指令数据
-			struct DAP_Command *cmd, *cmd_t;
-			list_for_each_entry_safe(cmd, cmd_t, &list_tmp, list_entry){
-				list_del(&cmd->list_entry);	// 将链表中删除
-				free(cmd);
-			}
-			return FALSE;
-		}
-		// 并入DAP指令队列
-		list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
-	}else{
-		if(add_DAP_RW_RegBlock(&adapterObj->dap.instrQueue, reg, FALSE, TRUE, NULL, data, blockCnt) == FALSE){
+		// 加入block指令
+		if(add_DAP_RW_RegBlock(&adapterObj->dap.instrQueue, reg, read, ap, dataIO, blockCnt) == FALSE){
 			return FALSE;
 		}
 	}
@@ -896,7 +975,40 @@ BOOL adapter_DAP_Execute(AdapterObject *adapterObj){
 	// 如果指令队列为空，则直接成功返回
 	if(list_empty(&adapterObj->dap.instrQueue)) return TRUE;
 	// 解析并执行JTAG队列指令
-	return adapterObj->Operate(adapterObj, AINS_DAP_CMD_EXECUTE);
+	if(adapterObj->Operate(adapterObj, AINS_DAP_CMD_EXECUTE) == FALSE){
+		log_warn("Execute Commands Failed.");
+		return FALSE;
+	}
+	// 执行成功之后读取SELECT、CTRL_STAT并更新本地缓存
+	LIST_HEAD(list_tmp);
+	uint32_t select = 0, ctrl_stat = 0;
+	// 读SELECT寄存器
+	if(add_DAP_RW_RegSingle(&list_tmp, SELECT, TRUE, FALSE, &select, 0) == FALSE){
+		goto FAILED;
+	}
+	// 加入block 指令
+	if(add_DAP_RW_RegSingle(&list_tmp, CTRL_STAT, TRUE, FALSE, &ctrl_stat, 0) == FALSE){
+		goto FAILED;
+	}
+	// 并入DAP指令队列
+	list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
+	// 执行
+	if(adapterObj->Operate(adapterObj, AINS_DAP_CMD_EXECUTE) == TRUE){
+		adapterObj->dap.SELECT_Reg.regData = select;
+		adapterObj->dap.CTRL_STAT_Reg.regData = ctrl_stat;
+		return TRUE;
+	}else{
+		log_warn("Refresh SELECT & CTRL/STAT Register Failed!");
+		return FALSE;
+	}
+FAILED:;
+	struct DAP_Command *cmd, *cmd_t;
+	list_for_each_entry_safe(cmd, cmd_t, &list_tmp, list_entry){
+		list_del(&cmd->list_entry);	// 将链表中删除
+		free(cmd);
+	}
+	log_warn("Refresh SELECT & CTRL/STAT Register Failed!");
+	return FALSE;
 }
 
 /**

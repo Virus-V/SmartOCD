@@ -629,7 +629,7 @@ BOOL DAP_ReadMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode,
 		}
 	}
 
-	// TODO 处理地址自增模式下超过1kb边界的情况，超过1kb的边界了需要拆分，每次地址自增控制在1kb以内
+	// 处理地址自增模式下超过1kb边界的情况，超过1kb的边界了需要拆分，每次地址自增控制在1kb以内
 	uint64_t addrCurr = addr, addrEnd;	// 当前地址，结束地址
 	uint64_t addrNextBoundary;	// 地址的下一个1kb边界
 	int thisTimeTransCnt,dataPos = 0;// 指向data_out的偏移
@@ -741,7 +741,7 @@ BOOL DAP_WriteMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode
 		}
 	}
 
-	// TODO 处理地址自增模式下超过1kb边界的情况，超过1kb的边界了需要拆分，每次地址自增控制在1kb以内
+	// 处理地址自增模式下超过1kb边界的情况，超过1kb的边界了需要拆分，每次地址自增控制在1kb以内
 	uint64_t addrCurr = addr, addrEnd;	// 当前地址，结束地址
 	uint64_t addrNextBoundary;	// 地址的下一个1kb边界
 	int thisTimeTransCnt,dataPos = 0;// 指向data_out的偏移
@@ -799,3 +799,46 @@ BOOL DAP_WriteMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode
 	adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = cswTmp.regData;
 	return TRUE;
 }
+
+/**
+ * 读取Component ID和Peripheral ID
+ * componentBase：Component的基址，必须4KB对齐
+ * cid_out：读取的Component ID
+ * pid_out：读取的Peripheral ID
+ */
+BOOL DAP_Read_CID_PID(AdapterObject *adapterObj, uint32_t componentBase, uint32_t *cid_out, uint64_t *pid_out){
+	assert(adapterObj != NULL);
+	jmp_buf exception;
+	if((componentBase & 0xFFF) != 0) {
+		log_warn("Component base address is not 4KB aligned!");
+		return FALSE;
+	}
+	*cid_out = 0; *pid_out = 0;
+	uint32_t cid0, cid1, cid2, cid3;
+	uint32_t pid0, pid1, pid2, pid3, pid4;	// pid5-7全是0，所以不用读
+	// 错误处理
+	switch(setjmp(exception)){
+	case 1: log_warn("DAP_ReadMem32:Read Component ID Failed!"); return FALSE;
+	case 2: log_warn("DAP_ReadMem32:Read Peripheral ID Failed!"); return FALSE;
+	case 3: log_warn("DAP_Execute:Failed!"); return FALSE;
+	default: log_warn("Unknow Error."); return FALSE;
+	case 0:break;
+	}
+	// 读取Component ID
+	if(DAP_ReadMem32(adapterObj, componentBase + 0xFF0, &cid0) == FALSE) longjmp(exception, 1);
+	if(DAP_ReadMem32(adapterObj, componentBase + 0xFF4, &cid1) == FALSE) longjmp(exception, 1);
+	if(DAP_ReadMem32(adapterObj, componentBase + 0xFF8, &cid2) == FALSE) longjmp(exception, 1);
+	if(DAP_ReadMem32(adapterObj, componentBase + 0xFFC, &cid3) == FALSE) longjmp(exception, 1);
+	// 读取Peripheral ID
+	if(DAP_ReadMem32(adapterObj, componentBase + 0xFE0, &pid0) == FALSE) longjmp(exception, 2);
+	if(DAP_ReadMem32(adapterObj, componentBase + 0xFE4, &pid1) == FALSE) longjmp(exception, 2);
+	if(DAP_ReadMem32(adapterObj, componentBase + 0xFE8, &pid2) == FALSE) longjmp(exception, 2);
+	if(DAP_ReadMem32(adapterObj, componentBase + 0xFEC, &pid3) == FALSE) longjmp(exception, 2);
+	if(DAP_ReadMem32(adapterObj, componentBase + 0xFD0, &pid4) == FALSE) longjmp(exception, 2);
+
+	*cid_out = (cid3 & 0xff) << 24 | (cid2 & 0xff) << 16 | (cid1 & 0xff) << 8 | (cid0 & 0xff);
+	*pid_out = (uint64_t)(pid4 & 0xff) << 32 | (pid3 & 0xff) << 24 | (pid2 & 0xff) << 16 | (pid1 & 0xff) << 8 | (pid0 & 0xff);
+	return TRUE;
+}
+
+

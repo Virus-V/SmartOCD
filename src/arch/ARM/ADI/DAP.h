@@ -267,4 +267,5 @@ BOOL DAP_WriteMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t data_in);
 
 BOOL DAP_ReadMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode, int transSize, int transCnt, uint32_t *data_out);
 BOOL DAP_WriteMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode, int transSize, int transCnt, uint32_t *data_in);
+BOOL DAP_Read_CID_PID(AdapterObject *adapterObj, uint32_t componentBase, uint32_t *cid_out, uint64_t *pid_out);
 #endif /* SRC_ARCH_ARM_ADI_DAP_H_ */
