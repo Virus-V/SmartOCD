@@ -26,12 +26,28 @@ void load3rd(lua_State *L){
 }
 
 /**
+ * Register constants to table which is on the stack top.
+ * The table MUST exists on the stack top before call this function.
+ */
+void layer_regConstant(lua_State *L, lua3rd_regConst *c){
+	assert(L != NULL);
+	while(c->name != NULL){
+		// TODO distinguish constant type
+		lua_pushinteger(L, c->value);
+		// register constant to the table
+		lua_setfield(L, -2, c->name);
+		c++;
+	}
+}
+
+/**
  * 新建类型元表
  * gc：该类型的垃圾回收回调
  * oo：面向对象的方法集合
  * 将元表的副本留在栈中
  */
 void layer_newTypeMetatable(lua_State *L, const char *tname, lua_CFunction gc, const luaL_Reg *oo){
+	assert(L != NULL);
 	// 创建元表
 	luaL_newmetatable(L, tname); // +1
 	lua_pushvalue(L, -1);	// 复制索引 +1

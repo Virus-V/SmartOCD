@@ -23,10 +23,8 @@
  */
 static int cmsis_dap_new (lua_State *L) {
 	struct cmsis_dap *cmsis_dapObj = lua_newuserdata(L, sizeof(struct cmsis_dap));	// +1
-	// 清零空间
-	memset(cmsis_dapObj, 0x0, sizeof(struct cmsis_dap));
 	// 初始化CMSIS-DAP
-	if( NewCMSIS_DAP(cmsis_dapObj) == FALSE){
+	if(NewCMSIS_DAP(cmsis_dapObj) == FALSE){
 		// 此函数永不返回，惯例用法前面加个return
 		return luaL_error(L, "Failed to new CMSIS-DAP Object.");
 	}
@@ -84,9 +82,9 @@ static int cmsis_dap_connect(lua_State *L){
 static const luaL_Reg lib_cmsis_dap_f[] = {
 	{"new", cmsis_dap_new},
 	{"connect", cmsis_dap_connect},
-	{"dap_jtag_configure", NULL},
-	{"dap_transferConfigure", NULL},
-	{"dap_swd_configure", NULL},
+	{"jtag_configure", NULL},
+	{"transferConfigure", NULL},
+	{"swd_configure", NULL},
 	{NULL, NULL}
 };
 
