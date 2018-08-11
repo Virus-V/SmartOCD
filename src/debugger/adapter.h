@@ -386,5 +386,6 @@ BOOL adapter_DAP_WriteAbortReg(AdapterObject *adapterObj, uint32_t data);
 
 // 返回传输方式的字符串形式
 const char *adapter_Transport2Str(enum transportType type);
+const char *adapter_Status2Str(enum adapterStatus type);
 
 #endif /* SRC_DEBUGGER_ADAPTER_H_ */

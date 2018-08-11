@@ -733,3 +733,16 @@ const char *adapter_Transport2Str(enum transportType type){
 #undef X
 	return "UNKOWN_TRANSPORT";
 }
+
+/**
+ * 获得仿真器状态字符串
+ */
+const char *adapter_Status2Str(enum adapterStatus type){
+#define X(_s) if (type == _s) return #_s
+	X(ADAPTER_STATUS_CONNECTED);
+	X(ADAPTER_STATUS_DISCONNECT);
+	X(ADAPTER_STATUS_RUNING);
+	X(ADAPTER_STATUS_IDLE);
+#undef X
+	return "UNKOWN_STATUS";
+}
