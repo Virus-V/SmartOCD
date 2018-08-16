@@ -3,11 +3,9 @@
  * Date:2018年04月20日22:13:45
  * Author: Virus.V <virusv@live.com>
 ]]
-cmsis_dap = require("cmsis_dap"); -- 加载CMSIS-DAP库
+adapter = require("Adapter");	-- 加载Adapter库
+cmsis_dap = require("CMSIS-DAP"); -- 加载CMSIS-DAP库
 cmsis_dapObj = cmsis_dap.new(); -- 创建新的CMSIS-DAP对象
-if cmsis_dapObj == nil then
-	error("Failed to get CMSIS-DAP Object instance!")
-end
 -- CMSIS-DAP的VID和PID
 local vid_pids = {
 	-- Keil Software
@@ -21,81 +19,58 @@ local vid_pids = {
 cmsis_dap.connect(cmsis_dapObj, vid_pids, nil)
 -- 初始化Adapter对象
 cmsis_dapObj:init()
+-- 配置CMSIS-DAP Transfer参数
+cmsis_dap.transferConfigure(cmsis_dapObj, 5, 5, 5)
+-- SWD参数
+cmsis_dap.swdConfigure(cmsis_dapObj, 0)
 -- 点亮连接状态指示灯
-cmsis_dapObj:setStatus("CONNECTED")
+cmsis_dapObj:setStatus(adapter.STATUS_CONNECTED)
 cmsis_dapObj:setClock(10000000)	-- 10MHz
-if not cmsis_dapObj:haveTransmission("JTAG") then
+if not cmsis_dapObj:haveTransmission(adapter.JTAG) then
 	error("Emmm.. This adapter does not support JTAG Transmission.")
 end
-cmsis_dapObj:selectTransmission("JTAG")
-cmsis_dapObj:setStatus("RUNING")
+cmsis_dapObj:selectTransmission(adapter.JTAG)
+cmsis_dapObj:setStatus(adapter.STATUS_RUNING)
 
--- 创建DAP寄存器地址表，Lua不支持常量。
-DAP_Reg = {
-	DP_CTRL_STAT 	= 0x04,
-	DP_SELECT 		= 0x08,
-	DP_RDBUFF		= 0x0C,
-	-- DPv1
-	DP_DPIDR		= 0x00,
-	DP_ABORT		= 0x00,
-	DP_DLCR			= 0x14;
-	DP_RESEND		= 0x08,
-	-- DPv2
-	DP_TARGETID		= 0x24,
-	DP_DLPIDR		= 0x34,
-	DP_EVENTSTAT	= 0x44,
-	DP_TARGETSEL	= 0x0C,
+-- 读取JTAG Pins
+local pins_data = cmsis_dapObj:jtagPins(0, 0, 0)
+print("JTAG Pins " .. pins_data)
+-- -- 引入DAP相关包
+-- dap = require("DAP")
+-- -- 创建DAP对象，使用CMSIS-DAP作为Adapter
+-- dapObj = dap.new(cmsis_dapObj)
+-- -- 设置TAP信息，一共两个TAP，第一个TAP的指令寄存器长度为4,第二个指令寄存器长度为5
+-- dapObj:setInfo({4})
+-- dapObj:reset(false);	-- TAP soft reset
+-- local idcodes = dapObj:get_IDCODE()
+-- print("===========Found " .. #idcodes .." TAPs===========")
+-- for k,v in ipairs(idcodes) do
+-- 	print(string.format("JTAG index %d => IDCODE:0x%08X", k, v))
+-- end
 
-	AP_CSW		= 0x00,
-	AP_TAR_LSB	= 0x04,
-	AP_TAR_MSB	= 0x08,
-	AP_DRW		= 0x0C,
-	AP_BD0		= 0x10,
-	AP_BD1		= 0x14,
-	AP_BD2		= 0x18,
-	AP_BD3		= 0x1C,
-	AP_CFG		= 0xF4,
-	AP_ROM_LSB	= 0xF8,
-	AP_ROM_MSB	= 0xF0,
-	AP_IDR		= 0xFC 
-}
-
--- 引入DAP相关包
-dap = require("DAP")
--- 创建DAP对象，使用CMSIS-DAP作为Adapter
-dapObj = dap.new(cmsis_dapObj)
--- 设置TAP信息，一共两个TAP，第一个TAP的指令寄存器长度为4,第二个指令寄存器长度为5
-dapObj:setInfo({4})
-dapObj:reset(false);	-- TAP soft reset
-local idcodes = dapObj:get_IDCODE()
-print("===========Found " .. #idcodes .." TAPs===========")
-for k,v in ipairs(idcodes) do
-	print(string.format("JTAG index %d => IDCODE:0x%08X", k, v))
-end
-
-dapObj:set_TAP(0)	-- 设置JTAG模式下当前DAP使用的TAP在JTAG扫描链中的索引，SW模式下忽略
-dapObj:setDelay(5)	-- 设置Memory等待周期数，等待内存操作完成。在慢速设备上有助于减少指令WAIT响应次数
--- 清除Sticky Flags
-dapObj:write_DP(DAP_Reg.DP_CTRL_STAT, 0x32)	
--- dapObj:writeAbort(0x1F)	-- 清除所有错误标志 S5P6818 是DPv0，所以Abort只有DAP Abort位
--- 将SELECT寄存器清零
-dapObj:write_DP(DAP_Reg.DP_SELECT, 0)
--- System domain power up && Debug domain power up
-dapObj:write_DP(DAP_Reg.DP_CTRL_STAT, 0x40000000 | 0x10000000 | 0x32)
-local ctrl_status
-repeat 
-	ctrl_status = dapObj:read_DP(DAP_Reg.DP_CTRL_STAT)
-until ctrl_status & (0x20000000 | 0x80000000) == (0x20000000 | 0x80000000)
-print("System and Debug Power up.")
--- 写入MASK LANE和OVERRUN Detection
-dapObj:write_DP(DAP_Reg.DP_CTRL_STAT, 0x40000000 | 0x10000000 | 0x00000F01 | 0x32)	
--- 检查错误
-local err, ctrl_stat = dapObj:checkError()
-if not err then 
-	error(string.format( "CTRL/STATUS: %08X", ctrl_stat)) 
-else
-	print(string.format( "CTRL/STATUS: %08X", ctrl_stat))
-end
+-- dapObj:set_TAP(0)	-- 设置JTAG模式下当前DAP使用的TAP在JTAG扫描链中的索引，SW模式下忽略
+-- dapObj:setDelay(5)	-- 设置Memory等待周期数，等待内存操作完成。在慢速设备上有助于减少指令WAIT响应次数
+-- -- 清除Sticky Flags
+-- dapObj:write_DP(DAP_Reg.DP_CTRL_STAT, 0x32)	
+-- -- dapObj:writeAbort(0x1F)	-- 清除所有错误标志 S5P6818 是DPv0，所以Abort只有DAP Abort位
+-- -- 将SELECT寄存器清零
+-- dapObj:write_DP(DAP_Reg.DP_SELECT, 0)
+-- -- System domain power up && Debug domain power up
+-- dapObj:write_DP(DAP_Reg.DP_CTRL_STAT, 0x40000000 | 0x10000000 | 0x32)
+-- local ctrl_status
+-- repeat 
+-- 	ctrl_status = dapObj:read_DP(DAP_Reg.DP_CTRL_STAT)
+-- until ctrl_status & (0x20000000 | 0x80000000) == (0x20000000 | 0x80000000)
+-- print("System and Debug Power up.")
+-- -- 写入MASK LANE和OVERRUN Detection
+-- dapObj:write_DP(DAP_Reg.DP_CTRL_STAT, 0x40000000 | 0x10000000 | 0x00000F01 | 0x32)	
+-- -- 检查错误
+-- local err, ctrl_stat = dapObj:checkError()
+-- if not err then 
+-- 	error(string.format( "CTRL/STATUS: %08X", ctrl_stat)) 
+-- else
+-- 	print(string.format( "CTRL/STATUS: %08X", ctrl_stat))
+-- end
 
 --[[
 0x80001000 => 0x00001003.
@@ -143,7 +118,7 @@ dapObj:write_AP(DAP_Reg.AP_CSW, csw | 0x2)
 ]]
 
 
-cmsis_dapObj:setStatus("IDLE")
+cmsis_dapObj:setStatus(adapter.STATUS_IDLE)
 -- 反初始化Adapter对象后禁止操作TAP对象和DAP对象
 -- cmsis_dapObj:deinit()
 

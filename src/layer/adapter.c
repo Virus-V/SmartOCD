@@ -140,7 +140,7 @@ static int adapter_jtag_status_change(lua_State *L){
 		return luaL_error(L, "JTAG state machine new state is illegal!");
 	}
 	if(adapter_JTAG_StatusChange(adapterObj, status) == FALSE){
-		return luaL_error(L, "JTAG state machine change state failed!");
+		return luaL_error(L, "Inserting an state machine change instruction failed!");
 	}
 	return 0;
 }
@@ -148,13 +148,181 @@ static int adapter_jtag_status_change(lua_State *L){
 /**
  * jtag交换TDI TDO
  * 1#：adapter对象
- * 2#:字符串对象 00101010 从字符串开始依次发出
+ * 2#:字符串对象
+ * 3#:二进制位个数
+ * Note：该函数会刷新JTAG指令队列
  */
 static int adapter_jtag_exchange_io(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
-	int tdi_len = 0;
-	const char *tdi_data = lua_tolstring (L, 2, &tdi_len);
+	size_t str_len = 0;
+	const char *tdi_data = lua_tolstring (L, 2, &str_len);
+	int bitCnt = (int)luaL_checkinteger(L, 3);
+	// 判断bit长度是否合法
+	if((str_len << 3) < bitCnt ){	// 字符串长度小于要发送的字节数
+		return luaL_error(L, "TDI data length is illegal!");
+	}
+	// 开辟缓冲内存空间
+	uint8_t *data = malloc(str_len * sizeof(uint8_t));
+	if(data == NULL){
+		return luaL_error(L, "TDI data buff alloc Failed!");
+	}
+	// 拷贝数据
+	memcpy(data, tdi_data, str_len * sizeof(uint8_t));
+	// 插入执行队列
+	if(adapter_JTAG_Exchange_IO(adapterObj, data, bitCnt) == FALSE){
+		free(data);
+		return luaL_error(L, "Insert to instruction queue failed!");
+	}
+	// 执行队列
+	if(adapter_JTAG_Execute(adapterObj) == FALSE){
+		free(data);
+		return luaL_error(L, "Execute the instruction queue failed!");
+	}
+	// 执行成功，构造lua字符串
+	lua_pushlstring(L, data, str_len);
+	free(data);	// 释放缓冲
+	return 1;
+}
 
+/**
+ * 在UPDATE之后转入idle状态等待几个时钟周期，以等待慢速的内存操作完成
+ * 1#:adapter对象
+ * 2#:cycles要进入Idle等待的周期
+ */
+static int adapter_jtag_idle_wait(lua_State *L){
+	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
+	int cycles = (int)luaL_checkinteger(L, 2);
+	if(adapter_JTAG_IdleWait(adapterObj, cycles) == FALSE){
+		return luaL_error(L, "Inserting an Idle instruction failed!");
+	}
+	return 0;
+}
+
+/**
+ * 执行指令队列
+ */
+static int adapter_jtag_execute_cmd(lua_State *L){
+	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
+	if(adapter_JTAG_Execute(adapterObj) == FALSE){
+		return luaL_error(L, "Instruction execution failed!");
+	}
+	return 0;
+}
+
+/**
+ * 清空指令队列
+ * 1#:Adapter对象
+ */
+static int adapter_jtag_clean_cmd(lua_State *L){
+	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
+	adapter_JTAG_CleanCommandQueue(adapterObj);
+	return 0;
+}
+
+/**
+ * 读取或写入JTAG引脚状态
+ * 1#:Adapter对象
+ * 2#:要写入的数据
+ * 3#:要写入的数据掩码
+ * 4#:死区等待时间
+ * 返回：
+ * 1#:读取的引脚值
+ */
+static int adapter_jtag_pins(lua_State *L){
+	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
+	uint8_t pin_data = (uint8_t)luaL_checkinteger(L, 2);
+	uint8_t pin_mask = (uint8_t)luaL_checkinteger(L, 3);
+	int pin_wait = (int)luaL_checkinteger(L, 4);
+	if(adapter_JTAG_RW_Pins(adapterObj, pin_mask, &pin_data, pin_wait) == FALSE){
+		return luaL_error(L, "Read/Write JTAG Pins failed!");
+	}
+	lua_pushinteger(L, pin_data);
+	return 1;
+}
+
+/**
+ * 设置JTAG扫描链上的TAP状态机信息
+ * 1#：TAPObject对象
+ * 2#：数组，{4,5,8...} 用来表示每个TAP的IR寄存器长度。
+ * 返回：无
+ */
+static int adapter_jtag_set_tap_info(lua_State *L){
+	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
+	luaL_checktype(L, 2, LUA_TTABLE);
+	// 获得JTAG扫描链中TAP个数
+	int tapCount = lua_rawlen(L, 2);
+	// 开辟存放IR Len的空间，会把这个空间当做完全用户数据压栈
+	uint16_t *irLens = lua_newuserdata(L, tapCount * sizeof(uint16_t));
+	lua_pushnil(L);
+	while (lua_next(L, 2) != 0){
+		/* 使用 '键' （在索引 -2 处） 和 '值' （在索引 -1 处）*/
+		int key_index = (int)lua_tointeger(L, -2);	// 获得索引
+		irLens[key_index-1] = (uint16_t)lua_tointeger(L, -1);	// 获得值
+		lua_pop(L, 1);	// 将值弹出，键保留在栈中以便下次迭代使用
+	}
+	// 设置信息
+	if(adapter_JTAG_Set_TAP_Info(adapterObj, tapCount, irLens) == FALSE){
+		return luaL_error(L, "Set TAP Info Failed!");
+	}
+	return 0;
+}
+
+/**
+ * 写某个tap的IR，在调用该函数之前要先调用adapter_jtag_set_tap_info配置TAP信息
+ * 1#:adapter对象
+ * 2#:TAP 在扫描链的索引
+ * 3#:要写入的数据
+ */
+static int adapter_write_tap_ir(lua_State *L){
+	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
+	uint16_t tap_index = (uint16_t)luaL_checkinteger(L, 2);
+	// 判断tap_index是否合法
+	luaL_argcheck(L, tap_index < adapterObj->tap.TAP_Count, 2, "TAP index value is too large!");
+	uint32_t ir_data = (uint32_t)luaL_checkinteger(L, 3);
+
+	if(adapter_JTAG_Wirte_TAP_IR(adapterObj, tap_index, ir_data) == FALSE){
+		return luaL_error(L, "Write %d IR failed!", tap_index);
+	}
+	return 0;
+}
+
+/**
+ * 交换某个TAP的DR值
+ * 1#:Adapter
+ * 2#:TAP 在扫描链的索引
+ * 3#:数据字符串
+ * 4#:交换数据位长度
+ * 返回：
+ * 1#:获得数据
+ */
+static int adapter_exchange_tap_dr(lua_State *L){
+	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
+	uint16_t tap_index = (uint16_t)luaL_checkinteger(L, 2);
+	// 判断tap_index是否合法
+	luaL_argcheck(L, tap_index < adapterObj->tap.TAP_Count, 2, "TAP index value is too large!");
+	size_t str_len = 0;
+	const char *tdi_data = lua_tolstring (L, 3, &str_len);
+	int bitCnt = (int)luaL_checkinteger(L, 4);
+	// 判断bit长度是否合法
+	if((str_len << 3) < bitCnt ){	// 字符串长度小于要发送的字节数
+		return luaL_error(L, "TDI data length is illegal!");
+	}
+	// 开辟缓冲内存空间
+	uint8_t *data = malloc(str_len * sizeof(uint8_t));
+	if(data == NULL){
+		return luaL_error(L, "TDI data buff alloc Failed!");
+	}
+	// 拷贝数据
+	memcpy(data, tdi_data, str_len * sizeof(uint8_t));
+	// 插入执行队列
+	if(adapter_JTAG_Exchange_TAP_DR(adapterObj, tap_index, data, bitCnt) == FALSE){
+		free(data);
+		return luaL_error(L, "Exchange TAP DR failed!");
+	}
+	// 执行成功，构造lua字符串
+	lua_pushlstring(L, data, str_len);
+	free(data);	// 释放缓冲
+	return 1;
 }
 
 /**
@@ -252,15 +420,15 @@ static const luaL_Reg lib_adapter_oo[] = {
 	{"reset", adapter_reset},
 	{"jtagStatusChange", adapter_jtag_status_change},	// JTAG状态机状态切换
 	{"jtagExchangeIO", adapter_jtag_exchange_io},	// 用字符串实现，luaL_Buffer
-	{"jtagIdleWait"},
-	{"jtagExecuteCmd"},
-	{"jtagCleanCmd"},
+	{"jtagIdleWait", adapter_jtag_idle_wait},
+	{"jtagExecuteCmd", adapter_jtag_execute_cmd},
+	{"jtagCleanCmd", adapter_jtag_clean_cmd},
 	//
-	{"jtagPins"},
+	{"jtagPins", adapter_jtag_pins},
 	//
-	{"jtagSetTAPInfo"},
-	{"jtagWriteTAPIR"},
-	{"jtagExchangeTAPDR"},
+	{"jtagSetTAPInfo", adapter_jtag_set_tap_info},
+	{"jtagWriteTAPIR", adapter_write_tap_ir},
+	{"jtagExchangeTAPDR", adapter_exchange_tap_dr},
 	// dap实现？
 //	{},
 //	{},
@@ -275,6 +443,6 @@ void register2lua_adapter(lua_State *L){
 	layer_newTypeMetatable(L, "obj.Adapter", adapter_gc, lib_adapter_oo);
 	// _LOADED["adapter"] = luaopen_adapter(); // 不设置_G[modname] = luaopen_adapter();
 	// 在栈中存在luaopen_adapter()的返回值副本
-	luaL_requiref(L, "adapter", luaopen_adapter, 0);
+	luaL_requiref(L, "Adapter", luaopen_adapter, 0);
 	lua_pop(L, 1);
 }

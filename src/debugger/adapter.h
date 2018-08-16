@@ -294,13 +294,7 @@ BOOL adapter_JTAG_Execute(AdapterObject *adapterObj);
 // 清空JTAG指令队列
 void adapter_JTAG_CleanCommandQueue(AdapterObject *adapterObj);
 
-/*
- * 同步操作
- * 复位和读取引脚状态是同步的，不会缓冲到队列，会立即获得结果
- * 注意：复位adapter_JTAG_Reset为软复位的时候，同样会使用队列，
- * 所以它会自动调用adapter_JTAG_Execute，之前存在于JTAG指令队列的指令也会被执行
- */
-// 读写Pins
+// 读写Pins 同步操作
 BOOL adapter_JTAG_RW_Pins(AdapterObject *adapterObj, uint8_t pinSelect, uint8_t *pinData, int pinWait);
 
 /**

@@ -203,7 +203,7 @@ int DAP_Find_AP(AdapterObject *adapterObj, enum ap_type apType){
  * 高32位：0x77 66 55 44
  */
 BOOL DAP_Read_TAR(AdapterObject *adapterObj, uint64_t *address_out){
-	assert(adapterObj != NULL);
+	assert(adapterObj != NULL && address_out != NULL);
 	*address_out = 0;
 	// 如果支持Large Address
 	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1 &&
@@ -236,7 +236,11 @@ BOOL DAP_Write_TAR(AdapterObject *adapterObj, uint64_t address_in){
  * data_out：读取的数据输出地址
  */
 BOOL DAP_ReadMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t *data_out){
-	assert(adapterObj != NULL && adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1);
+	assert(adapterObj != NULL && data_out != NULL);
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init != 1){
+		log_warn("The current AP has not been initialized yet.");
+		return FALSE;
+	}
 	MEM_AP_CSW_Parse cswTmp;
 	cswTmp.regData = adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData;
 	// 设置CSW：Size=Word，AddrInc=off
@@ -275,7 +279,11 @@ BOOL DAP_ReadMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t *data_out){
  * data_out：读取的数据输出地址
  */
 BOOL DAP_ReadMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t *data_out){
-	assert(adapterObj != NULL && adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1);
+	assert(adapterObj != NULL && data_out != NULL);
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init != 1){
+		log_warn("The current AP has not been initialized yet.");
+		return FALSE;
+	}
 	// 检查对齐
 	if(addr & 0x1){
 		log_warn("Memory address is not half word aligned!");
@@ -320,7 +328,11 @@ BOOL DAP_ReadMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t *data_out)
  * 注意：地址要以字对齐，否则报错
  */
 BOOL DAP_ReadMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t *data_out){
-	assert(adapterObj != NULL && adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1);
+	assert(adapterObj != NULL && data_out != NULL);
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init != 1){
+		log_warn("The current AP has not been initialized yet.");
+		return FALSE;
+	}
 	// 检查对齐
 	if(addr & 0x3){
 		log_warn("Memory address is not word aligned!");
@@ -358,7 +370,11 @@ BOOL DAP_ReadMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t *data_out)
  * TODO 没有测试
  */
 BOOL DAP_ReadMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t *data_out){
-	assert(adapterObj != NULL && adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1);
+	assert(adapterObj != NULL && data_out != NULL);
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init != 1){
+		log_warn("The current AP has not been initialized yet.");
+		return FALSE;
+	}
 	// 检查对齐
 	if(addr & 0x7){
 		log_warn("Memory address is not double word aligned!");
@@ -403,7 +419,11 @@ BOOL DAP_ReadMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t *data_out)
  * data_in：写入的数据
  */
 BOOL DAP_WriteMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t data_in){
-	assert(adapterObj != NULL && adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1);
+	assert(adapterObj != NULL);
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init != 1){
+		log_warn("The current AP has not been initialized yet.");
+		return FALSE;
+	}
 	MEM_AP_CSW_Parse cswTmp;
 	cswTmp.regData = adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData;
 	// 设置CSW：Size=Word，AddrInc=off
@@ -441,7 +461,11 @@ BOOL DAP_WriteMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t data_in){
  * data_in：写入的数据
  */
 BOOL DAP_WriteMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t data_in){
-	assert(adapterObj != NULL && adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1);
+	assert(adapterObj != NULL);
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init != 1){
+		log_warn("The current AP has not been initialized yet.");
+		return FALSE;
+	}
 	// 检查对齐
 	if(addr & 0x1){
 		log_warn("Memory address is not half word aligned!");
@@ -486,7 +510,11 @@ BOOL DAP_WriteMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t data_in){
  * 注意：地址要以字对齐，否则报错
  */
 BOOL DAP_WriteMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t data_in){
-	assert(adapterObj != NULL && adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1);
+	assert(adapterObj != NULL);
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init != 1){
+		log_warn("The current AP has not been initialized yet.");
+		return FALSE;
+	}
 	// 检查对齐
 	if(addr & 0x3){
 		log_warn("Memory address is not word aligned!");
@@ -525,7 +553,11 @@ BOOL DAP_WriteMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t data_in){
  * TODO 没有测试
  */
 BOOL DAP_WriteMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t data_in){
-	assert(adapterObj != NULL && adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1);
+	assert(adapterObj != NULL);
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init != 1){
+		log_warn("The current AP has not been initialized yet.");
+		return FALSE;
+	}
 	// 检查对齐
 	if(addr & 0x7){
 		log_warn("Memory address is not double word aligned!");
@@ -577,7 +609,11 @@ BOOL DAP_WriteMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t data_in){
  * data_out：读取的数据存放地址
  */
 BOOL DAP_ReadMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode, int transSize, int transCnt, uint32_t *data_out){
-	assert(adapterObj != NULL && adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1);
+	assert(adapterObj != NULL && data_out != NULL);
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init != 1){
+		log_warn("The current AP has not been initialized yet.");
+		return FALSE;
+	}
 	// 设置csw
 	MEM_AP_CSW_Parse cswTmp;
 	cswTmp.regData = adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData;
@@ -689,7 +725,11 @@ BOOL DAP_ReadMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode,
 }
 
 BOOL DAP_WriteMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode, int transSize, int transCnt, uint32_t *data_in){
-	assert(adapterObj != NULL && adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1);
+	assert(adapterObj != NULL);
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init != 1){
+		log_warn("The current AP has not been initialized yet.");
+		return FALSE;
+	}
 	// 设置csw
 	MEM_AP_CSW_Parse cswTmp;
 	cswTmp.regData = adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData;
@@ -807,7 +847,7 @@ BOOL DAP_WriteMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode
  * pid_out：读取的Peripheral ID
  */
 BOOL DAP_Read_CID_PID(AdapterObject *adapterObj, uint32_t componentBase, uint32_t *cid_out, uint64_t *pid_out){
-	assert(adapterObj != NULL);
+	assert(adapterObj != NULL && cid_out != NULL && pid_out != NULL);
 	jmp_buf exception;
 	if((componentBase & 0xFFF) != 0) {
 		log_warn("Component base address is not 4KB aligned!");

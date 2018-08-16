@@ -234,7 +234,12 @@ static BOOL add_JTAG_Exchange_IO(struct list_head *list, uint8_t *dataPtr, int b
  * free_cb:该指令对象释放时，调用的清理回调
  */
 BOOL adapter_JTAG_Exchange_IO(AdapterObject *adapterObj, uint8_t *dataPtr, int bitCount){
-	assert(adapterObj != NULL && (adapterObj->tap.currentStatus == JTAG_TAP_DRSHIFT || adapterObj->tap.currentStatus == JTAG_TAP_IRSHIFT));
+	assert(adapterObj != NULL && dataPtr != NULL);
+	// 判断当前TAP状态
+	if(adapterObj->tap.currentStatus != JTAG_TAP_DRSHIFT && adapterObj->tap.currentStatus != JTAG_TAP_IRSHIFT){
+		log_warn("TAP status is illegal!");
+		return FALSE;
+	}
 	// 判断该仿真器是否支持JTAG
 	if(adapter_HaveTransmission(adapterObj, JTAG) == FALSE){
 		log_warn("This adapter doesn't support JTAG transmission.");
@@ -296,7 +301,7 @@ ERR_EXIT:;
  * 读写JTAG引脚电平
  */
 BOOL adapter_JTAG_RW_Pins(AdapterObject *adapterObj, uint8_t pinSelect, uint8_t *pinData, int pinWait){
-	assert(adapterObj != NULL);
+	assert(adapterObj != NULL && pinData != NULL);
 	// 判断该仿真器是否支持JTAG
 	if(adapter_HaveTransmission(adapterObj, JTAG) == FALSE){
 		log_warn("This adapter doesn't support JTAG transmission.");
@@ -338,7 +343,7 @@ void adapter_JTAG_CleanCommandQueue(AdapterObject *adapterObj){
  * 扫描链的TAP数量，每个TAP的IR长度
  */
 BOOL adapter_JTAG_Set_TAP_Info(AdapterObject *adapterObj, uint16_t tapCount, uint16_t *IR_Len){
-	assert(adapterObj != NULL);
+	assert(adapterObj != NULL && IR_Len != NULL);
 	int idx,bits = 0;
 	// 释放
 	if(adapterObj->tap.TAP_Count < tapCount){
@@ -397,8 +402,11 @@ static void bitExtract(uint8_t *source, int startPos, int len, uint8_t *data){
  * 该函数会执行JTAG指令队列！
  */
 BOOL adapter_JTAG_Wirte_TAP_IR(AdapterObject *adapterObj, uint16_t tapIndex, uint32_t IR_Data){
-	assert(adapterObj != NULL && tapIndex < adapterObj->tap.TAP_Count);
-
+	assert(adapterObj != NULL);
+	if(tapIndex < adapterObj->tap.TAP_Count){
+		log_warn("TAP index value is too large!");
+		return FALSE;
+	}
 	// 计算所有TAP的IR寄存器长度 所占的字节数
 	int all_IR_Bytes = (adapterObj->tap.IR_Bits + 7) >> 3;
 
@@ -457,7 +465,12 @@ ERR_EXIT:;
  * 该函数会执行JTAG指令队列！
  */
 BOOL adapter_JTAG_Exchange_TAP_DR(AdapterObject *adapterObj, uint16_t tapIndex, uint8_t *DR_Data, int DR_BitCnt){
-	assert(adapterObj != NULL && tapIndex < adapterObj->tap.TAP_Count);
+	assert(adapterObj != NULL && DR_Data != NULL);
+	// 判断tapIndex是否合法
+	if(tapIndex < adapterObj->tap.TAP_Count){
+		log_warn("TAP index value is too large!");
+		return FALSE;
+	}
 	int all_DR_Bits = adapterObj->tap.TAP_Count - 1 + DR_BitCnt;
 	// 占用的字节数
 	int all_DR_Bytes = (all_DR_Bits + 7) >> 3;
@@ -581,7 +594,7 @@ static BOOL add_DAP_RW_RegBlock(
  * updateSelect:是否自动更新SELECT寄存器
  */
 BOOL adapter_DAP_RW_nP_Single(AdapterObject *adapterObj, int reg, BOOL read, BOOL ap, uint32_t data_in, uint32_t *data_out, BOOL updateSelect){
-	assert(adapterObj != NULL);
+	assert(adapterObj != NULL && data_out != NULL);
 	if(updateSelect == TRUE){
 		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
 		LIST_HEAD(list_tmp);
@@ -621,7 +634,7 @@ BOOL adapter_DAP_RW_nP_Single(AdapterObject *adapterObj, int reg, BOOL read, BOO
  * updateSelect:是否自动更新SELECT寄存器
  */
 BOOL adapter_DAP_RW_nP_Block(AdapterObject *adapterObj, int reg, BOOL read, BOOL ap, uint32_t *dataIO, int blockCnt, BOOL updateSelect){
-	assert(adapterObj != NULL);
+	assert(adapterObj != NULL && dataIO != NULL);
 	if(updateSelect == TRUE){
 		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
 		LIST_HEAD(list_tmp);

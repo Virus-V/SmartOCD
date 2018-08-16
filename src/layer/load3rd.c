@@ -9,11 +9,11 @@
 #include "lua.h"
 #include "lauxlib.h"
 #include "lualib.h"
+#include "layer/load3rd.h"
 
 extern void register2lua_cmsis_dap(lua_State *L);
 extern void register2lua_adapter(lua_State *L);
-extern void register2lua_TAP(lua_State *L);
-extern void register2lua_DAP(lua_State *L);
+//extern void register2lua_DAP(lua_State *L);
 /**
  * 初始化第三方库
  */
@@ -21,15 +21,14 @@ void load3rd(lua_State *L){
 	// 注册cmsis-dap仿真器库函数
 	register2lua_cmsis_dap(L);
 	register2lua_adapter(L);
-	register2lua_TAP(L);
 	//register2lua_DAP(L);
 }
 
 /**
- * Register constants to table which is on the stack top.
- * The table MUST exists on the stack top before call this function.
+ * Register the constants to the table which is at the top of stack.
+ * The table must exist at the top of the stack before calling this function.
  */
-void layer_regConstant(lua_State *L, lua3rd_regConst *c){
+void layer_regConstant(lua_State *L, const lua3rd_regConst *c){
 	assert(L != NULL);
 	while(c->name != NULL){
 		// TODO distinguish constant type
