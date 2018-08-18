@@ -9,6 +9,7 @@
 #define SRC_DEBUGGER_CMSIS_DAP_H_
 
 #include "smart_ocd.h"
+#include "debugger/usb.h"
 #include "debugger/adapter.h"
 
 // CMSIS-DAP Command IDs
@@ -138,11 +139,14 @@ enum cmsis_dapInstr {
 	CMDAP_TRANSFER_BLOCK,	// DAP_TransferBlock
 	CMDAP_WRITE_ABORT,	// 写入ABORT寄存器
 	CMDAP_JTAG_IDCODE,		// 获得JTAG的IDCode
-	CMDAP_JTAG_CONFIGURE,	// 设置JTAG设备的IR长度
+	CMDAP_JTAG_CONFIGURE,	// 设置JTAG扫描链中TAP个数和IR长度
+	CMDAP_SWD_CONFIGURE,	// SWD_Configure
 };
 
 struct cmsis_dap {
 	AdapterObject AdapterObj;	// 对象名必须为AdapterObj，不可以为指针，而且必须在第一个
+	USBObject usbObj;	// USB连接对象
+	BOOL Connected;	// 是否已连接
 	int Version;	// CMSIS-DAP 版本
 	int MaxPcaketCount;	// 缓冲区最多容纳包的个数
 	int PacketSize;	// 包最大长度
@@ -150,7 +154,19 @@ struct cmsis_dap {
 	// TODO 实现更高版本仿真器支持 SWO、
 };
 
+// 判断是否支持某些功能
+#define CMSIS_DAP_HAS_CAPALITY(p,flags) (((p)->capablityFlag & (flags)) == (flags))
+
+// 设置标志位
+// 如果ca的第bit位为1，则执行p->capablityFlag |= flag
+#define CMSIS_DAP_SET_CAP(p,ca,bit,flag) \
+	if( ((ca) & (0x1 << (bit))) != 0) (p)->capablityFlag |= (flag);
+
 BOOL NewCMSIS_DAP(struct cmsis_dap *cmsis_dapObj);
-BOOL ConnectCMSIS_DAP(struct cmsis_dap *cmsis_dapObj, const uint16_t *vids, const uint16_t *pids, const char *serialNum);
+// 搜索并连接CMSIS-DAP仿真器
+BOOL Connect_CMSIS_DAP(struct cmsis_dap *cmsis_dapObj, const uint16_t *vids, const uint16_t *pids, const char *serialNum);
+BOOL CMSIS_DAP_JTAG_Configure(AdapterObject *adapterObj, uint8_t count, uint8_t *irData);
+BOOL CMSIS_DAP_TransferConfigure(AdapterObject *adapterObj, uint8_t idleCycle, uint16_t waitRetry, uint16_t matchRetry);
+BOOL CMSIS_DAP_SWD_Configure(AdapterObject *adapterObj, uint8_t cfg);
 
 #endif /* SRC_DEBUGGER_CMSIS_DAP_H_ */

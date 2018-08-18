@@ -11,7 +11,7 @@ COMPILE_TIME := $(shell date +%FT%T%z)
 
 include $(ROOT_DIR)/src/source.mk
 include $(ROOT_DIR)/test/test.mk
-
+include $(ROOT_DIR)/lua-5.3.4/lua.mk
 #==========可变参数区============ 
 # 入口文件
 SMARTOCD_ENTRY_SRC_FILE = $(ROOT_DIR)/src/smart_ocd.c
@@ -34,7 +34,8 @@ OPT ?= 0
 DEBUG = -ggdb
 
 CFLAGS = $(DEBUG)
-CFLAGS += -O$(OPT)
+#开发过程中使用-Werror，所有警告都当做错误来终止编译
+CFLAGS += -O$(OPT) -Werror
 CFLAGS += $(addprefix -D,$(DEFINES)) $(addprefix -I,$(SMARTOCD_INC_PATHS) $(TEST_INC_PATHS))
 # Linker Flags
 LDFLAGS += $(addprefix -L,$(ALL_LIB_PATH))
@@ -43,12 +44,16 @@ LDFLAGS += $(addprefix -l,$(ALL_LIBS))
 
 .PRECIOUS : $(SMARTOCD_ENTRY_OBJ_FILE) $(SMARTOCD_OBJ_FILES) $(TEST_OBJ_FILES)
 
-all: $(TARGET)
+all: $(TARGET) buildcfg
+
+buildcfg:
+	@touch $(SMARTOCD_ENTRY_SRC_FILE)
 
 $(TARGET): $(SMARTOCD_OBJ_FILES) $(SMARTOCD_ENTRY_OBJ_FILE)
 	$(CC) $^ -o $@ $(LDFLAGS) 
 	@echo "Build Complete!"
- 
+
+
 %_test: $(SMARTOCD_OBJ_FILES) $(TEST_OBJ_FILES) $(ROOT_DIR)/test/%_test.o
 	$(CC) $^ -ggdb -o $(ROOT_DIR)/test/$@ $(LDFLAGS)
 

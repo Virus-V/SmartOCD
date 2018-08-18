@@ -10,6 +10,7 @@
 
 #include <assert.h>
 #include <stdint.h>
+#include <setjmp.h>
 
 #ifdef HAVE_CONFIG
 #include "global_config.h"
@@ -21,6 +22,9 @@ typedef enum {
 	TRUE
 } BOOL;
 
+// 致命错误恢复点
+extern jmp_buf fatalException;
+
 #define CAST(type,val) ((type)(val))
 #define BYTE_IDX(data,idx) (((data) >> (idx * 8)) & 0xff)
 
@@ -28,7 +32,6 @@ typedef enum {
 #define __CONSTRUCT(class) __construct_##class##Object
 #define __DESTORY(class) __destory_##class##Object
 
-// 新建对象
 // 用户输入lua命令历史记录文件
 #define COMMAND_HISTORY "smartocd_history.txt"
 #endif /* SRC_SMART_OCD_H_ */

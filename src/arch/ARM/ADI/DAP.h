@@ -5,13 +5,11 @@
  *      Author: virusv
  */
 
-#ifndef SRC_ARCH_CORESIGHT_DAP_H_
-#define SRC_ARCH_CORESIGHT_DAP_H_
+#ifndef SRC_ARCH_ARM_ADI_DAP_H_
+#define SRC_ARCH_ARM_ADI_DAP_H_
 
 #include "smart_ocd.h"
-#include "misc/list/list.h"
-#include "debugger/adapter.h"
-#include "lib/TAP.h"
+#include "misc/list.h"
 
 /*
  * Copyright (c) 2013-2016 ARM Limited. All rights reserved.
@@ -39,47 +37,12 @@
  * Title:        DAP.h Definitions
  *
  *---------------------------------------------------------------------------*/
-// DAP SWJ Pins
-#define DAP_SWJ_SWCLK_TCK               0       // SWCLK/TCK
-#define DAP_SWJ_SWDIO_TMS               1       // SWDIO/TMS
-#define DAP_SWJ_TDI                     2       // TDI
-#define DAP_SWJ_TDO                     3       // TDO
-#define DAP_SWJ_nTRST                   5       // nTRST
-#define DAP_SWJ_nRESET                  7       // nRESET
 
 // DAP Transfer Request
-#define DAP_TRANSFER_APnDP              (1U<<0)
-#define DAP_TRANSFER_RnW                (1U<<1)
-#define DAP_TRANSFER_A2                 (1U<<2)
-#define DAP_TRANSFER_A3                 (1U<<3)
-
-// DP寄存器地址
-// DPv0只有JTAG模式，所以没有Abort寄存器，也没有IDCODE/DPIDR寄存器，都有一个单独的扫描链
-// DPv0下有如下寄存器
-#define DP_CTRL_STAT                    0x04U   // Control & Status
-#define DP_SELECT                       0x08U   // Select Register (JTAG R/W & SW W)
-#define DP_RDBUFF                       0x0CU   // Read Buffer (Read Only)
-// DPv1增加下列寄存器
-#define DP_DPIDR                        0x00U   // IDCODE Register (SW Read only)
-#define DP_ABORT                        0x00U   // Abort Register (SW Write only)
-#define DP_DLCR							0x14U	// Data Link Control Register(SW Only RW)
-#define DP_RESEND						0x08U	// Read Resend Register (SW Read Only)
-// DPv2增加下列寄存器
-#define DP_TARGETID						0x24U	// Target Identification register (RO)
-#define DP_DLPIDR						0x34U	// Data Link Protocol Identification Register (SW RO)
-#define DP_EVENTSTAT					0x44U	// Event Status register (RO)
-#define DP_TARGETSEL					0x0CU	// Target Selection register (SW WO, SWD Protocol v2才存在)
-
-// JTAG IR Codes
-#define JTAG_ABORT                      0x08U
-#define JTAG_DPACC                      0x0AU
-#define JTAG_APACC                      0x0BU
-#define JTAG_IDCODE                     0x0EU
-#define JTAG_BYPASS                     0x0FU
-
-// JTAG Response
-#define JTAG_RESP_OK_FAULT				0x02	// OK/FAULT
-#define JTAG_RESP_WAIT					0x01	// WAIT
+#define DAP_TRANSFER_APnDP		(1U<<0)
+#define DAP_TRANSFER_RnW		(1U<<1)
+#define DAP_TRANSFER_A2			(1U<<2)
+#define DAP_TRANSFER_A3			(1U<<3)
 
 // Abort Register definitions
 #define DP_ABORT_DAPABORT       0x00000001  // DAP Abort
@@ -89,47 +52,33 @@
 #define DP_ABORT_ORUNERRCLR     0x00000010  // Clear STICKYORUN Flag (SW Only)
 
 // Debug Control and Status definitions
-#define DP_CTRL_ORUNDETECT     0x00000001  // Overrun Detect
-#define DP_STAT_STICKYORUN     0x00000002  // Sticky Overrun
-#define DP_CTRL_TRNMODEMSK     0x0000000C  // Transfer Mode Mask
-#define DP_CTRL_TRNNORMAL      0x00000000  // Transfer Mode: Normal
-#define DP_CTRL_TRNVERIFY      0x00000004  // Transfer Mode: Pushed Verify
-#define DP_CTRL_TRNCOMPARE     0x00000008  // Transfer Mode: Pushed Compare
-#define DP_STAT_STICKYCMP      0x00000010  // Sticky Compare
-#define DP_STAT_STICKYERR      0x00000020  // Sticky Error
-#define DP_STAT_READOK         0x00000040  // Read OK (SW Only)
-#define DP_STAT_WDATAERR       0x00000080  // Write Data Error (SW Only)
-#define DP_CTRL_MASKLANEMSK    0x00000F00  // Mask Lane Mask
-#define DP_CTRL_MASKLANE0      0x00000100  // Mask Lane 0
-#define DP_CTRL_MASKLANE1      0x00000200  // Mask Lane 1
-#define DP_CTRL_MASKLANE2      0x00000400  // Mask Lane 2
-#define DP_CTRL_MASKLANE3      0x00000800  // Mask Lane 3
-#define DP_CTRL_TRNCNTMSK      0x001FF000  // Transaction Counter Mask
-#define DP_CTRL_CDBGRSTREQ     0x04000000  // Debug Reset Request
-#define DP_STAT_CDBGRSTACK     0x08000000  // Debug Reset Acknowledge
-#define DP_CTRL_CDBGPWRUPREQ   0x10000000  // Debug Power-up Request
-#define DP_STAT_CDBGPWRUPACK   0x20000000  // Debug Power-up Acknowledge
-#define DP_CTRL_CSYSPWRUPREQ   0x40000000  // System Power-up Request
-#define DP_STAT_CSYSPWRUPACK   0x80000000  // System Power-up Acknowledge
+#define DP_CTRL_ORUNDETECT		0x00000001  // Overrun Detect
+#define DP_STAT_STICKYORUN		0x00000002  // Sticky Overrun
+#define DP_CTRL_TRNMODEMSK		0x0000000C  // Transfer Mode Mask
+#define DP_CTRL_TRNNORMAL		0x00000000  // Transfer Mode: Normal
+#define DP_CTRL_TRNVERIFY		0x00000004  // Transfer Mode: Pushed Verify
+#define DP_CTRL_TRNCOMPARE		0x00000008  // Transfer Mode: Pushed Compare
+#define DP_STAT_STICKYCMP		0x00000010  // Sticky Compare
+#define DP_STAT_STICKYERR		0x00000020  // Sticky Error
+#define DP_STAT_READOK			0x00000040  // Read OK (SW Only)
+#define DP_STAT_WDATAERR		0x00000080  // Write Data Error (SW Only)
+#define DP_CTRL_MASKLANEMSK		0x00000F00  // Mask Lane Mask
+#define DP_CTRL_MASKLANE0		0x00000100  // Mask Lane 0
+#define DP_CTRL_MASKLANE1		0x00000200  // Mask Lane 1
+#define DP_CTRL_MASKLANE2		0x00000400  // Mask Lane 2
+#define DP_CTRL_MASKLANE3		0x00000800  // Mask Lane 3
+#define DP_CTRL_TRNCNTMSK		0x001FF000  // Transaction Counter Mask
+#define DP_CTRL_CDBGRSTREQ		0x04000000  // Debug Reset Request
+#define DP_STAT_CDBGRSTACK		0x08000000  // Debug Reset Acknowledge
+#define DP_CTRL_CDBGPWRUPREQ	0x10000000  // Debug Power-up Request
+#define DP_STAT_CDBGPWRUPACK	0x20000000  // Debug Power-up Acknowledge
+#define DP_CTRL_CSYSPWRUPREQ	0x40000000  // System Power-up Request
+#define DP_STAT_CSYSPWRUPACK	0x80000000  // System Power-up Acknowledge
 
 // Debug Select Register definitions
-#define DP_SELECT_CTRLSELMSK        0x00000001  // CTRLSEL (SW Only)
-#define DP_SELECT_APBANKSELMSK      0x000000F0  // APBANKSEL Mask
-#define DP_SELECT_APSELMSK          0xFF000000  // APSEL Mask
-
-// Access Port Register Addresses
-#define AP_REG_CSW			0x00        // Control and Status Word
-#define AP_REG_TAR_LSB		0x04        // Transfer Address
-#define AP_REG_TAR_MSB		0x08
-#define AP_REG_DRW			0x0C        // Data Read/Write
-#define AP_REG_BD0			0x10        // Banked Data 0
-#define AP_REG_BD1			0x14        // Banked Data 1
-#define AP_REG_BD2			0x18        // Banked Data 2
-#define AP_REG_BD3			0x1C        // Banked Data 3
-#define AP_REG_CFG			0xF4		// CFG Register
-#define AP_REG_ROM_LSB		0xF8        // Debug ROM Address
-#define AP_REG_ROM_MSB		0xF0
-#define AP_REG_IDR			0xFC        // Identification Register
+#define DP_SELECT_CTRLSELMSK	0x00000001  // CTRLSEL (SW Only)
+#define DP_SELECT_APBANKSELMSK	0x000000F0  // APBANKSEL Mask
+#define DP_SELECT_APSELMSK		0xFF000000  // APSEL Mask
 
 // AP Control and Status Word definitions
 #define AP_CSW_SIZEMSK			0x00000007  // Access Size: Selection Mask
@@ -139,68 +88,49 @@
 #define AP_CSW_SIZE64			0x00000003	// Access Size: 64-bit
 #define AP_CSW_SIZE128			0x00000004	// Access Size: 128-bit
 #define AP_CSW_SIZE256			0x00000005	// Access Size: 256-bit
+// MEM-AP传输数据大小参数
+enum dataSizeParam{
+	DAP_DATA_SIZE_8 = 0,
+	DAP_DATA_SIZE_16,
+	DAP_DATA_SIZE_32,
+	DAP_DATA_SIZE_64,
+	DAP_DATA_SIZE_128,
+	DAP_DATA_SIZE_256,
+};
 
 #define AP_CSW_ADDRINCMSK		0x00000030  // Auto Address Increment Mask
-#define AP_CSW_NADDRINC		0x00000000  // No Address Increment
-#define AP_CSW_SADDRINC		0x00000010  // Single Address Increment
-#define AP_CSW_PADDRINC		0x00000020  // Packed Address Increment
+#define AP_CSW_NADDRINC			0x00000000  // No Address Increment
+#define AP_CSW_SADDRINC			0x00000010  // Single Address Increment
+#define AP_CSW_PADDRINC			0x00000020  // Packed Address Increment
+// MEM-AP 地址自增模式参数
+enum addrIncParam {
+	DAP_ADDRINC_OFF = 0,
+	DAP_ADDRINC_SINGLE,
+	DAP_ADDRINC_PACKED,
+};
 
 #define AP_CSW_DBGSTAT			0x00000040  // Debug Status
 #define AP_CSW_TINPROG			0x00000080  // Transfer in progress
 #define AP_CSW_HPROT			0x02000000  // User/Privilege Control
 
-#define AP_CSW_MSTRTYPEMSK	0x20000000  // Master Type Mask
-#define AP_CSW_MSTRCORE		0x00000000  // Master Type: Core
-#define AP_CSW_MSTRDBG		0x20000000  // Master Type: Debug
+#define AP_CSW_MSTRTYPEMSK		0x20000000  // Master Type Mask
+#define AP_CSW_MSTRCORE			0x00000000  // Master Type: Core
+#define AP_CSW_MSTRDBG			0x20000000  // Master Type: Debug
+#define AP_CSW_RESERVED			0x01000000  // Reserved Value
 
-#define AP_CSW_RESERVED		0x01000000  // Reserved Value
+#define JEP106_CODE_ARM			0x23B	// ARM JEP106 CODE
 
-// Core Debug Register Address Offsets
-#define DBG_OFS        0x0DF0      // Debug Register Offset inside NVIC
-#define DBG_HCSR_OFS   0x00        // Debug Halting Control & Status Register
-#define DBG_CRSR_OFS   0x04        // Debug Core Register Selector Register
-#define DBG_CRDR_OFS   0x08        // Debug Core Register Data Register
-#define DBG_EMCR_OFS   0x0C        // Debug Exception & Monitor Control Register
+#define DP_SELECT_APSEL			0xFF000000
+#define DP_SELECT_APBANK		0x000000F0
+#define DP_SELECT_DPBANK		0x0000000F
+#define DP_SELECT_MASK			0xFF0000FF
 
-// Core Debug Register Addresses
-//#define DBG_HCSR       (DBG_Addr + DBG_HCSR_OFS)
-//#define DBG_CRSR       (DBG_Addr + DBG_CRSR_OFS)
-//#define DBG_CRDR       (DBG_Addr + DBG_CRDR_OFS)
-//#define DBG_EMCR       (DBG_Addr + DBG_EMCR_OFS)
-
-// Debug Halting Control and Status Register definitions
-#define C_DEBUGEN      0x00000001  // Debug Enable
-#define C_HALT         0x00000002  // Halt
-#define C_STEP         0x00000004  // Step
-#define C_MASKINTS     0x00000008  // Mask Interrupts
-#define C_SNAPSTALL    0x00000020  // Snap Stall
-#define S_REGRDY       0x00010000  // Register R/W Ready Flag
-#define S_HALT         0x00020000  // Halt Flag
-#define S_SLEEP        0x00040000  // Sleep Flag
-#define S_LOCKUP       0x00080000  // Lockup Flag
-#define S_RETIRE_ST    0x01000000  // Sticky Retire Flag
-#define S_RESET_ST     0x02000000  // Sticky Reset Flag
-#define DBGKEY         0xA05F0000  // Debug Key
-
-// Debug Exception and Monitor Control Register definitions
-#define VC_CORERESET   0x00000001  // Reset Vector Catch
-#define VC_MMERR       0x00000010  // Debug Trap on MMU Fault
-#define VC_NOCPERR     0x00000020  // Debug Trap on No Coprocessor Fault
-#define VC_CHKERR      0x00000040  // Debug Trap on Checking Error Fault
-#define VC_STATERR     0x00000080  // Debug Trap on State Error Fault
-#define VC_BUSERR      0x00000100  // Debug Trap on Bus Error Fault
-#define VC_INTERR      0x00000200  // Debug Trap on Interrupt Error Fault
-#define VC_HARDERR     0x00000400  // Debug Trap on Hard Fault
-#define MON_EN         0x00010000  // Monitor Enable
-#define MON_PEND       0x00020000  // Monitor Pend
-#define MON_STEP       0x00040000  // Monitor Step
-#define MON_REQ        0x00080000  // Monitor Request
-#define TRCENA         0x01000000  // Trace Enable (DWT, ITM, ETM, TPIU)
-
-#define DP_SELECT_APSEL 0xFF000000
-#define DP_SELECT_APBANK 0x000000F0
-#define DP_SELECT_DPBANK 0x0000000F
-#define DP_SELECT_INVALID 0x00FFFF00 /* Reserved bits one */
+enum ap_type{
+	AP_TYPE_JTAG = 0,	// JTAG AP
+	AP_TYPE_AMBA_AHB = 0x1,	// AMBA AHB bus
+	AP_TYPE_AMBA_APB = 0x2,	// AMBA APB2 or APB3 bus
+	AP_TYPE_AMBA_AXI = 0x4	// AMBA AXI3 or AXI4 bus, with optional ACT-Lite support
+};
 
 // DP IDR Register 解析
 typedef union {
@@ -224,7 +154,8 @@ typedef union {
 		uint32_t PartNo : 8;	// Part Number，调试端口部件号
 		uint32_t Revision : 4;	// 版本
 	} regInfo;
-} DP_IDRParse;
+} DP_IDR_Parse;
+
 // AP IDR Register 解析
 typedef union {
 	uint32_t regData;
@@ -236,7 +167,7 @@ typedef union {
 		uint32_t JEP106Code : 11;	// For an AP designed by ARM this field has the value 0x23B
 		uint32_t Revision : 4;	// 版本
 	} regInfo;
-} AP_IDRParse;
+} AP_IDR_Parse;
 
 typedef union {
 	uint32_t regData;
@@ -263,59 +194,82 @@ typedef union {
 		uint32_t DbgSwEnable : 1;	// Debug software access enable.
 									// DbgSwEnable must be ignored and treated as one if DeviceEn is set to 0.
 	} regInfo;
-} MEM_AP_CSWParse;
+} MEM_AP_CSW_Parse;
 
-// DAP对象
-typedef struct DAPObject DAPObject;
-struct DAPObject{
-	TAPObject tapObj;	// 继承于TAP
-	uint8_t DP_Version;	// DP版本号
-	uint16_t TAP_index;	// TAP在JTAG中的索引，SWD模式下忽略该参数
-	uint32_t CTRL_STAT_Reg;	// 当前CTRL/STAT寄存器
-	uint32_t ir;	// 当前ir寄存器
-	union {
-		uint32_t data;
-		struct {
-			uint32_t DP_BankSel : 4;
-			uint32_t AP_BankSel : 4;
-			uint32_t : 16;
-			uint32_t AP_Sel : 8;
-		} info;
-	}SelectReg;	// 当前Select寄存器
-	int retry;	// 接收到WAIT时重试次数
-	// 错误处理的回调函数列表
-	// WDATAERR, STICKYERR, STICKYCMP, STICKYORUN
-	void (*stickyErrHandle)(DAPObject *dapObj);
+typedef union {
+	uint32_t regData;
+	struct {
+		uint32_t ORUNDETECT:1;	// 此位置1打开过载检测
+		uint32_t STICKYORUN:1;	// 如果启用过载检测，此位为1则表示发生过载
+		uint32_t TRNMODE:2;		// AP操作的Transfer mode。0：正常模式;1：pushed-verify模式；2：pushed-compare模式；3：保留
+		uint32_t STICKYCMP:1;	// 匹配，pushed模式下有用
+		uint32_t STICKYERR:1;	// AP Transaction发生错误
+		uint32_t READOK:1;		// JTAG:RES0;SWD:RO/WI.该位为1表示上次AP读或者RDBUFF读是否OK
+		uint32_t WDATAERR:1;	// JTAG:RES0;SWD:RO/WI.该位表示写入数据出错
+								// 在SWD帧中的数据部分parity错误或者帧错误
+		uint32_t MASKLANE:4;	// indicares the bytes to be masked in pushed-compare and pushed-verify operation.
+		uint32_t TRNCNT:12;		// 传输计数器 Transaction Counter
+		uint32_t :2;			// RES0
+		uint32_t CDBGRSTREQ:1;	// Debug reset request. 这个位控制CDBGRSTREQ信号
+		uint32_t CDBGRSTACK:1;	// Debug reset acknowledge. 这个位表示CDBGRSTACK信号
+		uint32_t CDBGPWRUPREQ:1;	// Debug power up request. 这个位控制CDBGPWRUPREQ信号
+		uint32_t CDBGPWRUPACK:1;	// Debug power up acknowledge. 这个位表示CDBGPWRUPACK信号
+		uint32_t CSYSPWRUPREQ:1;	// System power up request. 这个位控制CSYSPWRUPREQ信号
+		uint32_t CSYSPWRUPACK:1;	// System power up acknowledge. 这个位表示CSYSPWRUPACK信号
+	} regInfo;
+}DP_CTRL_STATUS_Parse;
 
+// SELECT寄存器解析
+typedef union {
+	uint32_t regData;
+	struct {
+		uint32_t DP_BankSel : 4;
+		uint32_t AP_BankSel : 4;
+		uint32_t Invaild : 1;	// 表示是否需要强制更新SELECT寄存器
+		uint32_t : 15;
+		uint32_t AP_Sel : 8;
+	} regInfo;
+}DP_SELECT_Parse;
+
+// packed transfer
+union PackedTransferData{
+	uint32_t data_32;
+	uint16_t data_16[2];
+	uint8_t data_8[4];
 };
 
-// 构造和析构函数
-BOOL __CONSTRUCT(DAP)(DAPObject *dapObj, AdapterObject *adapterObj);
-void __DESTORY(DAP)(DAPObject *dapObj);
-// 设置DAP的TAP索引位置
-#define DAP_Set_TAP_Index(p,idx) ((p)->TAP_index = (idx))
-// 设置DAP的WAIT重试次数
-#define DAP_SetRetry(p,cnt) ((p)->retry = (cnt))
-// 设置错误标志
-#define DAP_SetErrorHandle(p,fun) ((p)->stickyErrHandle = (fun))
+// 获得当前AP
+#define DAP_CURR_AP(pa) (pa)->dap.SELECT_Reg.regInfo.AP_Sel
 
-BOOL DAP_DP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out);
-BOOL DAP_DP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data);
-BOOL DAP_AP_Read(DAPObject *dapObj, uint8_t reg, uint32_t *data_out);
-BOOL DAP_AP_Write(DAPObject *dapObj, uint8_t reg, uint32_t data);
-BOOL DAP_AP_Select(DAPObject *dapObj, uint8_t apIdx);
-// 写入Abort寄存器
-BOOL DAP_WriteAbort(DAPObject *dapObj, uint32_t abort);
-// 检查状态标志
-BOOL DAP_CheckStatus(DAPObject *dapObj, BOOL updateOnly);
-// 清除粘性标志
-BOOL DAP_ClearStickyFlag(DAPObject *dapObj, uint32_t flags);
+typedef struct AdapterObject AdapterObject;
+/**
+ * DAP初始化
+ * Find AP
+ * Write TAR
+ * Read TAR
+ * Read CID PID
+ * 读写内存
+ * 读写内存块
+ * 打印ROM Table
+ */
+BOOL DAP_Init(AdapterObject *adapterObj);
+BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx);
+BOOL DAP_Find_AP(AdapterObject *adapterObj, enum ap_type apType, uint8_t *apIdx);
+BOOL DAP_Read_TAR(AdapterObject *adapterObj, uint64_t *address_out);
+BOOL DAP_Write_TAR(AdapterObject *adapterObj, uint64_t address_in);
 
-// 队列操作，只在SWD模式下可用
-BOOL DAP_SWD_Queue_DP_Read(DAPObject *dapObj);
-BOOL DAP_SWD_Queue_DP_Write(DAPObject *dapObj);
-BOOL DAP_SWD_Queue_AP_Read(DAPObject *dapObj);
-BOOL DAP_SWD_Queue_AP_Write(DAPObject *dapObj);
-BOOL DAP_SWD_Queue_Execute(DAPObject *dapObj);
+BOOL DAP_ReadMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t *data_out);
+BOOL DAP_ReadMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t *data_out);
+BOOL DAP_ReadMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t *data_out);
+BOOL DAP_ReadMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t *data_out);
+BOOL DAP_WriteMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t data_in);
+BOOL DAP_WriteMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t data_in);
+BOOL DAP_WriteMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t data_in);
+BOOL DAP_WriteMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t data_in);
 
-#endif /* SRC_ARCH_CORESIGHT_DAP_H_ */
+BOOL DAP_ReadMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode, int transSize, int transCnt, uint32_t *data_out);
+BOOL DAP_WriteMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode, int transSize, int transCnt, uint32_t *data_in);
+BOOL DAP_Read_CID_PID(AdapterObject *adapterObj, uint32_t componentBase, uint32_t *cid_out, uint64_t *pid_out);
+BOOL DAP_ReadCSW(AdapterObject *adapterObj, uint32_t *cswData);
+BOOL DAP_WriteCSW(AdapterObject *adapterObj, uint32_t cswData);
+#endif /* SRC_ARCH_ARM_ADI_DAP_H_ */

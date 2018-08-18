@@ -55,7 +55,7 @@ static int tap_new(lua_State *L){
  * 第一个参数：TAPObject对象
  * 第二个参数：布尔值，是否硬复位
  * 第三个参数：数字，表示硬复位时引脚延时，默认100
- * 返回：TRUE FALSE
+ * 返回：无
  */
 static int tap_reset(lua_State *L){
 	luaL_checktype(L, 1, LUA_TUSERDATA);
@@ -68,15 +68,17 @@ static int tap_reset(lua_State *L){
 	BOOL hard = (BOOL)lua_toboolean(L, 2);
 	int pinWait = (int)luaL_optinteger(L, 3, 100);
 	// 复位状态机
-	lua_pushboolean(L, TAP_Reset(tapObj, hard, pinWait));
-	return 1;
+	if(TAP_Reset(tapObj, hard, pinWait) == FALSE){
+		return luaL_error(L, "Reset TAP Failed!");
+	}
+	return 0;
 }
 
 /**
  * 设置JTAG扫描链上的TAP状态机信息
  * 第一个参数：TAPObject对象
  * 第二个参数：数组，{4,5,8...} 用来表示每个TAP的IR寄存器长度。
- * 返回：TRUE FALSE
+ * 返回：无
  */
 static int tap_set_info(lua_State *L){
 	luaL_checktype(L, 1, LUA_TUSERDATA);
@@ -98,8 +100,31 @@ static int tap_set_info(lua_State *L){
 		lua_pop(L, 1);	// 将值弹出，键保留在栈中以便下次迭代使用
 	}
 	// 设置信息
-	lua_pushboolean(L, TAP_SetInfo(tapObj, tapCount, irLens));
-	return 1;
+	if(TAP_SetInfo(tapObj, tapCount, irLens) == FALSE){
+		return luaL_error(L, "Set TAP Info Failed!");
+	}
+	return 0;
+}
+
+/**
+ * 设置更新DR后延时的时钟数
+ * 用于等待Memory操作完成
+ * 第一个参数：TAPObject对象
+ * 第二个参数：整数，表示延时的时钟周期数
+ * 返回：无
+ */
+static int tap_set_delay(lua_State *L){
+	luaL_checktype(L, 1, LUA_TUSERDATA);
+	TAPObject *tapObj = luaL_testudata(L, 1, "obj.TAP");
+	if(tapObj == NULL){	// 如果是DAP的类型
+		tapObj = luaL_testudata(L, 1, "obj.DAP");
+	}
+	luaL_argcheck(L, tapObj != NULL, 1, "Not a TAP or DAP object.");
+	// 获得延时的时钟周期数
+	int tapCount = (int)luaL_checkinteger(L, 2);
+	// 设置信息
+	TAP_Set_DR_Delay(tapObj, tapCount);
+	return 0;
 }
 
 /**
@@ -117,8 +142,7 @@ static int tap_get_idcode(lua_State *L){
 	// IDCODE的缓存空间
 	uint32_t *idCodes = lua_newuserdata(L, tapObj->TAP_Count * sizeof(uint32_t));
 	if(TAP_Get_IDCODE(tapObj, idCodes) == FALSE){
-		lua_pushnil(L);
-		return 1;
+		return luaL_error(L, "Get IDCODES Failed!");
 	}
 	// 将IDCODE组装成一个表
 	lua_createtable(L, tapObj->TAP_Count, 0); // +1
@@ -138,6 +162,7 @@ static const luaL_Reg lib_tap_f[] = {
 const luaL_Reg lib_tap_oo[] = {
 	{"reset", tap_reset},
 	{"setInfo", tap_set_info},
+	{"setDelay", tap_set_delay},
 	{"get_IDCODE", tap_get_idcode},
 	// TODO 实现低级操作TAP的方法
 	//{"write_IR", adapter_set_clock},

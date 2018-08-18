@@ -20,6 +20,9 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
+// 致命错误恢复点
+jmp_buf fatalException;
+
 static const struct option long_option[]={
    {"logfile", required_argument, NULL, 'l'},
    {"help", no_argument, NULL, 'h'},
@@ -30,33 +33,6 @@ static const struct option long_option[]={
 };
 static lua_State *globalL = NULL;
 static FILE *logFd = NULL;
-
-static void stackDump (lua_State *L) {
-	int i;
-	int top = lua_gettop(L);
-	for (i = 1; i <= top; i++) {
-		int t = lua_type(L, i);
-		switch (t) {
-
-		case LUA_TSTRING:
-			log_debug("%d %d : %s", i, -(top-i+1), lua_tostring(L, i));
-		break;
-
-		case LUA_TBOOLEAN:
-			log_debug("%d %d : %s", i, -(top-i+1), lua_toboolean(L, i) ? "true" : "false");
-		break;
-
-		case LUA_TNUMBER:
-			log_debug("%d %d : %g", i, -(top-i+1), lua_tonumber(L, i));
-		break;
-
-		default:
-			log_debug("%d %d : %s", i, -(top-i+1), lua_typename(L, t));
-		break;
-		}
-		printf("\n");
-	}
-}
 
 // 打印logo和版本
 static void printVersion() {
@@ -72,7 +48,7 @@ static void printVersion() {
 	for(i=0; logo[i]; i++)
 		printf("%s\n", logo[i]);
 
-	printf(" * SmartOCD V%s By: Virus.V <virusv@live.com>\n"
+	printf(" * SmartOCD v%s By: Virus.V <virusv@live.com>\n"
 			" * Complile time: %s\n"
 			" * Github: https://github.com/Virus-V/SmartOCD\n", VERSION, COMPILE_TIME);
 }
@@ -347,9 +323,6 @@ static int init (lua_State *L) {
 	char **argv = lua_touserdata(L,-1);
 	int opt, logLevel = LOG_INFO;
 	int exitFlag = 0;	// 执行脚本后结束运行
-	// 设置初始log级别
-	log_set_level(logLevel);
-
 	// 打开标准库
 	luaL_openlibs(L);
 	// 设置全局变量，SmartOCD版本信息
@@ -412,6 +385,14 @@ EXIT:
  */
 int main (int argc, char **argv) {
 	int status, result;
+	// 设置初始日志级别
+	log_set_level(LOG_INFO);
+	switch(setjmp(fatalException)){
+	default:
+		log_fatal("Fatal Error! Abort!");
+		return 1;
+	case 0:break;
+	}
 	// 创建lua状态机
 	lua_State *L = luaL_newstate();
 	if (L == NULL) {

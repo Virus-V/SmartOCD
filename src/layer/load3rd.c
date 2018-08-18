@@ -9,10 +9,10 @@
 #include "lua.h"
 #include "lauxlib.h"
 #include "lualib.h"
+#include "layer/load3rd.h"
 
 extern void register2lua_cmsis_dap(lua_State *L);
 extern void register2lua_adapter(lua_State *L);
-extern void register2lua_TAP(lua_State *L);
 extern void register2lua_DAP(lua_State *L);
 /**
  * 初始化第三方库
@@ -21,8 +21,22 @@ void load3rd(lua_State *L){
 	// 注册cmsis-dap仿真器库函数
 	register2lua_cmsis_dap(L);
 	register2lua_adapter(L);
-	register2lua_TAP(L);
 	register2lua_DAP(L);
+}
+
+/**
+ * Register the constants to the table which is at the top of stack.
+ * The table must exist at the top of the stack before calling this function.
+ */
+void layer_regConstant(lua_State *L, const lua3rd_regConst *c){
+	assert(L != NULL);
+	while(c->name != NULL){
+		// TODO distinguish constant type
+		lua_pushinteger(L, c->value);
+		// register constant to the table
+		lua_setfield(L, -2, c->name);
+		c++;
+	}
 }
 
 /**
@@ -32,6 +46,7 @@ void load3rd(lua_State *L){
  * 将元表的副本留在栈中
  */
 void layer_newTypeMetatable(lua_State *L, const char *tname, lua_CFunction gc, const luaL_Reg *oo){
+	assert(L != NULL);
 	// 创建元表
 	luaL_newmetatable(L, tname); // +1
 	lua_pushvalue(L, -1);	// 复制索引 +1
