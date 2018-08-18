@@ -20,7 +20,7 @@ The chip can be tested using the Lua scripting language, or GDB can be used to p
 
 简单示例——CMSIS-DAP仿真器初始化：
 ```lua
-adapter = require("Adapter");	-- 加载Adapter库
+adapter = require("Adapter");    -- 加载Adapter库
 cmsis_dap = require("CMSIS-DAP"); -- 加载CMSIS-DAP库
 cmsis_dapObj = cmsis_dap.New(); -- 创建新的CMSIS-DAP对象
 -- CMSIS-DAP的VID和PID
@@ -100,6 +100,7 @@ print(string.format("CTRL/STAT:0x%08X", dap.GetCTRL_STATReg(cmsis_dapObj)))
 print("Hello World")
 cmsis_dapObj:SetStatus(adapter.STATUS_IDLE)
 ```
+
 输出：
        _____                      __  ____  __________ 
       / ___/____ ___  ____ ______/ /_/ __ \/ ____/ __ \
