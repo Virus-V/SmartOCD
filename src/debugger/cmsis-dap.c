@@ -1229,6 +1229,18 @@ REEXEC:;
 			*(writeBuff + writeCnt++) = cmd->instr.RWRegSingle.reg
 				| (cmd->instr.RWRegSingle.RnW ? DAP_TRANSFER_RnW : 0)
 				| (cmd->instr.RWRegSingle.APnDP ? DAP_TRANSFER_APnDP : 0);
+			
+//			do{
+//				log_debug("----");
+//				log_debug("%s %s Reg %x.",
+//					cmd->instr.RWRegSingle.RnW ? "Read" : "Write",
+//					cmd->instr.RWRegSingle.APnDP ? "AP" : "DP",
+//					cmd->instr.RWRegSingle.reg);
+//				if(cmd->instr.RWRegSingle.RnW == FALSE){
+//					log_debug("0x%08X", cmd->instr.RWRegSingle.data.write);
+//				}
+//			}while(0);
+
 			// 如果是写操作
 			if(cmd->instr.RWRegSingle.RnW == 0){
 				// XXX 小端字节序
@@ -1379,7 +1391,7 @@ static BOOL operate(AdapterObject *adapterObj, int operate, ...){
 		break;
 
 	case AINS_DAP_CMD_EXECUTE:
-		log_trace("Execution command: DAP Transfer.");
+		log_trace("Execution command: Execute_DAP_Cmd.");
 		do {
 			uint8_t dap_index = (uint8_t)va_arg(parames, int);
 			uint8_t count = (uint8_t)va_arg(parames, int);
@@ -1444,6 +1456,9 @@ BOOL CMSIS_DAP_JTAG_Configure(AdapterObject *adapterObj, uint8_t count, uint8_t 
 	return adapterObj->Operate(adapterObj, CMDAP_JTAG_CONFIGURE, count, irData);
 }
 
+/**
+ * 配置DAP传输参数，同时会修改AdapterObject.DAP里面的Retry、IdleCycle对象
+ */
 BOOL CMSIS_DAP_TransferConfigure(AdapterObject *adapterObj, uint8_t idleCycle, uint16_t waitRetry, uint16_t matchRetry){
 	assert(adapterObj != NULL);
 	return adapterObj->Operate(adapterObj, CMDAP_TRANSFER_CONFIG, idleCycle, waitRetry, matchRetry);

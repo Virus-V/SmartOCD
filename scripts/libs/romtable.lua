@@ -1,37 +1,8 @@
 --[[
-    SmartOCD - ARMv8相关操作
-    2018年04月28日18:01:23
-    Virus.V <virusv@live.com>
+    遍历ROM Table
 ]]
--- 使用CMSIS-DAP
-dofile("cmsis_dap.socd")
--- 选择访问AHB总线的MEM-AP
-local APB_AP_Idx = dapObj:find_AP("APB")   -- 这里先选择AHB总线，测试用
-
-local csw = dapObj:read_AP(DAP_Reg.AP_CSW)
-print(string.format( "CSW Register: %08X", csw ))
--- 设置AP控制字,32位读取
-dapObj:write_AP(DAP_Reg.AP_CSW, csw | 0x2)
---[[
-    读取当前AP信息
-    PT:Packed Transfer
-    LD:Large Data 支持64位，128位，256位数据传输
-    LA:Large Address
-    BE:Big-Endian
-    BT:Byte Transfer 支持字节、半字、字宽度传输
-]]
-PackedTrans, LargeData, LargeAddr, BigEndian, ByteTrans = dapObj:get_AP_Capacity("PT","LD","LA","BE","BT")
-if PackedTrans then print("Support Packed Transfer.") end
-if LargeData then print("Support Large Data Extention.") end
-if LargeAddr then print("Support Large Address.") end
-if BigEndian then print("Big Endian Access.") end
-if ByteTrans then print("Support Less Word Transfer.") end
-
--- 读取ROM TABLE地址
-ROM_Table_Addr = dapObj:get_ROM_Table()
-print("ROM Table address is:" .. string.format("0x%08X", ROM_Table_Addr))
--- DAP组件信息 desinger,part,type,fullname
-dap_infos = {
+local dap = require("DAP")  -- 加载DAP库
+local dap_infos = {
     { 0x4BB, 0x000, "Cortex-M3 SCS",              "(System Control Space)", },
 	{ 0x4BB, 0x001, "Cortex-M3 ITM",              "(Instrumentation Trace Module)", },
 	{ 0x4BB, 0x002, "Cortex-M3 DWT",              "(Data Watchpoint and Trace)", },
@@ -127,18 +98,18 @@ dap_infos = {
 	{ 0x1000, 0x343, "TI DAPCTL",                  "", },
 }
 
--- 读取Component
-function display_ROM(dap, addr, depth)
-    -- 获得对齐后的地址
+-- 打印ROM Table
+function DisplayROMTable(adapter, addr, depth)
+	-- 获得对齐后的地址
     local base_addr = addr & 0xFFFFF000
     -- 读取pid和cid
-    local cid, pid = dap:get_CID_PID(base_addr)
+    local cid, pid = dap.Get_CID_PID(adapter, base_addr)
     if (cid & 0xFFFF0FFF) ~= 0xB105000D then
         -- 无效的CID
-        print("Invaild CID:" .. string.format("%08X", cid))
+        print("Invaild CID:" .. string.format("0x%08X", cid))
         return 
     end
-    print(string.format( "Component CID:0x%08X, PID:0x%010X.", cid, pid))
+    print(string.format( "\n* Component CID:0x%08X, PID:0x%010X.", cid, pid))
     -- 获得该Component占据的空间大小
     local occupy_size = (pid >> 36) & 0xF
     if occupy_size > 0 then 
@@ -157,23 +128,23 @@ function display_ROM(dap, addr, depth)
         end
     end
     if compon_type == 0x1 then    -- ROM Table
-        local mem_type = dap:readMem32(base_addr + 0xFCC)
+        local mem_type = dap.ReadMem32(adapter, base_addr + 0xFCC)
         if mem_type & 0x1 == 0x1 then
-            print("MEMTYPE system memory present on bus.")
+            print("- MEMTYPE system memory present on bus.")
         else
-            print("MEMTYPE system memory not present: dedicated debug bus.")
+            print("- MEMTYPE system memory not present: dedicated debug bus.")
         end
-        -- 遍历Table Entry 0xefc
+					-- 遍历Table Entry 0xefc
         for entry_offset = 0,0xF00,4 do
-            local entry = dap:readMem32(base_addr + entry_offset)
+            local entry = dap.ReadMem32(adapter, base_addr + entry_offset)
             if entry & 0x1 == 0x1 then  -- 存在表项
-                print(string.format( "0x%08X => 0x%08X.", (base_addr + (entry & 0xFFFFF000)) & 0xFFFFFFFF, entry))
-                -- 递归调用
-                -- display_ROM(dap, (base_addr + (entry & 0xFFFFF000)) & 0xFFFFFFFF, depth+1)
+                print(string.format( "- Next Entry:0x%08X BaseAddr:0x%08X.", entry, (base_addr + (entry & 0xFFFFF000)) & 0xFFFFFFFF))
+                						-- 递归调用
+                DisplayROMTable(adapter, (base_addr + (entry & 0xFFFFF000)) & 0xFFFFFFFF, depth+1)
             elseif entry == 0 then break end
         end
     elseif compon_type == 0x9 then -- CoreSight component
-        local dev_type = dap:readMem32(base_addr + 0xFCC)
+        local dev_type = dap.ReadMem32(adapter, base_addr + 0xFCC)
         local minor = (dev_type >> 4) & 0x0F
         local major_type, sub_type = "other"
         if dev_type & 0x0F == 0 then
@@ -248,9 +219,6 @@ function display_ROM(dap, addr, depth)
                 sub_type = "Memory"
             end
         end
-        print("Type is " .. major_type .. " - " .. sub_type)
+        print("- Type is " .. major_type .. " - " .. sub_type)
     end
 end
--- 打印ROM Table
-display_ROM(dapObj, 0x80020000, 0) 
-display_ROM(dapObj, 0x80040000, 0) 

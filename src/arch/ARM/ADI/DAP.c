@@ -42,11 +42,9 @@ BOOL DAP_Init(AdapterObject *adapterObj){
 	adapter_DAP_Write_DP_Single(adapterObj, SELECT, 0, FALSE);
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
 		log_fatal("SELECT Register Clean Failed.");
-		return -1;
+		return FALSE;
 	}
-	// 读取SELECT寄存器
-	adapter_DAP_Read_DP_Single(adapterObj, SELECT, &adapterObj->dap.SELECT_Reg.regData, FALSE);
-	adapter_DAP_Execute(adapterObj);
+	adapterObj->dap.SELECT_Reg.regData = 0;	// 清零SELECT寄存器
 
 	// 写0x20到CTRL，并读取
 	adapter_DAP_Write_DP_Single(adapterObj, CTRL_STAT, 0x20, TRUE);
@@ -71,6 +69,7 @@ BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx){
 	if(adapterObj->dap.SELECT_Reg.regInfo.AP_Sel == apIdx && adapterObj->dap.AP[apIdx].ctrl_state.init == 1){
 		return TRUE;
 	}
+
 	jmp_buf exception;
 	// 错误处理
 	switch(setjmp(exception)){
@@ -99,6 +98,7 @@ BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx){
 	TRY(adapter_DAP_Execute(adapterObj), 2);
 	// select更新成功，同步select寄存器数据
 	adapterObj->dap.SELECT_Reg.regData = selectTmp.regData;
+
 	// 获取AP相关信息：CFG
 	if(adapterObj->dap.AP[apIdx].ctrl_state.init == 0){	// 初始化ap相关参数
 		/**
@@ -111,6 +111,7 @@ BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx){
 		TRY(adapter_DAP_Read_AP_Single(adapterObj, CFG, &cfg, TRUE), 1);
 		TRY(adapter_DAP_Read_AP_Single(adapterObj, CSW, &csw, TRUE), 1);
 		TRY(adapter_DAP_Execute(adapterObj), 2);
+		log_debug("Default CSW: 0x%08X.", csw);
 
 		adapterObj->dap.AP[apIdx].ctrl_state.largeAddress = !!(cfg & 0x2);
 		adapterObj->dap.AP[apIdx].ctrl_state.largeData = !!(cfg & 0x4);
@@ -119,7 +120,7 @@ BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx){
 		adapterObj->dap.AP[apIdx].CSW.regData = csw;
 		// 写入packed模式和8位模式
 		adapterObj->dap.AP[apIdx].CSW.regInfo.AddrInc = DAP_ADDRINC_PACKED;
-		adapterObj->dap.AP[apIdx].CSW.regInfo.Size = AP_CSW_SIZE8;
+		adapterObj->dap.AP[apIdx].CSW.regInfo.Size = DAP_DATA_SIZE_8;
 		TRY(adapter_DAP_Write_AP_Single(adapterObj, CSW, adapterObj->dap.AP[apIdx].CSW.regData, TRUE), 1);
 		TRY(adapter_DAP_Read_AP_Single(adapterObj, CSW, &adapterObj->dap.AP[apIdx].CSW.regData, TRUE), 1);
 		TRY(adapter_DAP_Execute(adapterObj), 2);
@@ -133,11 +134,11 @@ BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx){
 		 * If the MEM-AP Large Data Extention is not supported, then when a MEM-AP implementation supports different
 		 * sized access, it MUST support word, halfword and byte accesses.
 		 */
-		if(adapterObj->dap.AP[apIdx].CSW.regInfo.AddrInc == AP_CSW_PADDRINC){
+		if(adapterObj->dap.AP[apIdx].CSW.regInfo.AddrInc == DAP_ADDRINC_PACKED){
 			adapterObj->dap.AP[apIdx].ctrl_state.packedTransfers = 1;
 			adapterObj->dap.AP[apIdx].ctrl_state.lessWordTransfers = 1;
 		}else{
-			adapterObj->dap.AP[apIdx].ctrl_state.lessWordTransfers = adapterObj->dap.AP[apIdx].CSW.regInfo.Size == AP_CSW_SIZE8 ? 1 : 0;
+			adapterObj->dap.AP[apIdx].ctrl_state.lessWordTransfers = adapterObj->dap.AP[apIdx].CSW.regInfo.Size == DAP_DATA_SIZE_8 ? 1 : 0;
 		}
 		// 恢复CSW寄存器的值
 		TRY(adapter_DAP_Write_AP_Single(adapterObj, CSW, csw, TRUE), 1);
@@ -153,44 +154,48 @@ BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx){
 /**
  * 寻找AP
  */
-int DAP_Find_AP(AdapterObject *adapterObj, enum ap_type apType){
-	assert(adapterObj != NULL);
-	int apIdx; AP_IDR_Parse ap_IDR;
+BOOL DAP_Find_AP(AdapterObject *adapterObj, enum ap_type apType, uint8_t *apIdx){
+	assert(adapterObj != NULL && apIdx != NULL);
+	int apIdx_t; AP_IDR_Parse ap_IDR;
 	uint32_t ctrl_stat;
 
-	for(apIdx = 0; apIdx < 256; apIdx++){
+	for(apIdx_t = 0; apIdx_t < 256; apIdx_t++){
 		// 选择AP
-		if(DAP_AP_Select(adapterObj, apIdx) == FALSE){
-			log_info("DAP_AP_Select fail,apIdx:%d", apIdx);
-			return -1;
+		if(DAP_AP_Select(adapterObj, apIdx_t) == FALSE){
+			log_warn("DAP_AP_Select failed, apIdx:%d", apIdx_t);
+			return FALSE;
 		}
 		if(adapter_DAP_Read_AP_Single(adapterObj, IDR, &ap_IDR.regData, TRUE) == FALSE){
-			log_info("Add read AP_IDR command fail,apIdx:%d", apIdx);
-			return -1;
+			log_warn("Add read AP_IDR command failed, apIdx:%d", apIdx_t);
+			return FALSE;
 		}
 		if(adapter_DAP_Read_DP_Single(adapterObj, CTRL_STAT, &ctrl_stat, TRUE) == FALSE){
-			log_info("Add read DP_CTRL/STAT command fail,apIdx:%d", apIdx);
-			return -1;
+			log_warn("Add read DP_CTRL/STAT command failed, apIdx:%d", apIdx_t);
+			return FALSE;
 
 		}
 		if(adapter_DAP_Execute(adapterObj) == FALSE){
 			log_warn("Failed to Execute DAP Command.");
 			adapter_DAP_CleanCommandQueue(adapterObj);	// 清空指令队列中未执行的指令
-			return -1;
+			return FALSE;
 		}
-		log_info("Probe AP %d, AP_IDR: 0x%08X, CTRL/STAT: 0x%08X.", apIdx, ap_IDR.regData, ctrl_stat);
+		//log_info("Probe AP %d, AP_IDR: 0x%08X, CTRL/STAT: 0x%08X.", apIdx_t, ap_IDR.regData, ctrl_stat);
+		if(ap_IDR.regData == 0) continue;
+		log_info("Probe AP %d, AP_IDR: 0x%08X, CTRL/STAT: 0x%08X.", apIdx_t, ap_IDR.regData, ctrl_stat);
 		// 检查厂商
-		if(ap_IDR.regInfo.JEP106Code == JEP106_CODE_ARM){
-			if(apType == AP_TYPE_JTAG && ap_IDR.regInfo.Class == 0){	// 选择JTAG-AP
-				return apIdx;
-			}else if(apType != AP_TYPE_JTAG && ap_IDR.regInfo.Class == 8){	// 选择MEM-AP
-				if(ap_IDR.regInfo.Type == apType){
-					return apIdx;
-				}
+		if(ap_IDR.regInfo.JEP106Code != JEP106_CODE_ARM) continue;
+		if(apType == AP_TYPE_JTAG && ap_IDR.regInfo.Class == 0){	// 选择JTAG-AP
+			*apIdx = apIdx_t;
+			return TRUE;
+		}else if(apType != AP_TYPE_JTAG && ap_IDR.regInfo.Class == 0x8){	// 选择MEM-AP
+			if(ap_IDR.regInfo.Type == apType){
+				*apIdx = apIdx_t;
+				return TRUE;
 			}
 		}
 	}
-	return -1;
+	log_info("Cant Find Specified AP! CTRL/STATE: 0x%08X.", ctrl_stat);
+	return FALSE;
 }
 
 /**
@@ -204,10 +209,13 @@ int DAP_Find_AP(AdapterObject *adapterObj, enum ap_type apType){
  */
 BOOL DAP_Read_TAR(AdapterObject *adapterObj, uint64_t *address_out){
 	assert(adapterObj != NULL && address_out != NULL);
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init != 1){
+		log_warn("The current AP has not been initialized yet.");
+		return FALSE;
+	}
 	*address_out = 0;
 	// 如果支持Large Address
-	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1 &&
-			adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.largeAddress == 1){
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.largeAddress == 1){
 		if(adapter_DAP_Read_AP_Single(adapterObj, TAR_MSB, CAST(uint32_t *, address_out) + 1, TRUE) == FALSE) return FALSE;
 	}
 	if(adapter_DAP_Read_AP_Single(adapterObj, TAR_LSB, CAST(uint32_t *, address_out), TRUE) == FALSE) return FALSE;
@@ -219,9 +227,13 @@ BOOL DAP_Read_TAR(AdapterObject *adapterObj, uint64_t *address_out){
  */
 BOOL DAP_Write_TAR(AdapterObject *adapterObj, uint64_t address_in){
 	assert(adapterObj != NULL);
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init != 1){
+		log_warn("The current AP has not been initialized yet.");
+		return FALSE;
+	}
 	// 如果支持Large Address
-	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init == 1 &&
-			adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.largeAddress == 1){
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.largeAddress == 1){
+		log_info("DAP_Write_TAR:MSB");
 		// 将地址的高32位写入TAR_MSB
 		if(adapter_DAP_Write_AP_Single(adapterObj, TAR_MSB, CAST(uint32_t, address_in >> 32), TRUE) == FALSE) return FALSE;
 	}
@@ -714,6 +726,11 @@ BOOL DAP_ReadMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode,
 			}
 			dataPos += thisTimeTransCnt;
 		}
+	}else{	// 地址不增 XXX 没测试
+		if(DAP_Write_TAR(adapterObj, addr) == FALSE) return FALSE;
+		if(adapter_DAP_Read_AP_Block(adapterObj, DRW, data_out, transCnt, TRUE) == FALSE){
+			return FALSE;
+		}
 	}
 	// 执行指令队列
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
@@ -830,6 +847,11 @@ BOOL DAP_WriteMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode
 			}
 			dataPos += thisTimeTransCnt;
 		}
+	}else{	// 地址不增 XXX 没测试
+		if(DAP_Write_TAR(adapterObj, addr) == FALSE) return FALSE;
+		if(adapter_DAP_Write_AP_Block(adapterObj, DRW, data_in, transCnt, TRUE) == FALSE){
+			return FALSE;
+		}
 	}
 	// 执行指令队列
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
@@ -853,6 +875,7 @@ BOOL DAP_Read_CID_PID(AdapterObject *adapterObj, uint32_t componentBase, uint32_
 		log_warn("Component base address is not 4KB aligned!");
 		return FALSE;
 	}
+
 	*cid_out = 0; *pid_out = 0;
 	uint32_t cid0, cid1, cid2, cid3;
 	uint32_t pid0, pid1, pid2, pid3, pid4;	// pid5-7全是0，所以不用读
@@ -881,4 +904,48 @@ BOOL DAP_Read_CID_PID(AdapterObject *adapterObj, uint32_t componentBase, uint32_
 	return TRUE;
 }
 
+/**
+ * 读CSW寄存器
+ */
+BOOL DAP_ReadCSW(AdapterObject *adapterObj, uint32_t *cswData){
+	assert(adapterObj != NULL && cswData != NULL);
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init != 1){
+		log_warn("The current AP has not been initialized yet.");
+		return FALSE;
+	}
+	*cswData = 0;
+	if(adapter_DAP_Read_AP_Single(adapterObj, CSW, cswData, TRUE) == FALSE){
+		log_warn("Read CSW Register Failed!");
+		return FALSE;
+	}
+	if(adapter_DAP_Execute(adapterObj) == FALSE){
+		log_warn("Read CSW Register Failed!");
+		return FALSE;
+	}
+	// 更新本地CSW
+	adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = *cswData;
+	return TRUE;
+}
+
+/**
+ * 写CSW寄存器
+ */
+BOOL DAP_WriteCSW(AdapterObject *adapterObj, uint32_t cswData){
+	assert(adapterObj != NULL);
+	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init != 1){
+		log_warn("The current AP has not been initialized yet.");
+		return FALSE;
+	}
+	if(adapter_DAP_Write_AP_Single(adapterObj, CSW, cswData, TRUE) == FALSE){
+		log_warn("Write CSW Register Failed!");
+		return FALSE;
+	}
+	if(adapter_DAP_Execute(adapterObj) == FALSE){
+		log_warn("Write CSW Register Failed!");
+		return FALSE;
+	}
+	// 更新本地CSW
+	adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = cswData;
+	return TRUE;
+}
 

@@ -123,13 +123,13 @@ enum addrIncParam {
 #define DP_SELECT_APSEL			0xFF000000
 #define DP_SELECT_APBANK		0x000000F0
 #define DP_SELECT_DPBANK		0x0000000F
-#define DP_SELECT_INVALID		0x00FFFF00 /* Reserved bits one */
+#define DP_SELECT_MASK			0xFF0000FF
 
 enum ap_type{
 	AP_TYPE_JTAG = 0,	// JTAG AP
-	AP_TYPE_AMBA_AHB,	// AMBA AHB bus
-	AP_TYPE_AMBA_APB,	// AMBA APB2 or APB3 bus
-	AP_TYPE_AMBA_AXI	// AMBA AXI3 or AXI4 bus, with optional ACT-Lite support
+	AP_TYPE_AMBA_AHB = 0x1,	// AMBA AHB bus
+	AP_TYPE_AMBA_APB = 0x2,	// AMBA APB2 or APB3 bus
+	AP_TYPE_AMBA_AXI = 0x4	// AMBA AXI3 or AXI4 bus, with optional ACT-Lite support
 };
 
 // DP IDR Register 解析
@@ -225,7 +225,8 @@ typedef union {
 	struct {
 		uint32_t DP_BankSel : 4;
 		uint32_t AP_BankSel : 4;
-		uint32_t : 16;
+		uint32_t Invaild : 1;	// 表示是否需要强制更新SELECT寄存器
+		uint32_t : 15;
 		uint32_t AP_Sel : 8;
 	} regInfo;
 }DP_SELECT_Parse;
@@ -253,9 +254,10 @@ typedef struct AdapterObject AdapterObject;
  */
 BOOL DAP_Init(AdapterObject *adapterObj);
 BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx);
-int DAP_Find_AP(AdapterObject *adapterObj, enum ap_type apType);
+BOOL DAP_Find_AP(AdapterObject *adapterObj, enum ap_type apType, uint8_t *apIdx);
 BOOL DAP_Read_TAR(AdapterObject *adapterObj, uint64_t *address_out);
 BOOL DAP_Write_TAR(AdapterObject *adapterObj, uint64_t address_in);
+
 BOOL DAP_ReadMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t *data_out);
 BOOL DAP_ReadMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t *data_out);
 BOOL DAP_ReadMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t *data_out);
@@ -268,4 +270,6 @@ BOOL DAP_WriteMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t data_in);
 BOOL DAP_ReadMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode, int transSize, int transCnt, uint32_t *data_out);
 BOOL DAP_WriteMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode, int transSize, int transCnt, uint32_t *data_in);
 BOOL DAP_Read_CID_PID(AdapterObject *adapterObj, uint32_t componentBase, uint32_t *cid_out, uint64_t *pid_out);
+BOOL DAP_ReadCSW(AdapterObject *adapterObj, uint32_t *cswData);
+BOOL DAP_WriteCSW(AdapterObject *adapterObj, uint32_t cswData);
 #endif /* SRC_ARCH_ARM_ADI_DAP_H_ */

@@ -1,8 +1,0 @@
-adapter.o: /home/virusv/SmartOCD/src/debugger/adapter.c \
- /home/virusv/SmartOCD/src/misc/log.h \
- /home/virusv/SmartOCD/src/smart_ocd.h \
- /home/virusv/SmartOCD/src/debugger/adapter.h \
- /home/virusv/SmartOCD/src/misc/list.h \
- /home/virusv/SmartOCD/src/lib/JTAG.h \
- /home/virusv/SmartOCD/src/arch/ARM/ADI/ADIv5.h \
- /home/virusv/SmartOCD/src/arch/ARM/ADI/DAP.h

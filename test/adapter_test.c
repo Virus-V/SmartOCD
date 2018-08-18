@@ -47,6 +47,9 @@ int main(){
 	adapter_JTAG_Execute(adapterObj);
 	log_debug("Origin Method read IDCODE: 0x%08X, 0x%08X.", idcode[0], idcode[1]);
 
+	uint16_t irss[2] = {4, 5};
+	adapter_JTAG_Set_TAP_Info(adapterObj, 2, irss);
+
 	uint8_t irs[2] = {4, 5};
 	// 设置JTAG信息
 	CMSIS_DAP_JTAG_Configure(adapterObj, 2, irs);

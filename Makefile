@@ -44,7 +44,10 @@ LDFLAGS += $(addprefix -l,$(ALL_LIBS))
 
 .PRECIOUS : $(SMARTOCD_ENTRY_OBJ_FILE) $(SMARTOCD_OBJ_FILES) $(TEST_OBJ_FILES)
 
-all: $(TARGET)
+all: $(TARGET) buildcfg
+
+buildcfg:
+	@touch $(SMARTOCD_ENTRY_SRC_FILE)
 
 $(TARGET): $(SMARTOCD_OBJ_FILES) $(SMARTOCD_ENTRY_OBJ_FILE)
 	$(CC) $^ -o $@ $(LDFLAGS) 

@@ -43,7 +43,7 @@ BOOL __CONSTRUCT(Adapter)(AdapterObject *adapterObj, const char *desc){
 	// 初始化DAP指令链表头
 	INIT_LIST_HEAD(&adapterObj->dap.instrQueue);
 	adapterObj->dap.ir = JTAG_IDCODE;	// 默认连接到IDCODE扫描链
-	adapterObj->dap.SELECT_Reg.regData = DP_SELECT_INVALID;	// 初始化非法值
+	adapterObj->dap.SELECT_Reg.regData = 0x100;	// Invaild标志置位
 	return TRUE;
 }
 
@@ -403,7 +403,7 @@ static void bitExtract(uint8_t *source, int startPos, int len, uint8_t *data){
  */
 BOOL adapter_JTAG_Wirte_TAP_IR(AdapterObject *adapterObj, uint16_t tapIndex, uint32_t IR_Data){
 	assert(adapterObj != NULL);
-	if(tapIndex < adapterObj->tap.TAP_Count){
+	if(tapIndex >= adapterObj->tap.TAP_Count){
 		log_warn("TAP index value is too large!");
 		return FALSE;
 	}
@@ -422,7 +422,11 @@ BOOL adapter_JTAG_Wirte_TAP_IR(AdapterObject *adapterObj, uint16_t tapIndex, uin
 	int IRLen = ACCESS_TAP_INFO_ARRAY(adapterObj, TAP_INFO_IR_LEN, tapIndex);
 	// 构造IR数据
 	bitReplace(tmp_buff, IRBefore, IRLen, CAST(uint8_t *, &IR_Data));
+
+	//int misc_PrintBulk(char *data, int length, int rowLen);
 	//misc_PrintBulk(tmp_buff, all_IR_Bytes, 8);
+	//log_debug("All bits:%d", adapterObj->tap.IR_Bits);
+
 	// 新建临时指令队列
 	LIST_HEAD(list_tmp);
 	// 插入状态改变指令
@@ -436,10 +440,17 @@ BOOL adapter_JTAG_Wirte_TAP_IR(AdapterObject *adapterObj, uint16_t tapIndex, uin
 		free(tmp_buff);
 		goto ERR_EXIT;
 	}
+
+	// 转到IR-UPDATE状态
+	if(add_JTAG_StatusChange(&list_tmp, JTAG_TAP_IREXIT1, JTAG_TAP_IRUPDATE) == FALSE){
+		free(tmp_buff);
+		goto ERR_EXIT;
+	}
+
 	// 并入指令队列
 	list_splice_tail(&list_tmp, &adapterObj->tap.instrQueue);
 	// 改变当前TAP的状态
-	adapterObj->tap.currentStatus = JTAG_TAP_IRSHIFT;
+	adapterObj->tap.currentStatus = JTAG_TAP_IRUPDATE;
 	// 执行队列
 	if(adapter_JTAG_Execute(adapterObj) == FALSE){
 		free(tmp_buff);
@@ -467,7 +478,7 @@ ERR_EXIT:;
 BOOL adapter_JTAG_Exchange_TAP_DR(AdapterObject *adapterObj, uint16_t tapIndex, uint8_t *DR_Data, int DR_BitCnt){
 	assert(adapterObj != NULL && DR_Data != NULL);
 	// 判断tapIndex是否合法
-	if(tapIndex < adapterObj->tap.TAP_Count){
+	if(tapIndex >= adapterObj->tap.TAP_Count){
 		log_warn("TAP index value is too large!");
 		return FALSE;
 	}
@@ -483,7 +494,10 @@ BOOL adapter_JTAG_Exchange_TAP_DR(AdapterObject *adapterObj, uint16_t tapIndex, 
 	memset(tmp_buff, 0xFF, all_DR_Bytes);
 	// 构造DR数据
 	bitReplace(tmp_buff, tapIndex, DR_BitCnt, DR_Data);
+
+	//int misc_PrintBulk(char *data, int length, int rowLen);
 	//misc_PrintBulk(tmp_buff, all_DR_Bytes, 8);
+	//log_debug("All bits:%d", all_DR_Bits);
 	// 新建临时指令队列
 	LIST_HEAD(list_tmp);
 	// 插入状态改变指令
@@ -497,11 +511,17 @@ BOOL adapter_JTAG_Exchange_TAP_DR(AdapterObject *adapterObj, uint16_t tapIndex, 
 		free(tmp_buff);
 		goto ERR_EXIT;
 	}
+
+	if(add_JTAG_StatusChange(&list_tmp, JTAG_TAP_DREXIT1, JTAG_TAP_DRUPDATE) == FALSE){
+		free(tmp_buff);
+		goto ERR_EXIT;
+	}
+
 	// 并入指令队列
 	list_splice_tail(&list_tmp, &adapterObj->tap.instrQueue);
 
 	// 改变当前TAP的状态
-	adapterObj->tap.currentStatus = JTAG_TAP_DRSHIFT;
+	adapterObj->tap.currentStatus = JTAG_TAP_DRUPDATE;
 	// 执行队列
 	if(adapter_JTAG_Execute(adapterObj) == FALSE){
 		free(tmp_buff);
@@ -509,6 +529,8 @@ BOOL adapter_JTAG_Exchange_TAP_DR(AdapterObject *adapterObj, uint16_t tapIndex, 
 	}
 	// 数据提取
 	bitExtract(tmp_buff, tapIndex, DR_BitCnt, DR_Data);
+
+	//misc_PrintBulk(tmp_buff, all_DR_Bytes, 8);
 
 	free(tmp_buff);
 	// 队列执行成功
@@ -522,6 +544,14 @@ ERR_EXIT:
 		}
 	}while(0);
 	return FALSE;
+}
+
+/**
+ * 写DAP的ABORT寄存器，或者ABORT扫描链
+ */
+BOOL adapter_DAP_WriteAbortReg(AdapterObject *adapterObj, uint32_t abort){
+	assert(adapterObj != NULL);
+	return adapterObj->Operate(adapterObj, AINS_DAP_WRITE_ABOTR, abort);
 }
 
 // 创建新的DAP指令对象，并将其插入DAP指令队列尾部
@@ -569,7 +599,7 @@ static BOOL add_DAP_RW_RegBlock(
 	uint32_t *dataIO, int count)
 {
 	assert(list != NULL);
-	assert((read == TRUE && dataIO != NULL) || read == FALSE);
+	assert(dataIO != NULL);
 	// 创建指令并插入队列
 	struct DAP_Command *command = new_DAP_Command(list);
 	if(command == NULL){
@@ -594,21 +624,33 @@ static BOOL add_DAP_RW_RegBlock(
  * updateSelect:是否自动更新SELECT寄存器
  */
 BOOL adapter_DAP_RW_nP_Single(AdapterObject *adapterObj, int reg, BOOL read, BOOL ap, uint32_t data_in, uint32_t *data_out, BOOL updateSelect){
-	assert(adapterObj != NULL && data_out != NULL);
+	assert(adapterObj != NULL);
+	assert(read == FALSE || (read == TRUE && data_out != NULL));
+
 	if(updateSelect == TRUE){
 		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
 		LIST_HEAD(list_tmp);
-		if(adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel != (reg >> 4)){
-			// 更新本地AP BankSel部分
-			adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel = reg >> 4;
+		if(ap == TRUE){
+			if(adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel != (reg >> 4)){
+				// 更新本地AP BankSel部分
+				adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel = reg >> 4;
+			}
+		}else{
+			if(adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel != (reg >> 4)){
+				// 更新本地DP BankSel部分
+				adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel = reg >> 4;
+			}
+		}
+		if(adapterObj->dap.SELECT_Reg.regData != select_bak || adapterObj->dap.SELECT_Reg.regInfo.Invaild == 1){
 			// 写SELECT寄存器
-			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData) == FALSE){
+			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData & DP_SELECT_MASK) == FALSE){
 				log_warn("Update SELECT Register Failed!");
 				adapterObj->dap.SELECT_Reg.regData = select_bak;
 				return FALSE;
 			}
+			adapterObj->dap.SELECT_Reg.regInfo.Invaild = 0;	// 取消强制更新标志
 		}
-		// 写 AP reg
+		
 		if(add_DAP_RW_RegSingle(&list_tmp, reg, read, ap, data_out, data_in) == FALSE){
 			adapterObj->dap.SELECT_Reg.regData = select_bak;
 			// 释放队列指令数据
@@ -638,15 +680,25 @@ BOOL adapter_DAP_RW_nP_Block(AdapterObject *adapterObj, int reg, BOOL read, BOOL
 	if(updateSelect == TRUE){
 		uint32_t select_bak = adapterObj->dap.SELECT_Reg.regData;
 		LIST_HEAD(list_tmp);
-		if(adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel != (reg >> 4)){
-			// 更新本地AP BankSel部分
-			adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel = reg >> 4;
+		if(ap == TRUE){
+			if(adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel != (reg >> 4)){
+				// 更新本地AP BankSel部分
+				adapterObj->dap.SELECT_Reg.regInfo.AP_BankSel = reg >> 4;
+			}
+		}else{
+			if(adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel != (reg >> 4)){
+				// 更新本地DP BankSel部分
+				adapterObj->dap.SELECT_Reg.regInfo.DP_BankSel = reg >> 4;
+			}
+		}
+		if(adapterObj->dap.SELECT_Reg.regData != select_bak || adapterObj->dap.SELECT_Reg.regInfo.Invaild == 1){
 			// 写SELECT寄存器
-			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData) == FALSE){
+			if(add_DAP_RW_RegSingle(&list_tmp, SELECT, FALSE, FALSE, NULL, adapterObj->dap.SELECT_Reg.regData & DP_SELECT_MASK) == FALSE){
 				log_warn("Update SELECT Register Failed!");
 				adapterObj->dap.SELECT_Reg.regData = select_bak;
 				return FALSE;
 			}
+			adapterObj->dap.SELECT_Reg.regInfo.Invaild = 0;	// 取消强制更新标志
 		}
 		// 加入block 指令
 		if(add_DAP_RW_RegBlock(&list_tmp, reg, read, ap, dataIO, blockCnt) == FALSE){
@@ -682,38 +734,22 @@ BOOL adapter_DAP_Execute(AdapterObject *adapterObj){
 	// 解析并执行JTAG队列指令
 	if(adapterObj->Operate(adapterObj, AINS_DAP_CMD_EXECUTE) == FALSE){
 		log_warn("Execute Commands Failed.");
+		adapterObj->dap.SELECT_Reg.regInfo.Invaild = 1;	// 设置强制更新SELECT寄存器标志
 		return FALSE;
 	}
-	// 执行成功之后读取SELECT、CTRL_STAT并更新本地缓存
-	LIST_HEAD(list_tmp);
-	uint32_t select = 0, ctrl_stat = 0;
-	// 读SELECT寄存器
-	if(add_DAP_RW_RegSingle(&list_tmp, SELECT, TRUE, FALSE, &select, 0) == FALSE){
-		goto FAILED;
+	// 执行成功之后读取CTRL_STAT并更新本地缓存
+	uint32_t ctrl_stat = 0;
+	if(add_DAP_RW_RegSingle(&adapterObj->dap.instrQueue, CTRL_STAT, TRUE, FALSE, &ctrl_stat, 0) == FALSE){
+		return FALSE;
 	}
-	// 加入block 指令
-	if(add_DAP_RW_RegSingle(&list_tmp, CTRL_STAT, TRUE, FALSE, &ctrl_stat, 0) == FALSE){
-		goto FAILED;
-	}
-	// 并入DAP指令队列
-	list_splice_tail(&list_tmp, &adapterObj->dap.instrQueue);
 	// 执行
 	if(adapterObj->Operate(adapterObj, AINS_DAP_CMD_EXECUTE) == TRUE){
-		adapterObj->dap.SELECT_Reg.regData = select;
 		adapterObj->dap.CTRL_STAT_Reg.regData = ctrl_stat;
 		return TRUE;
 	}else{
-		log_warn("Refresh SELECT & CTRL/STAT Register Failed!");
+		log_warn("Refresh CTRL/STAT Register Failed!");
 		return FALSE;
 	}
-FAILED:;
-	struct DAP_Command *cmd, *cmd_t;
-	list_for_each_entry_safe(cmd, cmd_t, &list_tmp, list_entry){
-		list_del(&cmd->list_entry);	// 将链表中删除
-		free(cmd);
-	}
-	log_warn("Refresh SELECT & CTRL/STAT Register Failed!");
-	return FALSE;
 }
 
 /**
@@ -726,14 +762,6 @@ void adapter_DAP_CleanCommandQueue(AdapterObject *adapterObj){
 		list_del(&cmd->list_entry);	// 将链表中删除
 		free(cmd);
 	}
-}
-
-/**
- * 写DAP的ABORT寄存器，或者ABORT扫描链
- */
-BOOL adapter_DAP_WriteAbortReg(AdapterObject *adapterObj, uint32_t data){
-	assert(adapterObj != NULL);
-	return adapterObj->Operate(adapterObj, AINS_DAP_WRITE_ABOTR, data);
 }
 
 /**

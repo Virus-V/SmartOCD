@@ -93,7 +93,7 @@ static void printAPInfo(uint32_t APIDR){
 //	size = pow(2, tmp);
 //	printf(",occupies %d blocks.\n", size);
 //}
-#define USE_JTAG
+//#define USE_JTAG
 int main(){
 	struct cmsis_dap cmsis_dapObj;
 	AdapterObject *adapterObj = CAST(AdapterObject *, &cmsis_dapObj);
@@ -151,8 +151,8 @@ int main(){
 		return -1;
 	}
 	// 寻找AP
-	int apIdx = DAP_Find_AP(adapterObj, AP_TYPE_AMBA_AHB);
-	if(apIdx == -1){
+	uint8_t apIdx =0;
+	if(DAP_Find_AP(adapterObj, AP_TYPE_AMBA_AHB, &apIdx) == FALSE){
 		log_fatal("Find APB-AP Failed!");
 		return -1;
 	}else{

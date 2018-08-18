@@ -64,7 +64,7 @@ struct JTAG_StatusMove{
 	TMS_SeqInfo seqInfo;
 };
 
-// JTAG交换IO
+// JTAG交换IO，在传输完成后会自动将状态机从SHIFT-xR跳转到EXTI1-xR
 struct JTAG_ExchangeIO{
 	uint8_t *data;	// 需要交换的数据地址
 	int bitNum;	// 交换的二进制位个数
@@ -307,6 +307,9 @@ BOOL adapter_JTAG_Set_TAP_Info(AdapterObject *adapterObj, uint16_t tapCount, uin
 BOOL adapter_JTAG_Wirte_TAP_IR(AdapterObject *adapterObj, uint16_t tapIndex, uint32_t IR_Data);
 BOOL adapter_JTAG_Exchange_TAP_DR(AdapterObject *adapterObj, uint16_t tapIndex, uint8_t *DR_Data, int DR_BitCnt);
 
+// 同步操作 写ABORT寄存器或者ABORT扫描链
+BOOL adapter_DAP_WriteAbortReg(AdapterObject *adapterObj, uint32_t abort);
+
 /**
  * DAP基础操作
  */
@@ -374,9 +377,6 @@ BOOL adapter_DAP_Execute(AdapterObject *adapterObj);
 
 // 清空DAP队列指令
 void adapter_DAP_CleanCommandQueue(AdapterObject *adapterObj);
-
-// 同步操作 写ABORT寄存器或者ABORT扫描链
-BOOL adapter_DAP_WriteAbortReg(AdapterObject *adapterObj, uint32_t data);
 
 // 返回传输方式的字符串形式
 const char *adapter_Transport2Str(enum transportType type);

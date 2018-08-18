@@ -79,7 +79,7 @@ static int adapter_set_clock(lua_State *L){
 }
 
 /**
- * 选择仿真器的传输方式
+ * 选择仿真器的传输模式
  * 第一个参数：AdapterObject指针
  * 第二个参数：传输方式类型adapter.SWD或adapter.JTAG。。
  * 返回值：无
@@ -94,7 +94,7 @@ static int adapter_select_transmission(lua_State *L){
 }
 
 /**
- * 判断仿真器是否支持某个传输方式
+ * 判断仿真器是否支持某个传输模式
  * 第一个参数：AdapterObject指针
  * 第二个参数：传输方式类型adapter.SWD或adapter.JTAG。。
  * 返回：TRUE FALSE
@@ -103,6 +103,18 @@ static int adapter_have_transmission(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	int type = (int)luaL_checkinteger(L, 2);	// 类型
 	lua_pushboolean(L, adapter_HaveTransmission(adapterObj, type));
+	return 1;
+}
+
+/**
+ * 返回当前传输模式
+ * 第一个参数：AdapterObject指针
+ * 第二个参数：传输方式类型adapter.SWD或adapter.JTAG。。
+ * 返回：TRUE FALSE
+ */
+static int adapter_curr_transmission(lua_State *L){
+	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
+	lua_pushinteger(L, adapterObj->currTrans);
 	return 1;
 }
 
@@ -120,8 +132,6 @@ static int adapter_reset(lua_State *L){
 	BOOL hard = (BOOL)lua_toboolean(L, 2);
 	BOOL srst = (BOOL)lua_toboolean(L, 3);
 	int pinWait = (int)luaL_optinteger(L, 4, 0);
-	//lua_pushboolean(L, adapter_Reset(adapterObj, hard, srst, pinWait));
-	//return 1;
 	if(adapter_Reset(adapterObj, hard, srst, pinWait) == FALSE){
 		return luaL_error(L, "Reset Adapter Failed!");
 	}
@@ -276,8 +286,6 @@ static int adapter_jtag_set_tap_info(lua_State *L){
 static int adapter_write_tap_ir(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	uint16_t tap_index = (uint16_t)luaL_checkinteger(L, 2);
-	// 判断tap_index是否合法
-	luaL_argcheck(L, tap_index < adapterObj->tap.TAP_Count, 2, "TAP index value is too large!");
 	uint32_t ir_data = (uint32_t)luaL_checkinteger(L, 3);
 
 	if(adapter_JTAG_Wirte_TAP_IR(adapterObj, tap_index, ir_data) == FALSE){
@@ -354,36 +362,28 @@ static const lua3rd_regConst lib_adapter_const[] = {
 	{"PIN_TDO", SWJ_PIN_TDO},
 	{"PIN_nTRST", SWJ_PIN_nTRST},
 	{"PIN_nRESET", SWJ_PIN_nRESET},
+	// TAP 状态
+	{"TAP_RESET", JTAG_TAP_RESET},
+	{"TAP_IDLE", JTAG_TAP_IDLE},
+	{"TAP_DR_SELECT", JTAG_TAP_DRSELECT},
+	{"TAP_DR_CAPTURE", JTAG_TAP_DRCAPTURE},
+	{"TAP_DR_SHIFT", JTAG_TAP_DRSHIFT},
+	{"TAP_DR_EXIT1", JTAG_TAP_DREXIT1},
+	{"TAP_DR_PAUSE", JTAG_TAP_DRPAUSE},
+	{"TAP_DR_EXIT2", JTAG_TAP_DREXIT2},
+	{"TAP_DR_UPDATE", JTAG_TAP_DRUPDATE},
+	{"TAP_IR_SELECT", JTAG_TAP_IRSELECT},
+	{"TAP_IR_CAPTURE", JTAG_TAP_IRCAPTURE},
+	{"TAP_IR_SHIFT", JTAG_TAP_IRSHIFT},
+	{"TAP_IR_EXIT1", JTAG_TAP_IREXIT1},
+	{"TAP_IR_PAUSE", JTAG_TAP_IRPAUSE},
+	{"TAP_IR_EXIT2", JTAG_TAP_IREXIT2},
+	{"TAP_IR_UPDATE", JTAG_TAP_IRUPDATE},
 	// Adapter 状态
 	{"STATUS_CONNECTED", ADAPTER_STATUS_CONNECTED},
 	{"STATUS_DISCONNECT", ADAPTER_STATUS_DISCONNECT},
 	{"STATUS_RUNING", ADAPTER_STATUS_RUNING},
 	{"STATUS_IDLE", ADAPTER_STATUS_IDLE},
-	// DP寄存器
-	{"DPREG_CTRL_STAT", CTRL_STAT},
-	{"DPREG_SELECT", SELECT},
-	{"DPREG_RDBUFF", RDBUFF},
-	{"DPREG_DPIDR", DPIDR},
-	{"DPREG_ABORT", ABORT},
-	{"DPREG_DLCR", DLCR},
-	{"DPREG_RESEND", RESEND},
-	{"DPREG_TARGETID", TARGETID},
-	{"DPREG_DLPIDR", DLPIDR},
-	{"DPREG_EVENTSTAT", EVENTSTAT},
-	{"DPREG_TARGETSEL", TARGETSEL},
-	// AP寄存器
-	{"APREG_CSW", CSW},
-	{"APREG_TAR_LSB", TAR_LSB},
-	{"APREG_TAR_MSB", TAR_MSB},
-	{"APREG_DRW", DRW},
-	{"APREG_BD0", BD0},
-	{"APREG_BD1", BD1},
-	{"APREG_BD2", BD2},
-	{"APREG_BD3", BD3},
-	{"APREG_CFG", CFG},
-	{"APREG_ROM_LSB", ROM_LSB},
-	{"APREG_ROM_MSB", ROM_MSB},
-	{"APREG_IDR", IDR},
 	// JTAG 扫描链
 	{"JTAG_ABORT", JTAG_ABORT},
 	{"JTAG_DPACC", JTAG_DPACC},
@@ -411,13 +411,14 @@ int luaopen_adapter (lua_State *L) {
 
 // 模块的面向对象方法
 static const luaL_Reg lib_adapter_oo[] = {
-	{"init", adapter_init},
-	{"deinit", adapter_deinit},
-	{"setStatus", adapter_set_status},
-	{"setClock", adapter_set_clock},
-	{"selectTransmission", adapter_select_transmission},
-	{"haveTransmission", adapter_have_transmission},
-	{"reset", adapter_reset},
+	{"Init", adapter_init},
+	{"Deinit", adapter_deinit},
+	{"SetStatus", adapter_set_status},
+	{"SetClock", adapter_set_clock},
+	{"SelectTransType", adapter_select_transmission},
+	{"HaveTransType", adapter_have_transmission},
+	{"CurrentTransType", adapter_curr_transmission},
+	{"Reset", adapter_reset},
 	{"jtagStatusChange", adapter_jtag_status_change},	// JTAG状态机状态切换
 	{"jtagExchangeIO", adapter_jtag_exchange_io},	// 用字符串实现，luaL_Buffer
 	{"jtagIdleWait", adapter_jtag_idle_wait},
@@ -429,11 +430,6 @@ static const luaL_Reg lib_adapter_oo[] = {
 	{"jtagSetTAPInfo", adapter_jtag_set_tap_info},
 	{"jtagWriteTAPIR", adapter_write_tap_ir},
 	{"jtagExchangeTAPDR", adapter_exchange_tap_dr},
-	// dap实现？
-//	{},
-//	{},
-//	{},
-//	{},
 	{NULL, NULL}
 };
 

@@ -34,33 +34,6 @@ static const struct option long_option[]={
 static lua_State *globalL = NULL;
 static FILE *logFd = NULL;
 
-static void stackDump (lua_State *L) {
-	int i;
-	int top = lua_gettop(L);
-	for (i = 1; i <= top; i++) {
-		int t = lua_type(L, i);
-		switch (t) {
-
-		case LUA_TSTRING:
-			log_debug("%d %d : %s", i, -(top-i+1), lua_tostring(L, i));
-		break;
-
-		case LUA_TBOOLEAN:
-			log_debug("%d %d : %s", i, -(top-i+1), lua_toboolean(L, i) ? "true" : "false");
-		break;
-
-		case LUA_TNUMBER:
-			log_debug("%d %d : %g", i, -(top-i+1), lua_tonumber(L, i));
-		break;
-
-		default:
-			log_debug("%d %d : %s", i, -(top-i+1), lua_typename(L, t));
-		break;
-		}
-		printf("\n");
-	}
-}
-
 // 打印logo和版本
 static void printVersion() {
 	char * logo[] = {
@@ -75,7 +48,7 @@ static void printVersion() {
 	for(i=0; logo[i]; i++)
 		printf("%s\n", logo[i]);
 
-	printf(" * SmartOCD V%s By: Virus.V <virusv@live.com>\n"
+	printf(" * SmartOCD v%s By: Virus.V <virusv@live.com>\n"
 			" * Complile time: %s\n"
 			" * Github: https://github.com/Virus-V/SmartOCD\n", VERSION, COMPILE_TIME);
 }

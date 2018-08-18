@@ -138,10 +138,10 @@ static int cmsis_dap_swd_configure(lua_State *L){
 
 
 static const luaL_Reg lib_cmsis_dap_f[] = {
-	{"new", cmsis_dap_new},
-	{"connect", cmsis_dap_connect},
+	{"New", cmsis_dap_new},
+	{"Connect", cmsis_dap_connect},
 	{"jtagConfigure", cmsis_dap_jtag_configure},
-	{"transferConfigure", cmsis_dap_transfer_configure},
+	{"TransferConfigure", cmsis_dap_transfer_configure},
 	{"swdConfigure", cmsis_dap_swd_configure},
 	{NULL, NULL}
 };
