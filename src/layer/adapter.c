@@ -82,15 +82,23 @@ static int adapter_set_clock(lua_State *L){
  * 选择仿真器的传输模式
  * 第一个参数：AdapterObject指针
  * 第二个参数：传输方式类型adapter.SWD或adapter.JTAG。。
- * 返回值：无
+ * 如果不提供第二个参数，则表示读取当前活动的传输模式
+ * 返回值：无返回值或者1返回值
+ * 1#：当前活动的传输模式
  */
-static int adapter_select_transmission(lua_State *L){
+static int adapter_transmission_type(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
-	int type = (int)luaL_checkinteger(L, 2);	// 类型
-	if(adapter_SelectTransmission(adapterObj, type) == FALSE){
-		return luaL_error(L, "Set Adapter Transmission to %s Failed!", adapter_Transport2Str(type));
+	if(lua_isnone(L, 2)){	// 读取当前活动传输模式
+		lua_pushinteger(L, adapterObj->currTrans);
+		return 1;
+	}else{	// 设置当前传输模式
+		int type = (int)luaL_checkinteger(L, 2);	// 类型
+		if(adapter_SelectTransmission(adapterObj, type) == FALSE){
+			return luaL_error(L, "Set Adapter Transmission to %s Failed!", adapter_Transport2Str(type));
+		}
+		return 0;
 	}
-	return 0;
+
 }
 
 /**
@@ -107,18 +115,6 @@ static int adapter_have_transmission(lua_State *L){
 }
 
 /**
- * 返回当前传输模式
- * 第一个参数：AdapterObject指针
- * 第二个参数：传输方式类型adapter.SWD或adapter.JTAG。。
- * 返回：TRUE FALSE
- */
-static int adapter_curr_transmission(lua_State *L){
-	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
-	lua_pushinteger(L, adapterObj->currTrans);
-	return 1;
-}
-
-/**
  * 复位Target
  * 1#:adapter对象
  * 2#：bool hard 是否硬复位（可选）
@@ -127,8 +123,8 @@ static int adapter_curr_transmission(lua_State *L){
  * 无返回值，失败会报错
  */
 static int adapter_reset(lua_State *L){
-	lua_settop (L, 4);	// 将栈扩展到4个
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
+	lua_settop (L, 4);	// 将栈扩展到4个
 	BOOL hard = (BOOL)lua_toboolean(L, 2);
 	BOOL srst = (BOOL)lua_toboolean(L, 3);
 	int pinWait = (int)luaL_optinteger(L, 4, 0);
@@ -186,6 +182,8 @@ static int adapter_jtag_exchange_io(lua_State *L){
 	// 执行队列
 	if(adapter_JTAG_Execute(adapterObj) == FALSE){
 		free(data);
+		// 清理指令队列
+		adapter_JTAG_CleanCommandQueue(adapterObj);
 		return luaL_error(L, "Execute the instruction queue failed!");
 	}
 	// 执行成功，构造lua字符串
@@ -214,6 +212,8 @@ static int adapter_jtag_idle_wait(lua_State *L){
 static int adapter_jtag_execute_cmd(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	if(adapter_JTAG_Execute(adapterObj) == FALSE){
+		// 清理指令队列
+		adapter_JTAG_CleanCommandQueue(adapterObj);
 		return luaL_error(L, "Instruction execution failed!");
 	}
 	return 0;
@@ -289,6 +289,8 @@ static int adapter_write_tap_ir(lua_State *L){
 	uint32_t ir_data = (uint32_t)luaL_checkinteger(L, 3);
 
 	if(adapter_JTAG_Wirte_TAP_IR(adapterObj, tap_index, ir_data) == FALSE){
+		// 清理指令队列
+		adapter_JTAG_CleanCommandQueue(adapterObj);
 		return luaL_error(L, "Write %d IR failed!", tap_index);
 	}
 	return 0;
@@ -325,6 +327,8 @@ static int adapter_exchange_tap_dr(lua_State *L){
 	// 插入执行队列
 	if(adapter_JTAG_Exchange_TAP_DR(adapterObj, tap_index, data, bitCnt) == FALSE){
 		free(data);
+		// 清理指令队列
+		adapter_JTAG_CleanCommandQueue(adapterObj);
 		return luaL_error(L, "Exchange TAP DR failed!");
 	}
 	// 执行成功，构造lua字符串
@@ -415,9 +419,8 @@ static const luaL_Reg lib_adapter_oo[] = {
 	{"Deinit", adapter_deinit},
 	{"SetStatus", adapter_set_status},
 	{"SetClock", adapter_set_clock},
-	{"SelectTransType", adapter_select_transmission},
+	{"TransType", adapter_transmission_type},
 	{"HaveTransType", adapter_have_transmission},
-	{"CurrentTransType", adapter_curr_transmission},
 	{"Reset", adapter_reset},
 	{"jtagStatusChange", adapter_jtag_status_change},	// JTAG状态机状态切换
 	{"jtagExchangeIO", adapter_jtag_exchange_io},	// 用字符串实现，luaL_Buffer

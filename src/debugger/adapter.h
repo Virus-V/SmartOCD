@@ -315,8 +315,6 @@ BOOL adapter_DAP_WriteAbortReg(AdapterObject *adapterObj, uint32_t abort);
  */
 // 设置当前DAP所在的TAP
 #define adapter_DAP_Index(pa,n) (pa)->dap.DAP_Index = (n)
-// 获得当前AP
-#define adapter_DAP_CURR_AP(pa) ((pa)->SelectReg.info.AP_Sel)
 /**
  * TODO 完善一些检查，比如在JTAG模式下不可以访问写ABORT寄存器和读IDCODE寄存器等等
  */

@@ -21,7 +21,7 @@
 /**
  * 注意，所有寄存器格式是 bank[8:4], A[3:2]低二位RES0
  */
-// DP寄存器地址
+// DP寄存器地址 bit0表示APnDP
 // DPv0只有JTAG模式，所以没有Abort寄存器，也没有IDCODE/DPIDR寄存器，都有一个单独的扫描链
 enum DP_Regs{
 	// DPv0下有如下寄存器
@@ -44,20 +44,20 @@ enum DP_Regs{
 		(reg) == ABORT || (reg) == DLCR || (reg) == RESEND || (reg) == TARGETID || (reg) == DLPIDR \
 		 || (reg) == EVENTSTAT || (reg) == TARGETSEL)
 
-// AP 寄存器
+// AP 寄存器: bit0表示APnDP
 enum AP_Regs{
-	CSW		= 0x00,		// Control and Status Word
-	TAR_LSB = 0x04,		// Transfer Address
-	TAR_MSB = 0x08,
-	DRW		= 0x0C,		// Data Read/Write
-	BD0		= 0x10,		// Banked Data 0
-	BD1		= 0x14,		// Banked Data 1
-	BD2		= 0x18,		// Banked Data 2
-	BD3		= 0x1C,		// Banked Data 3
-	CFG		= 0xF4,		// CFG Register
-	ROM_LSB	= 0xF8,		// Debug ROM Address
-	ROM_MSB	= 0xF0,
-	IDR		= 0xFC,		// Identification Register
+	CSW		= 0x01,		// Control and Status Word
+	TAR_LSB = 0x05,		// Transfer Address
+	TAR_MSB = 0x09,
+	DRW		= 0x0D,		// Data Read/Write
+	BD0		= 0x11,		// Banked Data 0
+	BD1		= 0x15,		// Banked Data 1
+	BD2		= 0x19,		// Banked Data 2
+	BD3		= 0x1D,		// Banked Data 3
+	ROM_MSB	= 0xF1,		// Debug ROM Address MSByte
+	CFG		= 0xF5,		// CFG Register
+	ROM_LSB	= 0xF9,		// Debug ROM Address LSByte
+	IDR		= 0xFD,		// Identification Register
 };
 
 #define IS_AP_REG(reg) ((reg) == CSW || (reg) == TAR_LSB || (reg) == TAR_MSB || (reg) == DRW || (reg) == BD0 || (reg) == BD1 || \

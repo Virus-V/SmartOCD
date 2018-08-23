@@ -128,7 +128,7 @@ function DisplayROMTable(adapter, addr, depth)
         end
     end
     if compon_type == 0x1 then    -- ROM Table
-        local mem_type = dap.ReadMem32(adapter, base_addr + 0xFCC)
+        local mem_type = dap.Memory32(adapter, base_addr + 0xFCC)
         if mem_type & 0x1 == 0x1 then
             print("- MEMTYPE system memory present on bus.")
         else
@@ -136,7 +136,7 @@ function DisplayROMTable(adapter, addr, depth)
         end
 					-- 遍历Table Entry 0xefc
         for entry_offset = 0,0xF00,4 do
-            local entry = dap.ReadMem32(adapter, base_addr + entry_offset)
+            local entry = dap.Memory32(adapter, base_addr + entry_offset)
             if entry & 0x1 == 0x1 then  -- 存在表项
                 print(string.format( "- Next Entry:0x%08X BaseAddr:0x%08X.", entry, (base_addr + (entry & 0xFFFFF000)) & 0xFFFFFFFF))
                 						-- 递归调用
@@ -144,7 +144,7 @@ function DisplayROMTable(adapter, addr, depth)
             elseif entry == 0 then break end
         end
     elseif compon_type == 0x9 then -- CoreSight component
-        local dev_type = dap.ReadMem32(adapter, base_addr + 0xFCC)
+        local dev_type = dap.Memory32(adapter, base_addr + 0xFCC)
         local minor = (dev_type >> 4) & 0x0F
         local major_type, sub_type = "other"
         if dev_type & 0x0F == 0 then

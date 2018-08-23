@@ -77,6 +77,8 @@ static int dap_select_ap(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	uint8_t apSel = (uint8_t)luaL_checkinteger(L, 2);
 	if(DAP_AP_Select(adapterObj, apSel) == FALSE){
+		// 清理指令队列
+		adapter_DAP_CleanCommandQueue(adapterObj);
 		return luaL_error(L, "Select AP Failed!");
 	}
 	return 0;
@@ -91,6 +93,8 @@ static int dap_write_abort(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	uint32_t abortData = (uint32_t)luaL_checkinteger(L, 2);
 	if(adapter_DAP_WriteAbortReg(adapterObj, abortData) == FALSE){
+		// 清理指令队列
+		adapter_DAP_CleanCommandQueue(adapterObj);
 		return luaL_error(L, "Write ABORT failed!");
 	}
 	return 0;
@@ -109,6 +113,8 @@ static int dap_find_ap(lua_State *L){
 	int apType = luaL_checkinteger(L, 2);
 	uint8_t apIdx;
 	if(DAP_Find_AP(adapterObj, apType, &apIdx) == FALSE){
+		// 清理指令队列
+		adapter_DAP_CleanCommandQueue(adapterObj);
 		return luaL_error(L, "Find AP Failed!");
 	}
 	// 将结果压栈
@@ -170,6 +176,8 @@ static int dap_rom_table(lua_State *L){
 	}
 	// 执行指令
 	if(adapter_DAP_Execute(adapterObj) == FALSE){
+		// 清理指令队列
+		adapter_DAP_CleanCommandQueue(adapterObj);
 		return luaL_error(L, "Read BASE Register Failed!");
 	}
 	lua_pushinteger(L, rom_addr);
@@ -177,170 +185,175 @@ static int dap_rom_table(lua_State *L){
 }
 
 /**
- * 获得CTRL/STAT寄存器
- * 1#:Adapter对象
- * 返回：
- * 1#：CTRL/STAT
+ * 读写DAP寄存器
+ * 1#：Adapter对象
+ * 2#：寄存器
+ * 3#：要写入的值（可选）
+ * 注意：某些寄存器在某些情况下不可读/写，比如SELECT在SWD模式下就只写，在JTAG模式下可读可写
+ * 在这里这个函数不进行检查，用户自行检查
+ * 返回：无或者寄存器值（32位）
+ * 1#：寄存器值
  */
-static int dap_get_ctrl_stat(lua_State *L){
+static int dap_rw_reg(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
-	lua_pushinteger(L, adapterObj->dap.CTRL_STAT_Reg.regData);
-	return 1;
+	int reg = (int)luaL_checkinteger(L, 2);
+	if(reg & 1){	// AP
+		if(lua_isnone(L, 3)){	// 读AP寄存器
+			log_debug("dap.Reg:Read AP Reg %x", reg);
+			uint32_t reg_data = 0;
+			if(adapter_DAP_Read_AP_Single(adapterObj, reg, &reg_data, TRUE) == FALSE){
+				return luaL_error(L, "Read AP Register Failed!");
+			}
+			if(adapter_DAP_Execute(adapterObj) == FALSE){	// 自动更新CTRL/STAT
+				// 清理指令队列
+				adapter_DAP_CleanCommandQueue(adapterObj);
+				return luaL_error(L, "Read AP Register Failed!");
+			}
+			if(reg == CSW){
+				adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = reg_data;
+			}
+			lua_pushinteger(L, reg_data);
+			return 1;
+		}else{	// 写AP寄存器
+			uint32_t reg_data = (uint32_t)luaL_checkinteger(L, 3);
+			log_debug("dap.Reg:Write AP Reg %x->%x", reg, reg_data);
+			if(adapter_DAP_Write_AP_Single(adapterObj, reg, reg_data, TRUE) == FALSE){
+				return luaL_error(L, "Write AP Register Failed!");
+			}
+			if(adapter_DAP_Execute(adapterObj) == FALSE){	// 自动更新CTRL/STAT
+				// 清理指令队列
+				adapter_DAP_CleanCommandQueue(adapterObj);
+				return luaL_error(L, "Write AP Register Failed!");
+			}
+			if(reg == CSW){
+				adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = reg_data;
+			}
+			return 0;
+		}
+	}else{	// DP
+		if(lua_isnone(L, 3)){	// 读DP寄存器
+			uint32_t dpreg = 0;
+			log_debug("dap.Reg:Read DP Reg %x", reg);
+			if(reg == CTRL_STAT){	// 直接返回CTRL/STAT缓存
+				lua_pushinteger(L, adapterObj->dap.CTRL_STAT_Reg.regData);
+				return 1;
+			}else if(reg & 0xf != 0x4){	// 不需要更新SELECT寄存器
+				if(adapter_DAP_Read_DP_Single(adapterObj, reg, &dpreg, FALSE) == FALSE){
+					return luaL_error(L, "Read DP Register Failed!");
+				}
+			}else{	// 需要更新SELECT寄存器的DP BANK
+				if(adapter_DAP_Read_DP_Single(adapterObj, reg, &dpreg, TRUE) == FALSE){
+					return luaL_error(L, "Read DP Register Failed!");
+				}
+			}
+			if(adapter_DAP_Execute(adapterObj) == FALSE){	// 自动更新CTRL/STAT
+				// 清理指令队列
+				adapter_DAP_CleanCommandQueue(adapterObj);
+				return luaL_error(L, "Read DP Register Failed!");
+			}
+			lua_pushinteger(L, dpreg);
+			return 1;
+		}else{	// 写DP寄存器
+			uint32_t reg_data = (uint32_t)luaL_checkinteger(L, 3);
+			log_debug("dap.Reg:Write DP Reg %x->%x", reg, reg_data);
+			if(reg & 0xf != 0x4){	// 不需要更新SELECT寄存器
+				if(adapter_DAP_Write_DP_Single(adapterObj, reg, reg_data, FALSE) == FALSE){
+					return luaL_error(L, "Write DP Register Failed!");
+				}
+			}else{	// 需要自动更新SELECT寄存器
+				if(adapter_DAP_Write_DP_Single(adapterObj, reg, reg_data, TRUE) == FALSE){
+					return luaL_error(L, "Write DP Register Failed!");
+				}
+			}
+			if(adapter_DAP_Execute(adapterObj) == FALSE){	// 自动更新CTRL/STAT
+				// 清理指令队列
+				adapter_DAP_CleanCommandQueue(adapterObj);
+				return luaL_error(L, "Write DP Register Failed!");
+			}
+			if(reg == SELECT){	// 如果是写SELECT寄存器，执行成功之后更新本地缓存
+				adapterObj->dap.SELECT_Reg.regData = reg_data;
+			}
+			return 0;
+		}
+	}
 }
 
 /**
- * 写入CTRL/STAT寄存器
- * 1#:Adapter对象
- * 2#：数据
- * 返回：无
- */
-static int dap_set_ctrl_stat(lua_State *L){
-	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
-	uint32_t ctrl_stat_data = luaL_checkinteger(L, 2);
-	if(adapter_DAP_Write_DP_Single(adapterObj, CTRL_STAT, ctrl_stat_data, TRUE) == FALSE){
-		return luaL_error(L, "Write CTRL/STAT Register Failed!");
-	}
-	if(adapter_DAP_Execute(adapterObj) == FALSE){	// 自动更新CTRL/STAT
-		return luaL_error(L, "Write CTRL/STAT Register Failed!");
-	}
-	return 0;
-}
-
-/**
- * 写入CSW寄存器数据
- * 1#:Adapter对象
- * 2#：数据
- * 返回：无
- */
-static int dap_set_csw(lua_State *L){
-	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
-	uint32_t csw_data = luaL_checkinteger(L, 2);
-	if(DAP_WriteCSW(adapterObj, csw_data) == FALSE){
-		return luaL_error(L, "Write CSW Register Failed!");
-	}
-	return 0;
-}
-
-/**
- * 读取CSW寄存器数据
- * 1#:Adapter对象
- * 返回：
- * 1#：CSW数据
- */
-static int dap_get_csw(lua_State *L){
-	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
-	uint32_t csw_data = 0;
-	if(DAP_ReadCSW(adapterObj, &csw_data) == FALSE){
-		return luaL_error(L, "Read CSW Register Failed!");
-	}
-	lua_pushinteger(L, csw_data);
-	return 1;
-}
-
-/**
- * 读取8位数据
+ * 读写8位数据
  * 1#：Adapter对象
  * 2#：addr：地址64位
- * 返回：
+ * 3#：数据（optional）
+ * 当只有两个参数时，执行读取动作，当有三个参数时，执行写入动作
+ * 返回：空或者数据
  * 1#：数据
  */
-static int dap_mem_read_8(lua_State *L){
+static int dap_mem_rw_8(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	uint64_t addr = luaL_checkinteger(L, 2);
-	uint8_t data;
-	if(DAP_ReadMem8(adapterObj, addr, &data) == FALSE){
-		return luaL_error(L, "Read Byte Memory %p Failed!", addr);
+	uint8_t data = 0;
+	if(lua_isnone(L, 3)){	// 读内存
+		if(DAP_ReadMem8(adapterObj, addr, &data) == FALSE){
+			// 清理指令队列
+			adapter_DAP_CleanCommandQueue(adapterObj);
+			return luaL_error(L, "Read Byte Memory %p Failed!", addr);
+		}
+		lua_pushinteger(L, data);
+		return 1;
+	}else{	// 写内存
+		data = (uint8_t)luaL_checkinteger(L, 3);
+		if(DAP_WriteMem8(adapterObj, addr, data) == FALSE){
+			// 清理指令队列
+			adapter_DAP_CleanCommandQueue(adapterObj);
+			return luaL_error(L, "Write Byte Memory %p Failed!", addr);
+		}
+		return 0;
 	}
-	lua_pushinteger(L, data);
-	return 1;
 }
 
-/**
- * 读取16位数据
- * 1#：Adapter对象
- * 2#：addr：地址64位
- * 返回：
- * 1#：数据
- */
-static int dap_mem_read_16(lua_State *L){
+static int dap_mem_rw_16(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	uint64_t addr = luaL_checkinteger(L, 2);
-	uint16_t data;
-	if(DAP_ReadMem16(adapterObj, addr, &data) == FALSE){
-		return luaL_error(L, "Read Halfword Memory %p Failed!", addr);
+	uint16_t data = 0;
+	if(lua_isnone(L, 3)){	// 读内存
+		if(DAP_ReadMem16(adapterObj, addr, &data) == FALSE){
+			// 清理指令队列
+			adapter_DAP_CleanCommandQueue(adapterObj);
+			return luaL_error(L, "Read Halfword Memory %p Failed!", addr);
+		}
+		lua_pushinteger(L, data);
+		return 1;
+	}else{	// 写内存
+		data = (uint16_t)luaL_checkinteger(L, 3);
+		if(DAP_WriteMem16(adapterObj, addr, data) == FALSE){
+			// 清理指令队列
+			adapter_DAP_CleanCommandQueue(adapterObj);
+			return luaL_error(L, "Write Halfword Memory %p Failed!", addr);
+		}
+		return 0;
 	}
-	lua_pushinteger(L, data);
-	return 1;
 }
 
-/**
- * 读取32位数据
- * 1#：Adapter对象
- * 2#：addr：地址64位
- * 返回：
- * 1#：数据
- */
-static int dap_mem_read_32(lua_State *L){
+static int dap_mem_rw_32(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	uint64_t addr = luaL_checkinteger(L, 2);
 	uint32_t data;
-	if(DAP_ReadMem32(adapterObj, addr, &data) == FALSE){
-		return luaL_error(L, "Read Word Memory %p Failed!", addr);
+	if(lua_isnone(L, 3)){	// 读内存
+		if(DAP_ReadMem32(adapterObj, addr, &data) == FALSE){
+			// 清理指令队列
+			adapter_DAP_CleanCommandQueue(adapterObj);
+			return luaL_error(L, "Read Word Memory %p Failed!", addr);
+		}
+		lua_pushinteger(L, data);
+		return 1;
+	}else{	// 写内存
+		data = (uint32_t)luaL_checkinteger(L, 3);
+		if(DAP_WriteMem32(adapterObj, addr, data) == FALSE){
+			// 清理指令队列
+			adapter_DAP_CleanCommandQueue(adapterObj);
+			return luaL_error(L, "Write Word Memory %p Failed!", addr);
+		}
+		return 0;
 	}
-	lua_pushinteger(L, data);
-	return 1;
-}
-
-/**
- * 写入8位数据
- * 1#：Adapter对象
- * 2#：addr：地址64位
- * 3#：data：数据
- * 返回：无
- */
-static int dap_mem_write_8(lua_State *L){
-	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
-	uint64_t addr = luaL_checkinteger(L, 2);
-	uint8_t data = (uint8_t)luaL_checkinteger(L, 3);
-	if(DAP_WriteMem8(adapterObj, addr, data) == FALSE){
-		return luaL_error(L, "Write Byte Memory %p Failed!", addr);
-	}
-	return 0;
-}
-
-/**
- * 写入16位数据
- * 1#：Adapter对象
- * 2#：addr：地址64位
- * 3#：data：数据
- * 返回：无
- */
-static int dap_mem_write_16(lua_State *L){
-	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
-	uint64_t addr = luaL_checkinteger(L, 2);
-	uint16_t data = (uint16_t)luaL_checkinteger(L, 3);
-	if(DAP_WriteMem16(adapterObj, addr, data) == FALSE){
-		return luaL_error(L, "Write Halfword Memory %p Failed!", addr);
-	}
-	return 0;
-}
-
-
-/**
- * 写入32位数据
- * 1#：Adapter对象
- * 2#：addr：地址64位
- * 3#：data：数据
- * 返回：无
- */
-static int dap_mem_write_32(lua_State *L){
-	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
-	uint64_t addr = luaL_checkinteger(L, 2);
-	uint32_t data = (uint32_t)luaL_checkinteger(L, 3);
-	if(DAP_WriteMem32(adapterObj, addr, data) == FALSE){
-		return luaL_error(L, "Write Word Memory %p Failed!", addr);
-	}
-	return 0;
 }
 
 /**
@@ -361,6 +374,8 @@ static int dap_read_mem_block(lua_State *L){
 	int transCnt = (int)luaL_checkinteger(L, 5);
 	uint32_t *buff = (uint32_t *)lua_newuserdata(L, transCnt * sizeof(uint32_t));
 	if(DAP_ReadMemBlock(adapterObj, addr, addrIncMode, transSize, transCnt, buff) == FALSE){
+		// 清理指令队列
+		adapter_DAP_CleanCommandQueue(adapterObj);
 		return luaL_error(L, "Read Block Failed!");
 	}
 	lua_pushlstring(L, CAST(const char *, buff), transCnt * sizeof(uint32_t));
@@ -382,7 +397,10 @@ static int dap_write_mem_block(lua_State *L){
 	int transSize = (int)luaL_checkinteger(L, 4);
 	size_t transCnt;	// 注意size_t在在64位环境下是8字节，int在64位下是4字节
 	uint32_t *buff = (uint32_t *)lua_tolstring (L, 5, &transCnt);
+
 	if(DAP_WriteMemBlock(adapterObj, addr, addrIncMode, transSize, (int)transCnt, buff) == FALSE){
+		// 清理指令队列
+		adapter_DAP_CleanCommandQueue(adapterObj);
 		return luaL_error(L, "Write Block Failed!");
 	}
 	return 0;
@@ -400,8 +418,11 @@ static int dap_get_pid_cid(lua_State *L){
 	AdapterObject *adapterObj = luaL_checkudata(L, 1, "obj.Adapter");
 	uint64_t addr = luaL_checkinteger(L, 2);
 	uint32_t cid; uint64_t pid;
-	if(DAP_Read_CID_PID(adapterObj, addr, &cid, &pid) == FALSE)
+	if(DAP_Read_CID_PID(adapterObj, addr, &cid, &pid) == FALSE){
+		// 清理指令队列
+		adapter_DAP_CleanCommandQueue(adapterObj);
 		return luaL_error(L, "Read CID PID Failed!");
+	}
 	lua_pushinteger(L, cid);
 	lua_pushinteger(L, pid);
 	return 2;
@@ -452,18 +473,42 @@ static const lua3rd_regConst lib_dap_const[] = {
 	{"AP_TYPE_AMBA_AHB", AP_TYPE_AMBA_AHB},
 	{"AP_TYPE_AMBA_APB", AP_TYPE_AMBA_APB},
 	{"AP_TYPE_AMBA_AXI", AP_TYPE_AMBA_AXI},
-	//
+	// 地址自增模式
 	{"ADDRINC_OFF", DAP_ADDRINC_OFF},
 	{"ADDRINC_SINGLE", DAP_ADDRINC_SINGLE},
 	{"ADDRINC_PACKED", DAP_ADDRINC_PACKED},
-	// DataSize
+	// 数据传输大小
 	{"DATA_SIZE_8", DAP_DATA_SIZE_8},
 	{"DATA_SIZE_16", DAP_DATA_SIZE_16},
 	{"DATA_SIZE_32", DAP_DATA_SIZE_32},
 	{"DATA_SIZE_64", DAP_DATA_SIZE_64},
 	{"DATA_SIZE_128", DAP_DATA_SIZE_128},
 	{"DATA_SIZE_256", DAP_DATA_SIZE_256},
-//	{"", },
+	// DAP相关寄存器
+	{"DP_REG_CTRL_STAT", CTRL_STAT},
+	{"DP_REG_SELECT", SELECT},
+	{"DP_REG_RDBUFF", RDBUFF},
+	{"DP_REG_DPIDR", DPIDR},
+	{"DP_REG_ABORT", ABORT},
+	{"DP_REG_DLCR", DLCR},
+	{"DP_REG_RESEND", RESEND},
+	{"DP_REG_TARGETID", TARGETID},
+	{"DP_REG_DLPIDR", DLPIDR},
+	{"DP_REG_EVENTSTAT", EVENTSTAT},
+	{"DP_REG_TARGETSEL", TARGETSEL},
+
+	{"AP_REG_CSW", CSW},
+	{"AP_REG_TAR_LSB", TAR_LSB},
+	{"AP_REG_TAR_MSB", TAR_MSB},
+	{"AP_REG_DRW", DRW},
+	{"AP_REG_BD0", BD0},
+	{"AP_REG_BD1", BD1},
+	{"AP_REG_BD2", BD2},
+	{"AP_REG_BD3", BD3},
+	{"AP_REG_ROM_MSB", ROM_MSB},
+	{"AP_REG_CFG", CFG},
+	{"AP_REG_ROM_LSB", ROM_LSB},
+	{"AP_REG_IDR", IDR},
 	{NULL, 0},
 };
 
@@ -484,23 +529,13 @@ static const luaL_Reg lib_dap_oo[] = {
 	{"FindAP", dap_find_ap},
 	{"GetAPCapacity", dap_ap_cap},
 	{"GetROMTable", dap_rom_table},
-	// TODO 读写AP DP REG
-//	{"GetTAR", dap_get_tar},
-//	{"SetTAR", dap_set_tar},
+	{"Reg", dap_rw_reg},	// 读写DAP寄存器
 
-	{"GetCTRL_STATReg", dap_get_ctrl_stat},
-	{"SetCTRL_STATReg", dap_set_ctrl_stat},
-	{"GetCSWReg", dap_get_csw},
-	{"SetCSWReg", dap_set_csw},
+	{"Memory8", dap_mem_rw_8},
+	{"Memory16", dap_mem_rw_16},
+	{"Memory32", dap_mem_rw_32},
+	//{"Memory64", dap_mem_rw_64},
 
-	{"ReadMem8", dap_mem_read_8},
-	{"ReadMem16", dap_mem_read_16},
-	{"ReadMem32", dap_mem_read_32},
-	//{"dapReadMem64", dap_mem_read_64},
-	{"WriteMem8", dap_mem_write_8},
-	{"WriteMem16", dap_mem_write_16},
-	{"WriteMem32", dap_mem_write_32},
-	//{"dapWriteMem64", dap_mem_write_64},
 	{"ReadMemBlock", dap_read_mem_block},
 	{"WriteMemBlock", dap_write_mem_block},
 	{"Get_CID_PID", dap_get_pid_cid},

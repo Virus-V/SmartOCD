@@ -11,6 +11,7 @@
 #include <string.h>
 #include <getopt.h>
 #include <signal.h>
+#include <unistd.h>	// usleep
 #include "smart_ocd.h"
 #include "misc/log.h"
 #include "misc/linenoise.h"
@@ -271,10 +272,31 @@ static void l_print (lua_State *L) {
   }
 }
 
+/**
+ * 注册全局函数
+ */
+// delay毫秒
+static int global_fun_sleep(lua_State *L){
+	lua_Number delay = luaL_checknumber(L, 1);	// ms
+	// 转换成微秒
+	delay *= 1000;
+	lua_Integer delay_us = 0;
+	if(!lua_numbertointeger(delay, &delay_us)){
+		return luaL_error(L, "Unable to convert milliseconds to microseconds, data is not legal?");
+	}
+	if(delay_us == 0){
+		return 0;
+	}
+	usleep(delay_us);
+	return 0;
+}
+
 // 设置一些全局变量
 static int setGlobal(lua_State *L) {
 	lua_pushfstring(L, "%s", VERSION);
-	lua_setglobal (L, "_SMARTOCD_VERSION");
+	lua_setglobal (L, "_SMARTOCD_VERSION");	// 版本信息
+	lua_pushcfunction(L, global_fun_sleep);
+	lua_setglobal (L, "sleep");	// 延时函数
 	return LUA_OK;
 }
 

@@ -1226,16 +1226,16 @@ REEXEC:;
 		}
 		switch(cmd->type){
 		case DAP_INS_RW_REG_SINGLE:
-			*(writeBuff + writeCnt++) = cmd->instr.RWRegSingle.reg
+			*(writeBuff + writeCnt++) = (cmd->instr.RWRegSingle.reg & 0xC)
 				| (cmd->instr.RWRegSingle.RnW ? DAP_TRANSFER_RnW : 0)
 				| (cmd->instr.RWRegSingle.APnDP ? DAP_TRANSFER_APnDP : 0);
 			
 //			do{
-//				log_debug("----");
+//				log_debug("-----------------------------");
 //				log_debug("%s %s Reg %x.",
 //					cmd->instr.RWRegSingle.RnW ? "Read" : "Write",
 //					cmd->instr.RWRegSingle.APnDP ? "AP" : "DP",
-//					cmd->instr.RWRegSingle.reg);
+//					cmd->instr.RWRegSingle.reg & 0xC);
 //				if(cmd->instr.RWRegSingle.RnW == FALSE){
 //					log_debug("0x%08X", cmd->instr.RWRegSingle.data.write);
 //				}
@@ -1254,7 +1254,7 @@ REEXEC:;
 			// 写入本次操作的次数
 			*CAST(int *, writeBuff + writeCnt) = cmd->instr.RWRegBlock.blockCnt;
 			writeCnt += sizeof(int);
-			*(writeBuff + writeCnt++) = cmd->instr.RWRegBlock.reg
+			*(writeBuff + writeCnt++) = (cmd->instr.RWRegSingle.reg & 0xC)
 				| (cmd->instr.RWRegBlock.RnW ? DAP_TRANSFER_RnW : 0)
 				| (cmd->instr.RWRegBlock.APnDP ? DAP_TRANSFER_APnDP : 0);
 			// 如果是写操作
@@ -1275,7 +1275,7 @@ REEXEC:;
 	case DAP_INS_RW_REG_SINGLE:
 		// 执行指令 DAP_Transfer
 		if(DAP_Transfer(respBuff, adapterObj, adapterObj->dap.DAP_Index, seqCnt, writeBuff, readBuff, &okSeqCnt) == FALSE){
-			log_warn("DAP_Transfer:Some DAP Instruction Execute Failed. Success:%d, All:%d,", okSeqCnt, seqCnt);
+			log_warn("DAP_Transfer:Some DAP Instruction Execute Failed. Success:%d, All:%d.", okSeqCnt, seqCnt);
 			result = FALSE;
 		}
 	break;
@@ -1283,12 +1283,15 @@ REEXEC:;
 	case DAP_INS_RW_REG_BLOCK:
 		// transfer block
 		if(DAP_TransferBlock(respBuff, adapterObj, adapterObj->dap.DAP_Index, seqCnt, writeBuff, readBuff, &okSeqCnt) == FALSE){
-			log_warn("DAP_TransferBlock:Some DAP Instruction Execute Failed. Success:%d, All:%d,", okSeqCnt, seqCnt);
+			log_warn("DAP_TransferBlock:Some DAP Instruction Execute Failed. Success:%d, All:%d.", okSeqCnt, seqCnt);
 			result = FALSE;
 		}
 	break;
 	}
-	
+//	printf("------\nWrite\n");
+//	misc_PrintBulk(writeBuff, writeBuffLen, 16);
+//	printf("Read\n");
+//	misc_PrintBulk(readBuff, readBuffLen, 16);
 	// 第三次遍历：同步数据
 	list_for_each_entry_safe(cmd, cmd_t, &adapterObj->dap.instrQueue, list_entry){
 		if(cmd->type != thisType){

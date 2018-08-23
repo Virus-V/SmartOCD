@@ -47,7 +47,7 @@ BOOL DAP_Init(AdapterObject *adapterObj){
 	adapterObj->dap.SELECT_Reg.regData = 0;	// 清零SELECT寄存器
 
 	// 写0x20到CTRL，并读取
-	adapter_DAP_Write_DP_Single(adapterObj, CTRL_STAT, 0x20, TRUE);
+	adapter_DAP_Write_DP_Single(adapterObj, CTRL_STAT, 0x20, TRUE);	// STICKYERR
 	adapter_DAP_Read_DP_Single(adapterObj, CTRL_STAT, &ctrl_stat, TRUE);
 	// 写上电请求
 	adapter_DAP_Write_DP_Single(adapterObj, CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ, TRUE);
@@ -903,49 +903,3 @@ BOOL DAP_Read_CID_PID(AdapterObject *adapterObj, uint32_t componentBase, uint32_
 	*pid_out = (uint64_t)(pid4 & 0xff) << 32 | (pid3 & 0xff) << 24 | (pid2 & 0xff) << 16 | (pid1 & 0xff) << 8 | (pid0 & 0xff);
 	return TRUE;
 }
-
-/**
- * 读CSW寄存器
- */
-BOOL DAP_ReadCSW(AdapterObject *adapterObj, uint32_t *cswData){
-	assert(adapterObj != NULL && cswData != NULL);
-	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init != 1){
-		log_warn("The current AP has not been initialized yet.");
-		return FALSE;
-	}
-	*cswData = 0;
-	if(adapter_DAP_Read_AP_Single(adapterObj, CSW, cswData, TRUE) == FALSE){
-		log_warn("Read CSW Register Failed!");
-		return FALSE;
-	}
-	if(adapter_DAP_Execute(adapterObj) == FALSE){
-		log_warn("Read CSW Register Failed!");
-		return FALSE;
-	}
-	// 更新本地CSW
-	adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = *cswData;
-	return TRUE;
-}
-
-/**
- * 写CSW寄存器
- */
-BOOL DAP_WriteCSW(AdapterObject *adapterObj, uint32_t cswData){
-	assert(adapterObj != NULL);
-	if(adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].ctrl_state.init != 1){
-		log_warn("The current AP has not been initialized yet.");
-		return FALSE;
-	}
-	if(adapter_DAP_Write_AP_Single(adapterObj, CSW, cswData, TRUE) == FALSE){
-		log_warn("Write CSW Register Failed!");
-		return FALSE;
-	}
-	if(adapter_DAP_Execute(adapterObj) == FALSE){
-		log_warn("Write CSW Register Failed!");
-		return FALSE;
-	}
-	// 更新本地CSW
-	adapterObj->dap.AP[DAP_CURR_AP(adapterObj)].CSW.regData = cswData;
-	return TRUE;
-}
-

@@ -745,6 +745,9 @@ BOOL adapter_DAP_Execute(AdapterObject *adapterObj){
 	// 执行
 	if(adapterObj->Operate(adapterObj, AINS_DAP_CMD_EXECUTE) == TRUE){
 		adapterObj->dap.CTRL_STAT_Reg.regData = ctrl_stat;
+		if(ctrl_stat & 0xa2){	// 检查STICKY标志
+			log_warn("Some Sticky Flag has been flaged. CTRL/STAT: 0x%08X.", ctrl_stat);
+		}
 		return TRUE;
 	}else{
 		log_warn("Refresh CTRL/STAT Register Failed!");
