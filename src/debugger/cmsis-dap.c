@@ -586,8 +586,6 @@ MAKE_PACKT:
 	 */
 	sendPackBuff[1] = seqCount;	// sequence count
 	memcpy(sendPackBuff + 2, data + packetStartIdx, sendPayloadLen);
-	//log_debug("Trasmission load: Send %d bytes, receive %d bytes.", sendPayloadLen, readPayloadLen);
-	//misc_PrintBulk(sendPackBuff+2, sendPayloadLen, 16);
 
 	// 发送包
 	DAPWrite(adapterObj, sendPackBuff, sendPayloadLen + 2);
@@ -603,7 +601,6 @@ MAKE_PACKT:
 	for(int readPackCnt = 0; readPackCnt < sendPackCnt; readPackCnt++){
 		DAPRead(adapterObj, respBuff);
 		if(result == TRUE && respBuff[1] == DAP_OK){
-			//misc_PrintBulk(respBuff+2, resultLength[readPackCnt], 16);
 			// 拷贝数据
 			if(response){
 				memcpy(response + outputIdx, respBuff + 2, resultLength[readPackCnt]);
@@ -723,12 +720,10 @@ MAKE_PACKT:
 	// 统计一些信息
 	for(; seqIdx < sequenceCnt; seqIdx ++){
 		data[idx] &= 0xf;	// 只保留[3:0]位
-		//log_debug("SeqIdx:%d, Seq:0x%02X, ", seqIdx, data[idx]);
 		// 判断是否是读寄存器
 		if((data[idx] & DAP_TRANSFER_RnW) == DAP_TRANSFER_RnW){
 			// 判断是否超出最大包长度
 			if((3 + readCount + 4) > cmsis_dapObj->PacketSize || (3 + writeCount + 1) > cmsis_dapObj->PacketSize){
-				//log_debug("Read is going to overflow.");
 				break;
 			}
 			idx += 1;
@@ -736,7 +731,6 @@ MAKE_PACKT:
 			writeCount ++;
 		}else{	// 写寄存器
 			if((3 + writeCount + 5) > cmsis_dapObj->PacketSize){
-				//log_debug("Write is going to overflow.");
 				break;
 			}
 			idx += 5;
@@ -745,7 +739,6 @@ MAKE_PACKT:
 		thisPackSeqCnt++;	// 本数据包sequence个数自增
 		// 判断数据包个数是否达到最大
 		if(thisPackSeqCnt == 0xFFu){
-			//log_debug("SeqCnt is going to overflow.");
 			seqIdx ++;
 			break;
 		}
@@ -755,10 +748,8 @@ MAKE_PACKT:
 	sendPackBuff[1] = index;	// DAP index, JTAG ScanChain 中的位置，在SWD模式下忽略该参数
 	sendPackBuff[2] = thisPackSeqCnt;	// 传输多少个request
 
-	//log_debug("writeCnt:%d.", writeCount);
 	// 将数据拷贝到包中
 	memcpy(sendPackBuff + 3, data + packetStartIdx, writeCount);
-	//misc_PrintBulk(sendPackBuff, writeCount + 3, 16);
 	// 交换数据
 	DAPWrite(adapterObj, sendPackBuff, 3 + writeCount);
 	packetInfo[sendPackCnt].dataLen = readCount;	// 本次包的响应包包含多少个数据
@@ -770,12 +761,9 @@ MAKE_PACKT:
 	// if(seqIdx < (sequenceCnt-1) && sendPackCnt < cmsis_dapObj->MaxPcaketCount) goto MAKE_PACKT;
 	if(seqIdx < (sequenceCnt-1) && sendPackCnt < 1) goto MAKE_PACKT;
 
-	//log_debug("read packet.");
 	BOOL result = TRUE;
 	for(int readPackCnt = 0; readPackCnt < sendPackCnt; readPackCnt++){	// NOTIC 这个循环也就执行一次
 		DAPRead(adapterObj, respBuff);
-		//misc_PrintBulk(respBuff, 16, 16);
-		//log_debug("%d.seqCnt:%d", readPackCnt, packetInfo[readPackCnt].seqCnt);
 		// 本次执行的Sequence是否等于应该执行的个数
 		if(result == TRUE){
 			*okSeqCnt += respBuff[1];
@@ -1149,7 +1137,6 @@ static BOOL Execute_JTAG_Cmd(uint8_t *respBuff, AdapterObject *adapterObj){
 			*(cmd->instr.exchangeIO.data + byteCnt - 1) |= (*(readBuff + readCnt) & 1) << restBit;
 			readCnt ++;
 		}
-		//misc_PrintBulk(cmd->instr.exchangeIO.data, byteCnt, 16);
 		FREE_CMD:
 		list_del(&cmd->list_entry);	// 将链表中删除
 		free(cmd);
@@ -1288,10 +1275,7 @@ REEXEC:;
 		}
 	break;
 	}
-//	printf("------\nWrite\n");
-//	misc_PrintBulk(writeBuff, writeBuffLen, 16);
-//	printf("Read\n");
-//	misc_PrintBulk(readBuff, readBuffLen, 16);
+
 	// 第三次遍历：同步数据
 	list_for_each_entry_safe(cmd, cmd_t, &adapterObj->dap.instrQueue, list_entry){
 		if(cmd->type != thisType){
