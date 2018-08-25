@@ -43,30 +43,46 @@ end
 --local rom_table_base = dap.GetROMTable(AdapterObj)
 --print(string.format("ROM Table Base: 0x%08X", rom_table_base))
 -- 初始化系统时钟
-dap.Memory32(AdapterObj, 0x40023804, 0x08012008)	-- RCC_PLLCFGR 16 Mhz /8 (M) * 128 (N) /4(P)
-print("OK");
-dap.Memory32(AdapterObj, 0x40023C00, 0x00000102)	-- FLASH_ACR = PRFTBE | 2(Latency)
-print("OK");
-local RCC_CR = dap.Memory32(AdapterObj, 0x40023800)	-- RCC_CR |= PLLON
-print("OK");
-dap.Memory32(AdapterObj, 0x40023800, RCC_CR | 0x01000000)
-print("OK");
-sleep(100)	-- Wait for PLL to lock
-dap.Memory32(AdapterObj, 0x40023808, dap.Memory32(AdapterObj, 0x40023808) | 0x00001000)	-- RCC_CFGR |= RCC_CFGR_PPRE1_DIV2
-print("OK");
-dap.Memory32(AdapterObj, 0x40023808, dap.Memory32(AdapterObj, 0x40023808) | 0x00000002)	-- RCC_CFGR |= RCC_CFGR_SW_PLL
-print("OK");
---AdapterObj:SetClock(4000000)	-- 将仿真器时钟频率设置为8MHz
--- 在低功耗模式下允许调试
-dap.Memory32(AdapterObj, 0xE0042004, dap.Memory32(AdapterObj, 0xE0042004) | 0x00000007)	-- DBGMCU_CR |= DBG_STANDBY | DBG_STOP | DBG_SLEEP
-print("Fault");
--- 在停机模式下停止看门狗
-dap.Memory32(AdapterObj, 0xE0042008, dap.Memory32(AdapterObj, 0xE0042008) | 0x00001800)	-- DBGMCU_APB1_FZ |= DBG_IWDG_STOP | DBG_WWDG_STOP
-print("OK");
--- dap.Reg(AdapterObj, dap.AP_REG_CSW, 0xa2000002)	-- 设置CSW，具体参考CoreSight Specs
-print(string.format("CSW: 0x%08X.",dap.Reg(AdapterObj, dap.AP_REG_CSW)))
+-- dap.Memory32(AdapterObj, 0x40023804, 0x08012008)	-- RCC_PLLCFGR 16 Mhz /8 (M) * 128 (N) /4(P)
+-- print("OK");
+-- dap.Memory32(AdapterObj, 0x40023C00, 0x00000102)	-- FLASH_ACR = PRFTBE | 2(Latency)
+-- print("OK");
+-- local RCC_CR = dap.Memory32(AdapterObj, 0x40023800)	-- RCC_CR |= PLLON
+-- print("OK");
+-- dap.Memory32(AdapterObj, 0x40023800, RCC_CR | 0x01000000)
+-- print("OK");
+-- sleep(100)	-- Wait for PLL to lock
+-- dap.Memory32(AdapterObj, 0x40023808, dap.Memory32(AdapterObj, 0x40023808) | 0x00001000)	-- RCC_CFGR |= RCC_CFGR_PPRE1_DIV2
+-- print("OK");
+-- dap.Memory32(AdapterObj, 0x40023808, dap.Memory32(AdapterObj, 0x40023808) | 0x00000002)	-- RCC_CFGR |= RCC_CFGR_SW_PLL
+-- print("OK");
+-- --AdapterObj:SetClock(4000000)	-- 将仿真器时钟频率设置为8MHz
+-- -- 在低功耗模式下允许调试
+-- dap.Memory32(AdapterObj, 0xE0042004, dap.Memory32(AdapterObj, 0xE0042004) | 0x00000007)	-- DBGMCU_CR |= DBG_STANDBY | DBG_STOP | DBG_SLEEP
+-- print("Fault");
+-- -- 在停机模式下停止看门狗
+-- dap.Memory32(AdapterObj, 0xE0042008, dap.Memory32(AdapterObj, 0xE0042008) | 0x00001800)	-- DBGMCU_APB1_FZ |= DBG_IWDG_STOP | DBG_WWDG_STOP
+-- print("OK");
+-- -- dap.Reg(AdapterObj, dap.AP_REG_CSW, 0xa2000002)	-- 设置CSW，具体参考CoreSight Specs
+-- print(string.format("CSW: 0x%08X.",dap.Reg(AdapterObj, dap.AP_REG_CSW)))
 
-DisplayROMTable(AdapterObj, rom_table_base, 0)
+-- DisplayROMTable(AdapterObj, rom_table_base, 0)
+local rom_table_base = dap.GetROMTable(AdapterObj)
+print(string.format("ROM Table Base: 0x%08X", rom_table_base))
+-- 打印ROM开头的
+for ROMAddr=0x08000000,0x08000040,4 do
+	-- Word Read
+	print(string.format("[0x%08X]:0x%08X.", ROMAddr, dap.Memory32(AdapterObj, ROMAddr)))
+	-- Half Word Read
+	print(string.format("[0x%08X]:0x%04X.", ROMAddr, dap.Memory16(AdapterObj, ROMAddr)))
+	print(string.format("[0x%08X]:0x%04X.", ROMAddr+2, dap.Memory16(AdapterObj, ROMAddr+2)))
+	-- Byte Read
+	print(string.format("[0x%08X]:0x%02X.", ROMAddr, dap.Memory8(AdapterObj, ROMAddr)))
+	print(string.format("[0x%08X]:0x%02X.", ROMAddr+1, dap.Memory8(AdapterObj, ROMAddr+1)))
+	print(string.format("[0x%08X]:0x%02X.", ROMAddr+2, dap.Memory8(AdapterObj, ROMAddr+2)))
+	print(string.format("[0x%08X]:0x%02X.", ROMAddr+3, dap.Memory8(AdapterObj, ROMAddr+3)))
+end
+print("Hello World")
 print(string.format("CTRL/STAT:0x%08X", dap.Reg(AdapterObj, dap.DP_REG_CTRL_STAT)))
 print("Hello World")
 -- for addr=0x08000000, 0x08003700, 4 do
