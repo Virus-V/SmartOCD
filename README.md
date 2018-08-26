@@ -2,7 +2,7 @@
 
 ## 简介
 
-SmartOCD(Smart On Chip Debugger)用于ARMv8架构的交互式片上调试工具。目的是使用它来更方便地调试Uboot，UEFI程序或操作系统内核。
+SmartOCD(Smart On Chip Debugger)是用于ARMv8架构的交互式片上调试工具。目的是使用它来更方便地调试Uboot，UEFI程序或操作系统内核。
 
 它可以使用Lua脚本语言编程，通过DAP协议和MEM-AP与CoreSight组件进行交互，或者直接读写总线上挂载的设备（ROM、RAM或Peripherals）等。
 
@@ -73,9 +73,9 @@ Lua 的语法类似 PASCAL 和 Modula 但更加简洁，所有的语法产生式
 
 ### 初始化
 ```lua
-adapter = require("Adapter");	-- 加载Adapter库
-cmsis_dap = require("CMSIS-DAP"); -- 加载CMSIS-DAP库
-AdapterObj = cmsis_dap.New(); -- 创建新的CMSIS-DAP对象
+adapter = require("Adapter")	-- 加载Adapter库
+cmsis_dap = require("CMSIS-DAP") -- 加载CMSIS-DAP库
+AdapterObj = cmsis_dap.New() -- 创建新的CMSIS-DAP Adapter对象
 -- CMSIS-DAP的VID和PID
 local vid_pids = {
 	-- Keil Software
@@ -97,7 +97,7 @@ cmsis_dap.swdConfigure(AdapterObj, 0)
 AdapterObj:SetStatus(adapter.STATUS_CONNECTED)
 AdapterObj:SetClock(500000)	-- 500KHz
 -- 选择传输模式
-if AdapterObj:HaveTransType(adapter.SWD) then	-- 
+if AdapterObj:HaveTransType(adapter.SWD) then	-- 优先选择SWD协议
 	AdapterObj:TransType(adapter.SWD)
 else
 	AdapterObj:TransType(adapter.JTAG)
@@ -123,7 +123,7 @@ if AdapterObj:TransType() == adapter.JTAG then
 	AdapterObj:jtagStatusChange(adapter.TAP_RESET)	-- TAP到RESET状态，默认连接IDCODE扫描链
 	AdapterObj:jtagStatusChange(adapter.TAP_DR_SHIFT)	-- TAP到DR-Shift状态，读取idcode
 	local raw_idcodes = AdapterObj:jtagExchangeIO(string.pack("I4I4I4I4", 0, 0, 0, 0), 128)
-	-- string.unpack 额外返回一个参数是next position，下面这个返回三个参数
+	-- string.unpack 额外返回一个参数是next position，下面这个返回五个参数
 	local idcodes = {string.unpack("I4I4I4I4", raw_idcodes)}
 	for key=1, #idcodes-1 do
 		print(string.format("TAP #%d : 0x%08X", key-1, idcodes[key]))
@@ -156,7 +156,7 @@ end
 
 local rom_table_base = dap.GetROMTable(AdapterObj)
 print(string.format("ROM Table Base: 0x%08X", rom_table_base))
--- 打印ROM开头的
+-- 打印ROM开头的64个32位字
 for ROMAddr=0x08000000,0x08000040,4 do
 	-- Word Read
 	print(string.format("[0x%08X]:0x%08X.", ROMAddr, dap.Memory32(AdapterObj, ROMAddr)))
@@ -326,8 +326,351 @@ Hello World
 ```
 
 ## Package
+SmartOCD的API以Package的方式封装到Lua中。
 ### Adapter
+#### 介绍
+Adapter是根据仿真器的基本功能和操作抽象出来的。通过Adapter对象，可以实现控制JTAG、DAP等基本操作。
+每打开一个仿真器都会返回一个Adapter对象实例。例如 `AdapterObj = cmsis_dap.New()` 就是创建一个CMSIS-DAP的Adapter实例。
+
+在介绍常量和方法之前，假设Lua代码中已经引入Adapter包并赋值给全局变量adapter：
+```lua
+adapter = require("Adapter")	-- 加载Adapter Package
+```
+
+#### 常量
+
+传输模式：
+- JTAG
+- SWD
+
+JTAG引脚的二进制位索引：
+- PIN_SWCLK_TCK
+- PIN_SWDIO_TMS
+- PIN_TDI
+- PIN_TDO
+- PIN_nTRST
+- PIN_nRESET
+
+TAP状态：
+- TAP_RESET
+- TAP_IDLE
+- TAP_DR_SELECT
+- TAP_DR_CAPTURE
+- TAP_DR_SHIFT
+- TAP_DR_EXIT1
+- TAP_DR_PAUSE
+- TAP_DR_EXIT2
+- TAP_DR_UPDATE
+- TAP_IR_SELECT
+- TAP_IR_CAPTURE
+- TAP_IR_SHIFT
+- TAP_IR_EXIT1
+- TAP_IR_PAUSE
+- TAP_IR_EXIT2
+- TAP_IR_UPDATE
+
+仿真器状态：
+- STATUS_CONNECTED
+- STATUS_DISCONNECT
+- STATUS_RUNING
+- STATUS_IDLE
+
+#### 方法
+- Init(*self*)  
+  作用：初始化Adapter对象对应的仿真器  
+  参数：  
+  1. Adapter对象
+  
+  返回值：无  
+  示例：
+  ```lua
+  -- 初始化Adapter对象
+  AdapterObj:Init()
+  ```
+  ----
+- Deinit(*self*)
+  作用：执行Adapter对象对应的仿真器的反初始化动作  
+  参数：  
+  1. Adapter对象
+  
+  返回值：无  
+  示例：
+  ```lua
+  -- 初始化Adapter对象
+  AdapterObj:Deinit()
+  ```
+  ----
+- SetStatus(*self, status*)  
+  作用：设置仿真器的状态指示灯（如果有的话）  
+  参数：  
+  1. Adapter对象
+  2. Number：Status状态  
+   参考Adapter常量 **仿真器状态** 部分
+  
+  返回值：无  
+  示例：
+  ```lua
+  -- 点亮连接状态指示灯
+  AdapterObj:SetStatus(adapter.STATUS_CONNECTED)
+  -- 点亮运行状态指示灯
+  AdapterObj:SetStatus(adapter.STATUS_RUNING)
+  -- 熄灭运行状态指示灯
+  AdapterObj:SetStatus(adapter.STATUS_IDLE)
+  -- 熄灭连接状态指示灯
+  AdapterObj:SetStatus(adapter.STATUS_DISCONNECT)
+  ```
+  ----
+- SetClock(*self, clock*)  
+  作用：设置仿真器JTAG/SWD同步时钟频率  
+  参数：  
+  1. Adapter对象
+  2. Number：Clock频率，单位Hz
+  
+  返回值：无  
+  示例：
+  ```lua
+  -- 设置仿真器通信时钟速率
+  AdapterObj:SetClock(500000)	-- 500KHz
+  ```
+  ----
+- TransType(*self [, setType]*)  
+  作用：设置或读取仿真器当前传输模式（必须仿真器支持此模式）  
+  参数：  
+  1. Adapter对象
+  2. Number：传输模式（可选）  
+   参考Adapter常量 **传输模式** 部分
+  
+  返回值：无 或者  
+  1. Number：仿真器当前传输模式  
+   
+  示例：
+  ```lua
+  -- 设置当前仿真器为SWD传输模式
+  AdapterObj:TransType(adapter.SWD)
+  -- 设置当前仿真器为JTAG模式
+  AdapterObj:TransType(adapter.JTAG)
+  -- 读取当前仿真器传输模式
+  local currTransType = AdapterObj:TransType()
+  ```
+  ----
+- HaveTransType(*self, type*)  
+  作用：检查仿真器是否支持某一传输模式  
+  参数：  
+  1. Adapter对象
+  2. Number：传输模式  
+   参考Adapter常量 **传输模式** 部分
+  
+  返回值：  
+  1. Boolean：true=支持；false=不支持  
+
+  示例：
+  ```lua
+  -- 优先选择SWD传输模式
+  if AdapterObj:HaveTransType(adapter.SWD) then
+      AdapterObj:TransType(adapter.SWD)
+  else
+      AdapterObj:TransType(adapter.JTAG)
+  end
+  ```
+  ----
+- Reset(*self [, hard [, srst [, pinWait]]]*)  
+  作用：对目标芯片进行复位操作  
+  参数：  
+  1. Adapter对象
+  2. Boolean：hard 是否进行硬复位  
+   所谓硬复位，是指让nTRST引脚输出有效信号。该参数只在JTAG传输模式下有效。
+  3. Boolean：srst 系统复位  
+   系统复位表示是否同时让nRESET引脚输出有效信号。该参数只在JTAG传输模式下和 hard 参数为 true 时有效。
+  4. Number：死区时间，单位µs
+   当nTRST和nRESET引脚为开漏模式时，等待引脚电平有效的时间。SWD传输模式不使用此参数。
+  
+  返回值：无  
+  示例：
+  ```lua
+  -- 软复位：JTAG的TMS引脚连续5个时钟的高电平；SWD进行line reset
+  AdapterObj:Reset()
+  AdapterObj:Reset(false)
+  -- 硬复位：JTAG的nTRST输出有效；SWD进行line reset
+  AdapterObj:Reset(true)
+  -- 硬复位同时系统复位：JTAG的nTRST和nRESET输出有效；SWD进行line reset
+  AdapterObj:Reset(true, true)
+  -- 硬复位、系统复位同时带有死区时间控制
+  AdapterObj:Reset(true, true, 300)
+  ```
+  ----
+- jtagStatusChange(*self, newStatus*)  
+  作用：在JTAG模式下，切换TAP状态机的状态  
+  参数：  
+  1. Adapter对象
+  2. Number：newStatus 要切换到的TAP状态
+   参考Adapter常量 **TAP状态** 部分
+  
+  返回值：无  
+  示例：
+  ```lua
+  -- TAP到RESET状态
+  AdapterObj:jtagStatusChange(adapter.TAP_RESET)
+  -- TAP到DR-Shift状态
+  AdapterObj:jtagStatusChange(adapter.TAP_DR_SHIFT)
+  -- 执行动作
+  AdapterObj:jtagExecuteCmd()
+  ```
+  ----
+- jtagExchangeIO(*self, data, bitCnt*)  
+  作用：交换TDI和TDO之间的数据。将data参数的数据发送到TDI，然后捕获TDO的数据作为函数返回值。注意，此方法会默认调用jtagExecuteCmd()方法！  
+  参数：  
+  1. Adapter对象
+  2. String：data 要发送的数据
+  3. Number：bitCnt 要发送多少个二进制位，不得大于data参数的数据实际长度
+  
+  返回值：  
+  1. String：捕获的TDO数据
+  示例：
+  ```lua
+  -- TAP到RESET状态，默认连接IDCODE扫描链
+  AdapterObj:jtagStatusChange(adapter.TAP_RESET)
+  -- TAP到DR-Shift状态，读取idcode
+  AdapterObj:jtagStatusChange(adapter.TAP_DR_SHIFT)
+  local raw_idcodes = AdapterObj:jtagExchangeIO(string.pack("I4I4", 0, 0), 64)
+  -- string.unpack 额外返回一个参数是next position
+  local idcodes = {string.unpack("I4I4", raw_idcodes)}
+  for key=1, #idcodes-1 do
+  	print(string.format("TAP #%d : 0x%08X", key-1, idcodes[key]))
+  end
+  ```
+  ----
+- jtagIdleWait(*self, cycles*)  
+  作用：进入TAP的Run-Test/Idle状态等待cycle个周期。此函数常用来等待耗时操作的完成。  
+  参数：  
+  1. Adapter对象
+  2. Number：cycle 等待的周期数
+  
+  返回值：无  
+  示例：
+  ```lua
+  -- TAP进入Run-Test/Idle等待50个TCLK时钟周期
+  AdapterObj:jtagIdleWait(50)
+  ```
+  ----
+- jtagExecuteCmd(*self*)  
+  作用：执行前面的JTAG操作。  
+  参数：  
+  1. Adapter对象
+  
+  返回值：无  
+  示例：
+  ```lua
+  -- TAP到RESET状态
+  AdapterObj:jtagStatusChange(adapter.TAP_RESET)
+  -- TAP到DR-Shift状态
+  AdapterObj:jtagStatusChange(adapter.TAP_DR_SHIFT)
+  -- TAP进入Run-Test/Idle等待50个TCLK时钟周期
+  AdapterObj:jtagIdleWait(50)
+  -- 执行前面三个JTAG动作
+  AdapterObj:jtagExecuteCmd()
+  ```
+  ----
+- jtagCleanCmd(*self*)  
+  作用：清除尚未执行JTAG操作  
+  参数：  
+  1. Adapter对象
+  
+  返回值：无  
+  示例：
+  ```lua
+  -- TAP到RESET状态
+  AdapterObj:jtagStatusChange(adapter.TAP_RESET)
+  -- TAP到DR-Shift状态
+  AdapterObj:jtagStatusChange(adapter.TAP_DR_SHIFT)
+  -- TAP进入Run-Test/Idle等待50个TCLK时钟周期
+  AdapterObj:jtagIdleWait(50)
+  -- 取消前面三个JTAG动作
+  AdapterObj:jtagCleanCmd()
+  -- 这一步没有任何JTAG操作被执行，函数将直接返回
+  AdapterObj:jtagExecuteCmd()
+  ```
+  ----
+- jtagPins(*self, pinData, pinMask, pinWait*)
+  作用：设置JTAG引脚电平并返回设置之后的引脚电平状态  
+  参数：  
+  1. Adapter对象
+  2. Number：pinData 引脚数据，LSB有效
+  3. Number：pinMask 引脚掩码，LSB有效
+  4. Number：pinWait 死区时间，单位µs
+  
+  返回值：  
+  1. Number：pinData JTAG全部引脚最新的状态，也就时执行设置JTAG引脚动作之后的JTAG引脚状态，LSB有效
+  示例：
+  ```lua
+  -- 读取JTAG Pins
+  local pins_data = AdapterObj:jtagPins(0, 0, 0)
+  print("JTAG Pins: TCK:" .. ((pins_data & adapter.PIN_SWCLK_TCK) >> adapter.PIN_SWCLK_TCK)
+	.. " TMS:" .. ((pins_data & (1 << adapter.PIN_SWDIO_TMS)) >> adapter.PIN_SWDIO_TMS)
+	.. " TDI:" .. ((pins_data & (1 << adapter.PIN_TDI)) >> adapter.PIN_TDI)
+	.. " TDO:" .. ((pins_data & (1 << adapter.PIN_TDO)) >> adapter.PIN_TDO)
+	.. " nTRST:" .. ((pins_data & (1 << adapter.PIN_nTRST)) >> adapter.PIN_nTRST)
+	.. " nRESET:" .. ((pins_data & (1 << adapter.PIN_nRESET)) >> adapter.PIN_nRESET))
+  -- 设置JTAG的TMS TDI引脚电平，并返回所有引脚最新的状态
+  local pins_data = AdapterObj:jtagPins((1 << adapter.PIN_SWDIO_TMS) | (0 << adapter.PIN_TDI), adapter.PIN_SWDIO_TMS | adapter.PIN_TDI, 0)
+  print(string.format("JTAG Pins: 0x%X.", pins_data))
+  ```
+  ----
+- jtagSetTAPInfo(*self, tapInfo*)  
+  作用：JTAG较高级用法。使用该函数声明JTAG扫描链上有多少个TAP，而且指定每个TAP的IR长度，
+  为 `jtagWriteTAPIR` 和 `jtagExchangeTAPDR` 两函数提供参考信息。
+  参数：  
+  1. Adapter对象
+  2. Array：tapInfo TAP信息数组
+  
+  返回值：无  
+  示例：
+  ```lua
+  -- 加载DAP Package
+  dap = require("DAP")
+  -- 设置JTAG扫描链中有两个TAP，IR长度分别是4,5
+  AdapterObj:jtagSetTAPInfo{4,5}
+  -- 写入JTAG扫描链中位于0号索引的TAP的IR寄存器，IR长度为4
+  AdapterObj:jtagWriteTAPIR(0, dap.JTAG_IDCODE)
+  -- 交换JTAG扫描链中位于0号索引的TAP的DR寄存器，DR长度为32，IDCODE寄存器
+  local arm_idcode = AdapterObj:jtagExchangeTAPDR(0, "\000\000\000\000", 32)
+  -- 打印IDCODE
+  print(string.format("%x", string.unpack("I4", arm_idcode)))
+  ```
+  ----
+- jtagWriteTAPIR(*self, tapIdx, irData*)  
+  作用：将 _irData_ 写入JTAG扫描链中位于 _tapIdx_ 的TAP的IR寄存器  
+  参数：  
+  1. Adapter对象
+  2. Number：tapIdx TAP在JTAG扫描链中的位置，从0开始
+  3. Number：irData 要写入IR寄存器的数据，将要写入的二进制位个数由 `jtagSetTAPInfo` 的 _tapInfo_ 参数指定。
+  
+  返回值：无  
+  示例：参考 `jtagSetTAPInfo` 方法的示例部分  
+  ____
+- jtagExchangeTAPDR(*self, tapIdx, data, bitCnt*)  
+  作用：交换JTAG扫描链中位于 _tapIdx_ 的TAP的DR寄存器  
+  参数：  
+  1. Adapter对象
+  2. Number：tapIdx TAP在JTAG扫描链中的位置，从0开始
+  3. Number：data 要交换进去的DR的数据
+  4. Number：bitCnt 指定DR寄存器的二进制位个数，不得大于 _data_ 数据的长度
+  
+  返回值：  
+  1. String：交换出来的DR寄存器数据  
+
+  示例：参考 `jtagSetTAPInfo` 方法的示例部分
+
+----
+
 ### DAP
+#### 介绍
+#### 常量
+#### 方法
+
+----
+
+### CMSIS-DAP
+
 
 ## 开发人员手册
 ### 开发计划

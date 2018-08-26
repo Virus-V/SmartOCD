@@ -509,6 +509,12 @@ static const lua3rd_regConst lib_dap_const[] = {
 	{"AP_REG_CFG", CFG},
 	{"AP_REG_ROM_LSB", ROM_LSB},
 	{"AP_REG_IDR", IDR},
+	// JTAG扫描链
+	{"JTAG_ABORT", JTAG_ABORT},
+	{"JTAG_DPACC", JTAG_DPACC},
+	{"JTAG_APACC", JTAG_APACC},
+	{"JTAG_IDCODE", JTAG_IDCODE},
+	{"JTAG_BYPASS", JTAG_BYPASS},
 	{NULL, 0},
 };
 

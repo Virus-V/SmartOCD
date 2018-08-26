@@ -388,14 +388,6 @@ static const lua3rd_regConst lib_adapter_const[] = {
 	{"STATUS_DISCONNECT", ADAPTER_STATUS_DISCONNECT},
 	{"STATUS_RUNING", ADAPTER_STATUS_RUNING},
 	{"STATUS_IDLE", ADAPTER_STATUS_IDLE},
-	// JTAG 扫描链
-	{"JTAG_ABORT", JTAG_ABORT},
-	{"JTAG_DPACC", JTAG_DPACC},
-	{"JTAG_APACC", JTAG_APACC},
-	{"JTAG_IDCODE", JTAG_IDCODE},
-	{"JTAG_BYPASS", JTAG_BYPASS},
-	{"JTAG_RESP_OK_FAULT", JTAG_RESP_OK_FAULT},
-	{"JTAG_RESP_WAIT", JTAG_RESP_WAIT},
 	{NULL, 0}
 };
 
@@ -422,8 +414,9 @@ static const luaL_Reg lib_adapter_oo[] = {
 	{"TransType", adapter_transmission_type},
 	{"HaveTransType", adapter_have_transmission},
 	{"Reset", adapter_reset},
+	// JTAG
 	{"jtagStatusChange", adapter_jtag_status_change},	// JTAG状态机状态切换
-	{"jtagExchangeIO", adapter_jtag_exchange_io},	// 用字符串实现，luaL_Buffer
+	{"jtagExchangeIO", adapter_jtag_exchange_io},
 	{"jtagIdleWait", adapter_jtag_idle_wait},
 	{"jtagExecuteCmd", adapter_jtag_execute_cmd},
 	{"jtagCleanCmd", adapter_jtag_clean_cmd},
