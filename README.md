@@ -404,7 +404,7 @@ TAP状态：
   作用：设置仿真器的状态指示灯（如果有的话）  
   参数：  
   1. Adapter对象
-  2. Number：Status状态  
+  2. Enumeration：Status状态  
    参考Adapter常量 **仿真器状态** 部分
   
   返回值：无  
@@ -437,11 +437,11 @@ TAP状态：
   作用：设置或读取仿真器当前传输模式（必须仿真器支持此模式）  
   参数：  
   1. Adapter对象
-  2. Number：传输模式（可选）  
+  2. Enumeration：传输模式（可选）  
    参考Adapter常量 **传输模式** 部分
   
   返回值：无 或者  
-  1. Number：仿真器当前传输模式  
+  1. Enumeration：仿真器当前传输模式  
    
   示例：
   ```lua
@@ -457,7 +457,7 @@ TAP状态：
   作用：检查仿真器是否支持某一传输模式  
   参数：  
   1. Adapter对象
-  2. Number：传输模式  
+  2. Enumeration：传输模式  
    参考Adapter常量 **传输模式** 部分
   
   返回值：  
@@ -502,7 +502,7 @@ TAP状态：
   作用：在JTAG模式下，切换TAP状态机的状态  
   参数：  
   1. Adapter对象
-  2. Number：newStatus 要切换到的TAP状态
+  2. Enumeration：newStatus 要切换到的TAP状态
    参考Adapter常量 **TAP状态** 部分
   
   返回值：无  
@@ -664,14 +664,391 @@ TAP状态：
 
 ### DAP
 #### 介绍
+DAP包提供一些DAP通用操作。
+
 #### 常量
+AP类型：
+
+- AP_TYPE_JTAG
+- AP_TYPE_AMBA_AHB
+- AP_TYPE_AMBA_APB
+- AP_TYPE_AMBA_AXI
+
+地址自增模式：
+
+- ADDRINC_OFF
+- ADDRINC_SINGLE
+- ADDRINC_PACKED
+
+传输数据宽度：
+
+- DATA_SIZE_8
+- DATA_SIZE_16
+- DATA_SIZE_32
+- DATA_SIZE_64
+- DATA_SIZE_128
+- DATA_SIZE_256
+
+DAP相关寄存器：
+
+- DP_REG_CTRL_STAT
+- DP_REG_SELECT
+- DP_REG_RDBUFF
+- DP_REG_DPIDR
+- DP_REG_ABORT
+- DP_REG_DLCR
+- DP_REG_RESEND
+- DP_REG_TARGETID
+- DP_REG_DLPIDR
+- DP_REG_EVENTSTAT
+- DP_REG_TARGETSEL
++ AP_REG_CSW
++ AP_REG_TAR_LSB
++ AP_REG_TAR_MSB
++ AP_REG_DRW
++ AP_REG_BD0
++ AP_REG_BD1
++ AP_REG_BD2
++ AP_REG_BD3
++ AP_REG_ROM_MSB
++ AP_REG_CFG
++ AP_REG_ROM_LSB
++ AP_REG_IDR
+
+ARM JTAG扫描链：
+
+- JTAG_ABORT
+- JTAG_DPACC
+- JTAG_APACC
+- JTAG_IDCODE
+- JTAG_BYPASS
+
+
 #### 方法
 
+- Init(*adapterObj*)  
+  作用：对DAP进行初始化  
+  参数：  
+  1. adapterObj Adapter对象
+
+  返回值：无  
+  示例：  
+  ```lua
+  -- 设置DAP在JTAG扫描链中的索引，SWD模式下忽略
+  dap.SetIndex(AdapterObj, 0)
+  -- 设置WAIT重试次数
+  dap.SetRetry(AdapterObj, 5)
+  -- 设置两次传输之间的空闲等待周期
+  dap.SetIdleCycle(AdapterObj, 5)
+  -- 初始化DAP
+  dap.Init(AdapterObj)
+  ```
+  ----
+- SetIndex(*adapterObj, index*)  
+  作用：在JTAG模式下，设置DAP在JTAG扫描链的位置  
+  参数：  
+  1. adapterObj Adapter对象
+  2. Number：index DAP在JTAG扫描链中的索引，从0开始
+  
+  返回值：无  
+  示例：参考 `Init` 方法的示例代码
+  ____
+- SetRetry(*adapterObj, retry*)  
+  作用：设置遇到WAIT响应时重试次数  
+  参数：
+  1. adapterObj Adapter对象
+  2. Number：retry 重试次数
+
+  返回值：无  
+  示例：参考 `Init` 方法的示例代码
+  ____
+- SetIdleCycle(*adapterObj, idleCycles*)  
+  作用：设置两次传输之间的等待周期。JTAG模式下在UPDATE-xR之后进入Run-test/Idle状态等待；SWD模式下发送空闲周期  
+  参数：  
+  1. adapterObj Adapter对象
+  2. Number：idleCycles 等待时钟周期个数
+
+  返回值：无  
+  示例：参考 `Init` 方法的示例代码
+  ____
+- SelectAP(*adapterObj, apIdx*)  
+  作用：选中索引为 _apIdx_ 的AP，作为后续DAP操作的默认AP。  
+  参数：  
+  1. adapterObj Adapter对象
+  2. Number：apIdx AP的索引，范围0~255
+
+  返回值：无  
+  示例：
+  ```lua
+  -- 选择索引为0的AP
+  dap.SelectAP(AdapterObj, 0)
+  ```
+  ----
+- WriteAbort(*adapterObj, abort*)  
+  作用：写入ABORT寄存器。JTAG模式下写入ABORT扫描链，SWD模式下写入ABORT寄存器  
+  参数：
+  1. adapterObj Adapter对象
+  2. Number：abort 写入ABORT寄存器/扫描链的数据
+
+  返回值：无  
+  示例：
+  ```lua
+  dap.WriteAbort(AdapterObj, 0x01)
+  ```
+  ----
+- FindAP(*adapterObj, apType*)  
+  作用：搜索类型为 _apType_ 的AP。  
+  参数：  
+  1. adapterObj Adapter对象
+  2. Enumeration：apType AP类型  
+   参考DAP常量 **AP类型** 部分
+
+  返回值：  
+  1. Number：该AP的索引 0~255
+
+  示例：  
+  ```lua
+  -- 选择类型为AMBA AHB的MEM-AP
+  local memAP = dap.FindAP(AdapterObj, dap.AP_TYPE_AMBA_AHB)
+  -- 选择类型为AMBA APB的MEM-AP
+  local debugAP = dap.FindAP(AdapterObj, dap.AP_TYPE_AMBA_APB)
+  ```
+  ----
+- GetAPCapacity(*adapterObj, ...*)  
+  作用：获得当前选中AP的Capacity  
+  参数：  
+  1. adapterObj Adapter对象
+  2. 字符串类型的可变参数，可取的值为"PT"、"LD"、"LA"、"BE"、"BT"，且可以任意数量任意顺序组合  
+   “PT” 代表探测该AP是否支持“Packed Transfer”  
+   “LD” 代表探测该AP是否支持“Large Data”  
+   “LA” 代表探测该AP是否支持“Large Address”  
+   “BE” 代表探测该AP是否支持“Big-endian”  
+   “BT” 代表探测该AP是否支持“Less Word Transfer”  
+
+  返回值：Boolean类型的可变返回值，返回值个数和顺序与函数可变参数的个数和顺序相同  
+  示例：  
+  ```lua
+  -- 选择类型为AMBA AHB的MEM-AP
+  local memAP = dap.FindAP(AdapterObj, dap.AP_TYPE_AMBA_AHB)
+  do 
+  	local PackedTrans, LargeData, LargeAddr, BigEndian, ByteTrans = dap.GetAPCapacity(AdapterObj, "PT","LD","LA","BE","BT")
+  	if PackedTrans then print("Support Packed Transfer.") end
+  	if LargeData then print("Support Large Data Extention.") end
+  	if LargeAddr then print("Support Large Address.") end
+  	if BigEndian then print("Big Endian Access.") end
+  	if ByteTrans then print("Support Less Word Transfer.") end
+  end 
+  ```
+  ----
+- GetROMTable(*adapterObj*)  
+  作用：获得当前AP的ROM Table地址。  
+  参数：  
+  1. adapterObj Adapter对象
+
+  返回值：  
+  1. Number：32或64位ROM Table基址
+
+  示例：
+  ```lua
+  -- 获得当前AP的ROM Table基址
+  local romTableBase = dap.GetROMTable(AdapterObj)
+  ```
+  ----
+- Reg(*adapterObj, reg [, data]*)  
+  作用：读写DP/AP寄存器。如果第三个参数不存在，则表示读寄存器，否则写寄存器  
+  参数：
+  1. adapterObj Adapter对象
+  2. Enumeration：reg 要读/写的寄存器  
+   参考DAP常量 **DAP相关寄存器** 部分
+  3. Number：data 写入寄存器的数据（可选参数）
+
+  返回值：无 或者  
+  1. Number：寄存器的值
+
+  示例：
+  ```lua
+  -- 写AP CSW 寄存器
+  dap.Reg(AdapterObj, dap.AP_REG_CSW, 0xa2000002)
+  -- 读DP CTRL/STAT 寄存器
+  local ctrl_stat = dap.Reg(AdapterObj, dap.DP_REG_CTRL_STAT)
+  ```
+  ----
+- Memory8(*adapterObj, addr [, data]*)  
+  作用：以字节（8位）的宽度读/写 _addr_ 的数据。如果第三个参数不存在，则表示读，反之为写  
+  参数：
+  1. adapterObj Adapter对象
+  2. Number：addr 要读/写的内存位置
+  3. Number：data 要写入的数据，LSB有效（可选参数）
+
+  返回值：无 或者 
+  1. Number：_addr_ 位置的数据  
+
+  示例：
+  ```lua
+  -- 读内存数据：将0x08000000地址的字节数据赋值给局部变量data
+  local data = dap.Memory8(AdapterObj, 0x08000000)
+  -- 写内存数据：将0xef（0xdeadbeef的最低字节）写入到0x20000000
+  dap.Memory8(AdapterObj, 0x20000000， 0xdeadbeef)
+  ```
+  ----
+- Memory16(*adapterObj, addr [, data]*)  
+  介绍：以半字（16位）的宽度读/写 _addr_ 的数据。  
+  参考 `Memory8`
+  ____
+- Memory32(*adapterObj, addr [, data]*)  
+  介绍：以字（32位）的宽度读/写 _addr_ 的数据。  
+  参考 `Memory8`
+  ____
+- ReadMemBlock(*adapterObj, addr, addrIncMode, dataWidth, readCnt*)  
+  介绍：批量读取 _addr_ 内存地址。  
+  参数：
+  1. adapterObj Adapter对象
+  2. Number：addr 要读取的内存地址
+  3. Enumeration：addrIncMode 地址自增模式
+   参考DAP常量 **地址自增模式** 部分
+  4. Enumeration：dataWidth 单次读取的数据宽度
+   参考DAP常量 **传输数据宽度** 部分
+  5. Number：readCnt 读取的次数
+
+  返回值：
+  1. String：读取的数据
+
+  示例：
+  ```lua
+  -- 从0x08000000开始读，读取16次，每次读取32位的数据，每次读取成功后地址自增
+  local data = dap.ReadMemBlock(AdapterObj, 0x08000000, dap.ADDRINC_SINGLE, dap.DATA_SIZE_32, 16)
+  -- 打印数据
+  local pos, word = 1, 0
+  while pos < #data do
+	word, pos = string.unpack("I4", data, pos)
+	print(string.format("0x%08X", word))
+  end
+  ```
+  ----
+- WriteMemBlock(*adapterObj, addr, addrIncMode, dataWidth, data*)  
+  介绍：批量写入 _addr_ 内存地址。  
+  参数：
+  1. adapterObj Adapter对象
+  2. Number：addr 要读取的内存地址
+  3. Enumeration：addrIncMode 地址自增模式
+   参考DAP常量 **地址自增模式** 部分
+  4. Enumeration：dataWidth 单次读取的数据宽度
+   参考DAP常量 **传输数据宽度** 部分
+  5. String：data 要写入的数据
+
+  返回值：无  
+  示例：
+  ```lua
+  -- 要写入的数据
+  local data = string.pack("I4I4I4I4", 0x11223344, 0x55667788, 0x99aabbcc, 0xddeeff00)
+  -- 执行写入动作
+  dap.WriteMemBlock(AdapterObj, 0x20000000, dap.ADDRINC_SINGLE, dap.DATA_SIZE_32, data)
+  ```
+  ----
+- Get_CID_PID(*adapterObj, base*)  
+  作用：获得CoreSight Component的Component ID和Peripheral ID  
+  参数：
+  1. adapterObj Adapter对象
+  2. Number：base Component的基址，4KB对齐
+  
+  返回值：
+  1. Number：cid 32位的Component ID
+  2. Number：pid 64位的Peripheral ID
+
+  示例：
+  ```lua
+  -- 读取ROM Table基址
+  local rom_table_base = dap.GetROMTable(AdapterObj)
+  -- 读取ROM Table的cid和pid
+  local cid,pid = dap.Get_CID_PID(AdapterObj, rom_table_base & 0xFFFFF000)
+  ```
 ----
 
 ### CMSIS-DAP
+#### 介绍
+此Package用于CMSIS-DAP仿真器。
+#### 常量
+无
+#### 方法
+- New()  
+  作用：创建新的CMSIS-DAP的Adapter对象  
+  参数：无  
+  返回值：
+  1. adapterObj Adapter对象
 
+  示例：
+  ```lua
+  -- 加载CMSIS-DAP库
+  cmsis_dap = require("CMSIS-DAP")
+  -- 创建新的CMSIS-DAP Adapter对象
+  AdapterObj = cmsis_dap.New()
+  ```
+  ----
+- Connect(*adapterObj, vid_pids*)  
+  作用：连接CMSIS-DAP仿真器设备  
+  参数：
+  1. adapterObj Adapter对象
+  2. Array：vid_pids CMSIS-DAP设备的USB VID和PID参数
 
+  返回值：无  
+  示例：
+  ```lua
+  -- CMSIS-DAP的VID和PID
+  local vid_pids = {
+	-- Keil Software
+  	{0xc251, 0xf001},	-- LPC-Link-II CMSIS_DAP
+  	{0xc251, 0xf002}, 	-- OPEN-SDA CMSIS_DAP (Freedom Board)
+  	{0xc251, 0x2722}, 	-- Keil ULINK2 CMSIS-DAP
+  	-- MBED Software
+  	{0x0d28, 0x0204}	-- MBED CMSIS-DAP
+  }
+  -- 连接CMSIS-DAP仿真器
+  cmsis_dap.Connect(AdapterObj, vid_pids, nil)
+  ```
+  ----
+- jtagConfigure(*adapterObj, tapInfo*)  
+  作用：CMSIS-DAP内部维护一个TAP信息列表，此函数用来配置该列表。参考Adapter包的`jtagSetTAPInfo`方法。  
+  参数：
+  1. adapterObj Adapter对象
+  2. Array：tapInfo TAP信息数组
+
+  返回值：无  
+  示例：
+  ```lua
+  -- 设置仿真器中JTAG扫描链信息：TAP个数和IR长度
+  cmsis_dap.jtagConfigure(AdapterObj, {4, 5})
+  ```
+  ----
+- TransferConfigure(*adapterObj, idleCycles, waitRetry, matchRetry*)  
+  作用：配置CMSIS-DAP传输参数  
+  参数：
+  1. adapterObj Adapter对象
+  2. Number：idleCycles 两次传输之间等待的间隔周期
+  3. Number：waitRetry 当接传输收到WAIT应答时，重试次数
+  4. Number：matchRetry 当在传输比较模式下，数据不匹配重试的次数
+
+  返回值：无  
+  示例：
+  ```lua
+  -- 配置CMSIS-DAP Transfer参数
+  cmsis_dap.TransferConfigure(AdapterObj, 5, 5, 5)
+  ```
+  ----
+- swdConfigure(*adapterObj, swdCfg*)  
+  作用：配置SWD传输参数。  
+  参数：
+  1. adapterObj Adapter对象
+  2. Number：swdCfg SWD传输参数  
+      - Bit 1 .. 0: Turnaround clock period of the SWD device (should be identical with the WCR [Write Control Register] value of the target): 0 = 1 clock cycle (default), 1 = 2 clock cycles, 2 = 3 clock cycles, 3 = 4 clock cycles.
+      - Bit 2: DataPhase: 0 = Do not generate Data Phase on WAIT/FAULT (default), 1 = Always generate Data Phase (also on WAIT/FAULT; Required for Sticky Overrun behavior).
+
+  返回值：无  
+  示例：
+  ```lua
+  -- SWD参数
+  cmsis_dap.swdConfigure(AdapterObj, 0)
+  ```
+----
 ## 开发人员手册
 ### 开发计划
 ### 开发指引
