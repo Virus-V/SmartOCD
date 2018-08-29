@@ -502,7 +502,7 @@ TAP状态：
   作用：在JTAG模式下，切换TAP状态机的状态  
   参数：  
   1. Adapter对象
-  2. Enumeration：newStatus 要切换到的TAP状态
+  2. Enumeration：newStatus 要切换到的TAP状态  
    参考Adapter常量 **TAP状态** 部分
   
   返回值：无  

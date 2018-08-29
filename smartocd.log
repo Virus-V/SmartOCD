@@ -1,8 +1,0 @@
-2018-04-20 21:23:46 DEBUG cmsis-dap.c:97: Try connecting vid: 0xc251, pid: 0xf001 usb device.
-2018-04-20 21:23:46 DEBUG usb.c:102: Found 13 usb devices.
-2018-04-20 21:23:46 WARN  usb.c:119: libusb_open() error:LIBUSB_ERROR_ACCESS,vid:c251,pid:f001.
-2018-04-20 21:23:46 DEBUG cmsis-dap.c:97: Try connecting vid: 0x01, pid: 0x03 usb device.
-2018-04-20 21:23:46 DEBUG usb.c:102: Found 13 usb devices.
-2018-04-20 21:23:46 DEBUG cmsis-dap.c:97: Try connecting vid: 0xf001, pid: 0x40 usb device.
-2018-04-20 21:23:46 DEBUG usb.c:102: Found 13 usb devices.
-2018-04-20 21:23:46 WARN  cmsis-dap.c:116: No suitable device found.
