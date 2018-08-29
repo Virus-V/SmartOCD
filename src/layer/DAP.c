@@ -397,8 +397,10 @@ static int dap_write_mem_block(lua_State *L){
 	int transSize = (int)luaL_checkinteger(L, 4);
 	size_t transCnt;	// 注意size_t在在64位环境下是8字节，int在64位下是4字节
 	uint32_t *buff = (uint32_t *)lua_tolstring (L, 5, &transCnt);
-
-	if(DAP_WriteMemBlock(adapterObj, addr, addrIncMode, transSize, (int)transCnt, buff) == FALSE){
+	if(transCnt & 0x3){
+		return luaL_error("The length of the data to be written is not a multiple of the word.");
+	}
+	if(DAP_WriteMemBlock(adapterObj, addr, addrIncMode, transSize, (int)transCnt >> 2, buff) == FALSE){
 		// 清理指令队列
 		adapter_DAP_CleanCommandQueue(adapterObj);
 		return luaL_error(L, "Write Block Failed!");
