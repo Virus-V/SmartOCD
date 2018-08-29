@@ -904,9 +904,9 @@ ARM JTAG扫描链：
   参数：
   1. adapterObj Adapter对象
   2. Number：addr 要读取的内存地址
-  3. Enumeration：addrIncMode 地址自增模式
+  3. Enumeration：addrIncMode 地址自增模式  
    参考DAP常量 **地址自增模式** 部分
-  4. Enumeration：dataWidth 单次读取的数据宽度
+  4. Enumeration：dataWidth 单次读取的数据宽度  
    参考DAP常量 **传输数据宽度** 部分
   5. Number：readCnt 读取的次数
 
@@ -930,9 +930,9 @@ ARM JTAG扫描链：
   参数：
   1. adapterObj Adapter对象
   2. Number：addr 要读取的内存地址
-  3. Enumeration：addrIncMode 地址自增模式
+  3. Enumeration：addrIncMode 地址自增模式  
    参考DAP常量 **地址自增模式** 部分
-  4. Enumeration：dataWidth 单次读取的数据宽度
+  4. Enumeration：dataWidth 单次读取的数据宽度  
    参考DAP常量 **传输数据宽度** 部分
   5. String：data 要写入的数据
 
