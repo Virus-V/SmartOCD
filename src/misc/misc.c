@@ -38,13 +38,12 @@ int misc_PrintBulk(char *data, int length, int rowLen){
 	// 如果参数不对则直接返回
 	if(length == 0 || rowLen == 0) return 0;
 
-	if(length < rowLen) rowLen = length;	// 如果总长度小于一行的长度，则把一行的长度设置为总长度输出在一行
 	lineCnt = (length / rowLen) + 1;	// 计算行数
 	for(tmp = length - (length % rowLen), placeCnt = 1; tmp >= 16; placeCnt++){
 		tmp /= 16;
 	}
     // 输出一行数据：前导位置信息：数据...
-	for(currRow = 0; currRow < lineCnt && rowLen > 0; currRow ++){
+	for(currRow = 0; currRow < lineCnt && length > 0; currRow ++){
 		int currPlaceCnt;	// 已输出的数据数字位数和已输出的数据
 		// 计算位数
 		for(tmp = printedCnt, currPlaceCnt = 1; tmp >= 16; currPlaceCnt++){
@@ -56,16 +55,28 @@ int misc_PrintBulk(char *data, int length, int rowLen){
 		}
 		printf("%X: ", printedCnt);
 		// 输出数据
-		for(tmp = 0; tmp < rowLen ; tmp++){
-			printf("%02hhX ", *(data + printedCnt + tmp));
-		}
-		// 加入输出总长度
-		printedCnt += rowLen;
-		printf("\n");
-		// 判断是否是最后一行
-		if(currRow == lineCnt-2){
-			rowLen = length % rowLen;
-		}
-	}
+        int dataLen = length > rowLen ? rowLen : length;
+        int blankLen = rowLen - dataLen;
+        for(tmp = 0; tmp < dataLen; tmp++){
+            printf("%02hhX ", *(data + printedCnt + tmp));
+        }
+        // 打印占位符
+        for(tmp = 0; tmp < blankLen * 3; tmp++){
+           printf(" "); 
+        }
+        printf("| ");
+        // 打印ascii
+        for(tmp = 0; tmp < dataLen; tmp++){
+            printf("%c", (0x20 <= *(data + printedCnt + tmp) && *(data + printedCnt + tmp) <= 0x7e) ? *(data + printedCnt + tmp) : '.');
+        }
+        for(tmp = 0; tmp < blankLen; tmp++){
+            printf(" ");
+        }
+        printf(" |");
+        length -= dataLen;
+        // 加入输出总长度
+        printedCnt += dataLen;    
+        printf("\n");
+    }	
 	return currRow;
 }
