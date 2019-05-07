@@ -47,7 +47,7 @@
 *.cmd
 .tmp_versions/
 .cproject
-.progect
+.project
 .settings/
 modules.order
 Module.symvers
