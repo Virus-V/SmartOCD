@@ -167,7 +167,7 @@ static int incomplete (lua_State *L, int status) {
 		if (lmsg >= MARKLEN && strcmp(msg + lmsg - MARKLEN, EOFMARK) == 0) {
 			lua_pop(L, 1);
 			return 1;
-			}
+		}
 	}
 	return 0;  /* else... */
 }
