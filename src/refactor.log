@@ -1,0 +1,7 @@
+src目录下
+    USB - USB 协议库
+    Adapter - Adapter 接口定义库
+    DAP - DAP协议的接口
+    CMSIS-DAP - CMSIS-DAP仿真器
+
+每个接口都可以在Lua里面注册为一个接口
