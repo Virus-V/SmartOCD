@@ -207,6 +207,7 @@ struct usb {
 	USB_INTERRUPT_TRANSFER InterruptTransfer;
 	USB_SET_CONFIGURATION SetConfiguration;
 	USB_CLAIM_INTERFACE ClaimInterface;
+	// 调用ClaimInterface服务之后可用
 	USB_READ_WRITE Read;
 	USB_READ_WRITE Write;
 };

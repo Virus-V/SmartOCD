@@ -5,19 +5,19 @@
  *      Author: virusv
  */
 
-#include "lib/JTAG.h"
+#include "JTAG/JTAG.h"
 #include "misc/log.h"
 
 // 判断一个状态是不是在某个阶段中
 #define JTAG_IN_DR(state) (JTAG_TAP_DRSELECT <= (state) && (state) <= JTAG_TAP_DRUPDATE)
 #define JTAG_IN_IR(state) (JTAG_TAP_IRSELECT <= (state) && (state) <= JTAG_TAP_IRUPDATE)
+
 /**
- * 单元测试函数部分
  * 用于产生在当前状态到指定状态的TMS时序
  * 返回值：sequence 高8位为时序信息，低八位为时序个数
  * 时序信息是最低位先发送。比如 0101 1111，则发送顺序是 <-1111 1010<-
  */
-TMS_SeqInfo JTAG_Get_TMS_Sequence(enum JTAG_TAP_Status fromStatus, enum JTAG_TAP_Status toStatus) {
+TMS_SeqInfo JtagGetTmsSequence(enum JTAG_TAP_Status fromStatus, enum JTAG_TAP_Status toStatus) {
 	assert(fromStatus >= JTAG_TAP_RESET && fromStatus <= JTAG_TAP_IRUPDATE);
 	assert(toStatus >= JTAG_TAP_RESET && toStatus <= JTAG_TAP_IRUPDATE);
 	int sequence, idx;
@@ -160,7 +160,7 @@ TMS_SeqInfo JTAG_Get_TMS_Sequence(enum JTAG_TAP_Status fromStatus, enum JTAG_TAP
 /**
  * 从当前TAP状态和给定的TMS，返回下一个TAP状态
  */
-enum JTAG_TAP_Status JTAG_NextStatus(enum JTAG_TAP_Status fromStatus, int tms){
+enum JTAG_TAP_Status JtagNextStatus(enum JTAG_TAP_Status fromStatus, int tms){
 	assert(fromStatus >= JTAG_TAP_RESET && fromStatus <= JTAG_TAP_IRUPDATE);
 	enum JTAG_TAP_Status nextStatus;
 	switch (fromStatus) {
@@ -237,7 +237,7 @@ enum JTAG_TAP_Status JTAG_NextStatus(enum JTAG_TAP_Status fromStatus, int tms){
  * count：TMS信号位数
  * 比如：1001110，count=7，有四个电平状态：1周期的低电平，3周期的高电平，2周期的低电平，1周期的高电平
  */
-int JTAG_Cal_TMS_LevelStatus(uint32_t tms, int count){
+int JtagCalTmsLevelStatus(uint32_t tms, int count){
 	int n=0,i;
 	uint32_t tms_s = (tms << 1) | (tms & 0x1);
 	uint32_t diff = tms_s ^ tms;
@@ -249,7 +249,7 @@ int JTAG_Cal_TMS_LevelStatus(uint32_t tms, int count){
 	return n+1;
 }
 
-const char *JTAG_state2str(enum JTAG_TAP_Status tap_state) {
+const char *JtagStateToStr(enum JTAG_TAP_Status tap_state) {
 #define X(_s) if (tap_state == _s) return #_s;
 	X(JTAG_TAP_RESET)
 	X(JTAG_TAP_IDLE)

@@ -50,7 +50,7 @@ USB CreateUSB(void){
 	usbObj->usbInterface.BulkTransfer = USBBulkTransfer;
 	usbObj->usbInterface.InterruptTransfer = USBInterruptTransfer;
 	usbObj->clamedIFNum = usbObj->currConfVal = -1;
-	return TRUE;
+	return (USB)&usbObj->usbInterface;
 }
 
 /*
