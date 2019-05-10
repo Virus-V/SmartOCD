@@ -10,7 +10,7 @@
 
 #include "smart_ocd.h"
 
-enum JTAG_TAP_Status {
+enum JTAG_TAP_State {
 	/* 特殊状态 */
 	JTAG_TAP_RESET = 0,
 	JTAG_TAP_IDLE,
@@ -42,28 +42,28 @@ typedef uint16_t TMS_SeqInfo;
 /**
  * 生成两个JTAG状态之间切换的TMS时序
  * 参数:
- * 	fromStatus:JTAG状态机的当前状态
- * 	toStatus:要转换到的JTAG状态机状态
+ * 	fromState:JTAG状态机的当前状态
+ * 	toState:要转换到的JTAG状态机状态
  * 返回:
  * 	TMS时序,见TMS_SeqInfo类型定义
  */
 TMS_SeqInfo
 JtagGetTmsSequence(
-		IN enum JTAG_TAP_Status fromStatus,
-		IN enum JTAG_TAP_Status toStatus
+		IN enum JTAG_TAP_State fromState,
+		IN enum JTAG_TAP_State toState
 );
 
 /**
  * 获得当前状态通过一个给定TMS信号时切换到的状态
  * 参数:
- *	fromStatus:当前JTAG状态机的状态
+ *	fromState:当前JTAG状态机的状态
  *	tms:给定的TMS信号
  * 返回:
  * 	下一个状态机状态
  */
-enum JTAG_TAP_Status
+enum JTAG_TAP_State
 JtagNextStatus(
-		IN enum JTAG_TAP_Status fromStatus,
+		IN enum JTAG_TAP_State fromState,
 		IN int tms
 );
 
@@ -80,7 +80,7 @@ JtagNextStatus(
  * 	返回值 = 4: 1周期的低电平，3周期的高电平，2周期的低电平，1周期的高电平
  */
 int
-JtagCalTmsLevelStatus(
+JtagCalTmsLevelState(
 		IN uint32_t tms,
 		IN int count
 );
@@ -94,7 +94,7 @@ JtagCalTmsLevelStatus(
  */
 const char *
 JtagStateToStr(
-		IN enum JTAG_TAP_Status tap_state
+		IN enum JTAG_TAP_State tap_state
 );
 
 #endif /* SRC_JTAG_JTAG_H_ */

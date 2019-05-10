@@ -73,7 +73,7 @@ static int usbStrDescriptorMatch(libusb_device_handle *devHandle, uint8_t descIn
 	// 描述字符串缓冲区
 	char descString[256+1];	// XXX 较大的数组在栈中分配！
 
-	if (descIndex == 0) return USB_BAD_PARAMETER;
+	if (descIndex == 0) return USB_ERR_BAD_PARAMETER;
 
 	retcode = libusb_get_string_descriptor_ascii(devHandle, descIndex, (unsigned char *)descString, sizeof(descString)-1);
 	if (retcode < 0) {
@@ -364,7 +364,7 @@ static int USBClaimInterface(USB self, uint8_t IFClass, uint8_t IFSubclass, uint
 
 	if(usbObj->currConfVal == -1){
 		log_error("The active configuration doesn't set.");
-		return USB_BAD_PARAMETER;
+		return USB_ERR_BAD_PARAMETER;
 	}
 
 	dev = libusb_get_device(usbObj->devHandle);

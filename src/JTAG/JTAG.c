@@ -17,137 +17,137 @@
  * 返回值：sequence 高8位为时序信息，低八位为时序个数
  * 时序信息是最低位先发送。比如 0101 1111，则发送顺序是 <-1111 1010<-
  */
-TMS_SeqInfo JtagGetTmsSequence(enum JTAG_TAP_Status fromStatus, enum JTAG_TAP_Status toStatus) {
-	assert(fromStatus >= JTAG_TAP_RESET && fromStatus <= JTAG_TAP_IRUPDATE);
-	assert(toStatus >= JTAG_TAP_RESET && toStatus <= JTAG_TAP_IRUPDATE);
+TMS_SeqInfo JtagGetTmsSequence(enum JTAG_TAP_State fromState, enum JTAG_TAP_State toState) {
+	assert(fromState >= JTAG_TAP_RESET && fromState <= JTAG_TAP_IRUPDATE);
+	assert(toState >= JTAG_TAP_RESET && toState <= JTAG_TAP_IRUPDATE);
 	int sequence, idx;
 #define _SET_BIT_(x) (sequence |= ((x) << idx))
-	for (sequence = 0, idx = 8; fromStatus != toStatus; sequence++, idx++) {
-		switch (fromStatus) {
+	for (sequence = 0, idx = 8; fromState != toState; sequence++, idx++) {
+		switch (fromState) {
 		case JTAG_TAP_RESET:
 			// 复位状态只有一个指向下一个相邻的状态，直接赋值
-			fromStatus = JTAG_TAP_IDLE;
+			fromState = JTAG_TAP_IDLE;
 			_SET_BIT_(0);	// TMS =0 切换到IDLE状态
 			break;
 		case JTAG_TAP_IDLE:
-			fromStatus = JTAG_TAP_DRSELECT;
+			fromState = JTAG_TAP_DRSELECT;
 			_SET_BIT_(1);
 			break;
 		case JTAG_TAP_DRSELECT:
-			if (JTAG_IN_DR(toStatus)) {
-				fromStatus = JTAG_TAP_DRCAPTURE;
+			if (JTAG_IN_DR(toState)) {
+				fromState = JTAG_TAP_DRCAPTURE;
 				_SET_BIT_(0);
 			} else {
-				fromStatus = JTAG_TAP_IRSELECT;
+				fromState = JTAG_TAP_IRSELECT;
 				_SET_BIT_(1);
 			}
 			break;
 		case JTAG_TAP_DRCAPTURE:
-			if (toStatus == JTAG_TAP_DRSHIFT) {
-				fromStatus = JTAG_TAP_DRSHIFT;
+			if (toState == JTAG_TAP_DRSHIFT) {
+				fromState = JTAG_TAP_DRSHIFT;
 				_SET_BIT_(0);
 			} else {
-				fromStatus = JTAG_TAP_DREXIT1;
+				fromState = JTAG_TAP_DREXIT1;
 				_SET_BIT_(1);
 			}
 			break;
 
 		case JTAG_TAP_DRSHIFT:
-			fromStatus = JTAG_TAP_DREXIT1;
+			fromState = JTAG_TAP_DREXIT1;
 			_SET_BIT_(1);
 			break;
 
 		case JTAG_TAP_DREXIT1:
-			if (toStatus == JTAG_TAP_DRPAUSE || toStatus == JTAG_TAP_DREXIT2) {
-				fromStatus = JTAG_TAP_DRPAUSE;
+			if (toState == JTAG_TAP_DRPAUSE || toState == JTAG_TAP_DREXIT2) {
+				fromState = JTAG_TAP_DRPAUSE;
 				_SET_BIT_(0);
 			} else {
-				fromStatus = JTAG_TAP_DRUPDATE;
+				fromState = JTAG_TAP_DRUPDATE;
 				_SET_BIT_(1);
 			}
 			break;
 
 		case JTAG_TAP_DRPAUSE:
-			fromStatus = JTAG_TAP_DREXIT2;
+			fromState = JTAG_TAP_DREXIT2;
 			_SET_BIT_(1);
 			break;
 
 		case JTAG_TAP_DREXIT2:
-			if (toStatus == JTAG_TAP_DRSHIFT) {
-				fromStatus = JTAG_TAP_DRSHIFT;
+			if (toState == JTAG_TAP_DRSHIFT) {
+				fromState = JTAG_TAP_DRSHIFT;
 				_SET_BIT_(0);
 			} else {
-				fromStatus = JTAG_TAP_DRUPDATE;
+				fromState = JTAG_TAP_DRUPDATE;
 				_SET_BIT_(1);
 			}
 			break;
 
 		case JTAG_TAP_DRUPDATE:
-			if (toStatus == JTAG_TAP_IDLE) {
-				fromStatus = JTAG_TAP_IDLE;
+			if (toState == JTAG_TAP_IDLE) {
+				fromState = JTAG_TAP_IDLE;
 				_SET_BIT_(0);
 			} else {
-				fromStatus = JTAG_TAP_DRSELECT;
+				fromState = JTAG_TAP_DRSELECT;
 				_SET_BIT_(1);
 			}
 			break;
 
 		case JTAG_TAP_IRSELECT:
-			if (JTAG_IN_IR(toStatus)) {
-				fromStatus = JTAG_TAP_IRCAPTURE;
+			if (JTAG_IN_IR(toState)) {
+				fromState = JTAG_TAP_IRCAPTURE;
 				_SET_BIT_(0);
 			} else {
-				fromStatus = JTAG_TAP_RESET;
+				fromState = JTAG_TAP_RESET;
 				_SET_BIT_(1);
 			}
 			break;
 
 		case JTAG_TAP_IRCAPTURE:
-			if (toStatus == JTAG_TAP_IRSHIFT) {
-				fromStatus = JTAG_TAP_IRSHIFT;
+			if (toState == JTAG_TAP_IRSHIFT) {
+				fromState = JTAG_TAP_IRSHIFT;
 				_SET_BIT_(0);
 			} else {
-				fromStatus = JTAG_TAP_IREXIT1;
+				fromState = JTAG_TAP_IREXIT1;
 				_SET_BIT_(1);
 			}
 			break;
 
 		case JTAG_TAP_IRSHIFT:
-			fromStatus = JTAG_TAP_IREXIT1;
+			fromState = JTAG_TAP_IREXIT1;
 			_SET_BIT_(1);
 			break;
 
 		case JTAG_TAP_IREXIT1:
-			if (toStatus == JTAG_TAP_IRPAUSE || toStatus == JTAG_TAP_IREXIT2) {
-				fromStatus = JTAG_TAP_IRPAUSE;
+			if (toState == JTAG_TAP_IRPAUSE || toState == JTAG_TAP_IREXIT2) {
+				fromState = JTAG_TAP_IRPAUSE;
 				_SET_BIT_(0);
 			} else {
-				fromStatus = JTAG_TAP_IRUPDATE;
+				fromState = JTAG_TAP_IRUPDATE;
 				_SET_BIT_(1);
 			}
 			break;
 
 		case JTAG_TAP_IRPAUSE:
-			fromStatus = JTAG_TAP_IREXIT2;
+			fromState = JTAG_TAP_IREXIT2;
 			_SET_BIT_(1);
 			break;
 
 		case JTAG_TAP_IREXIT2:
-			if (toStatus == JTAG_TAP_IRSHIFT) {
-				fromStatus = JTAG_TAP_IRSHIFT;
+			if (toState == JTAG_TAP_IRSHIFT) {
+				fromState = JTAG_TAP_IRSHIFT;
 				_SET_BIT_(0);
 			} else {
-				fromStatus = JTAG_TAP_IRUPDATE;
+				fromState = JTAG_TAP_IRUPDATE;
 				_SET_BIT_(1);
 			}
 			break;
 
 		case JTAG_TAP_IRUPDATE:
-			if (toStatus == JTAG_TAP_IDLE) {
-				fromStatus = JTAG_TAP_IDLE;
+			if (toState == JTAG_TAP_IDLE) {
+				fromState = JTAG_TAP_IDLE;
 				_SET_BIT_(0);
 			} else {
-				fromStatus = JTAG_TAP_DRSELECT;
+				fromState = JTAG_TAP_DRSELECT;
 				_SET_BIT_(1);
 			}
 			break;
@@ -160,75 +160,75 @@ TMS_SeqInfo JtagGetTmsSequence(enum JTAG_TAP_Status fromStatus, enum JTAG_TAP_St
 /**
  * 从当前TAP状态和给定的TMS，返回下一个TAP状态
  */
-enum JTAG_TAP_Status JtagNextStatus(enum JTAG_TAP_Status fromStatus, int tms){
-	assert(fromStatus >= JTAG_TAP_RESET && fromStatus <= JTAG_TAP_IRUPDATE);
-	enum JTAG_TAP_Status nextStatus;
-	switch (fromStatus) {
+enum JTAG_TAP_State JtagNextState(enum JTAG_TAP_State fromState, int tms){
+	assert(fromState >= JTAG_TAP_RESET && fromState <= JTAG_TAP_IRUPDATE);
+	enum JTAG_TAP_State nextState;
+	switch (fromState) {
 	case JTAG_TAP_RESET:
-		nextStatus = tms ? JTAG_TAP_RESET : JTAG_TAP_IDLE;
+		nextState = tms ? JTAG_TAP_RESET : JTAG_TAP_IDLE;
 		break;
 
 	case JTAG_TAP_IDLE:
-		nextStatus = tms ? JTAG_TAP_DRSELECT : JTAG_TAP_IDLE;
+		nextState = tms ? JTAG_TAP_DRSELECT : JTAG_TAP_IDLE;
 		break;
 
 	case JTAG_TAP_DRSELECT:
-		nextStatus = tms ? JTAG_TAP_IRSELECT : JTAG_TAP_DRCAPTURE;
+		nextState = tms ? JTAG_TAP_IRSELECT : JTAG_TAP_DRCAPTURE;
 		break;
 
 	case JTAG_TAP_DRCAPTURE:
-		nextStatus = tms ? JTAG_TAP_DREXIT1 : JTAG_TAP_DRSHIFT;
+		nextState = tms ? JTAG_TAP_DREXIT1 : JTAG_TAP_DRSHIFT;
 		break;
 
 	case JTAG_TAP_DRSHIFT:
-		nextStatus = tms ? JTAG_TAP_DREXIT1 : JTAG_TAP_DRSHIFT;
+		nextState = tms ? JTAG_TAP_DREXIT1 : JTAG_TAP_DRSHIFT;
 		break;
 
 	case JTAG_TAP_DREXIT1:
-		nextStatus = tms ? JTAG_TAP_DRUPDATE : JTAG_TAP_DRPAUSE;
+		nextState = tms ? JTAG_TAP_DRUPDATE : JTAG_TAP_DRPAUSE;
 		break;
 
 	case JTAG_TAP_DRPAUSE:
-		nextStatus = tms ? JTAG_TAP_DREXIT2 : JTAG_TAP_DRPAUSE;
+		nextState = tms ? JTAG_TAP_DREXIT2 : JTAG_TAP_DRPAUSE;
 		break;
 
 	case JTAG_TAP_DREXIT2:
-		nextStatus = tms ? JTAG_TAP_DRUPDATE : JTAG_TAP_DRSHIFT;
+		nextState = tms ? JTAG_TAP_DRUPDATE : JTAG_TAP_DRSHIFT;
 		break;
 
 	case JTAG_TAP_DRUPDATE:
-		nextStatus = tms ? JTAG_TAP_DRSELECT : JTAG_TAP_IDLE;
+		nextState = tms ? JTAG_TAP_DRSELECT : JTAG_TAP_IDLE;
 		break;
 
 	case JTAG_TAP_IRSELECT:
-		nextStatus = tms ? JTAG_TAP_RESET : JTAG_TAP_IRCAPTURE;
+		nextState = tms ? JTAG_TAP_RESET : JTAG_TAP_IRCAPTURE;
 		break;
 
 	case JTAG_TAP_IRCAPTURE:
-		nextStatus = tms ? JTAG_TAP_IREXIT1 : JTAG_TAP_IRSHIFT;
+		nextState = tms ? JTAG_TAP_IREXIT1 : JTAG_TAP_IRSHIFT;
 		break;
 
 	case JTAG_TAP_IRSHIFT:
-		nextStatus = tms ? JTAG_TAP_IREXIT1 : JTAG_TAP_IRSHIFT;
+		nextState = tms ? JTAG_TAP_IREXIT1 : JTAG_TAP_IRSHIFT;
 		break;
 
 	case JTAG_TAP_IREXIT1:
-		nextStatus = tms ? JTAG_TAP_IRUPDATE : JTAG_TAP_IRPAUSE;
+		nextState = tms ? JTAG_TAP_IRUPDATE : JTAG_TAP_IRPAUSE;
 		break;
 
 	case JTAG_TAP_IRPAUSE:
-		nextStatus = tms ? JTAG_TAP_IREXIT2 : JTAG_TAP_IRPAUSE;
+		nextState = tms ? JTAG_TAP_IREXIT2 : JTAG_TAP_IRPAUSE;
 		break;
 
 	case JTAG_TAP_IREXIT2:
-		nextStatus = tms ? JTAG_TAP_IRUPDATE : JTAG_TAP_IRSHIFT;
+		nextState = tms ? JTAG_TAP_IRUPDATE : JTAG_TAP_IRSHIFT;
 		break;
 
 	case JTAG_TAP_IRUPDATE:
-		nextStatus = tms ? JTAG_TAP_DRSELECT : JTAG_TAP_IDLE;
+		nextState = tms ? JTAG_TAP_DRSELECT : JTAG_TAP_IDLE;
 		break;
 	}
-	return nextStatus;
+	return nextState;
 }
 
 /**
@@ -237,7 +237,7 @@ enum JTAG_TAP_Status JtagNextStatus(enum JTAG_TAP_Status fromStatus, int tms){
  * count：TMS信号位数
  * 比如：1001110，count=7，有四个电平状态：1周期的低电平，3周期的高电平，2周期的低电平，1周期的高电平
  */
-int JtagCalTmsLevelStatus(uint32_t tms, int count){
+int JtagCalTmsLevelState(uint32_t tms, int count){
 	int n=0,i;
 	uint32_t tms_s = (tms << 1) | (tms & 0x1);
 	uint32_t diff = tms_s ^ tms;
@@ -249,7 +249,7 @@ int JtagCalTmsLevelStatus(uint32_t tms, int count){
 	return n+1;
 }
 
-const char *JtagStateToStr(enum JTAG_TAP_Status tap_state) {
+const char *JtagStateToStr(enum JTAG_TAP_State tap_state) {
 #define X(_s) if (tap_state == _s) return #_s;
 	X(JTAG_TAP_RESET)
 	X(JTAG_TAP_IDLE)

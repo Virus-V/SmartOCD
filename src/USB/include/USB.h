@@ -12,9 +12,9 @@
 
 // USB 接口状态值
 enum{
-	USB_SUCCESS,	// 成功
+	USB_SUCCESS = 0,	// 成功
 	USB_FAILED,	// 失败
-	USB_BAD_PARAMETER,	// 非法参数
+	USB_ERR_BAD_PARAMETER,	// 非法参数
 	USB_ERR_NOT_FOUND,	// 未找到设备
 	USB_ERR_INTERNAL_ERROR,	// USB库内部错误
 	USB_ERR_UNSUPPORT,	// 不支持的操作

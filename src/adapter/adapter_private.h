@@ -6,8 +6,8 @@
  *      Author: virusv
  */
 
-#ifndef SRC_ADAPTER_ADAPTER_H_
-#define SRC_ADAPTER_ADAPTER_H_
+#ifndef SRC_ADAPTER_ADAPTER_PRIVATE_H_
+#define SRC_ADAPTER_ADAPTER_PRIVATE_H_
 
 #include <stdarg.h>
 #include "smart_ocd.h"
@@ -18,7 +18,6 @@
 
 #include "adapter/include/adapter.h"
 
-// XXX 这是CMSIS-DAP的引脚定义
 // SW和JTAG引脚映射，用在JTAG_INS_RW_PINS指令里
 #define SWJ_PIN_SWCLK_TCK		0       // SWCLK/TCK
 #define SWJ_PIN_SWDIO_TMS		1       // SWDIO/TMS
@@ -175,13 +174,7 @@ enum commonOperation {
 	AINS_COMM_LAST	// 分隔符，代表最后一个
 };
 
-// Adapter的状态
-enum adapterStatus {
-	ADAPTER_STATUS_CONNECTED,	// Adapter已连接
-	ADAPTER_STATUS_DISCONNECT,	// Adapter已断开
-	ADAPTER_STATUS_RUNING,		// Adapter正在运行
-	ADAPTER_STATUS_IDLE,		// Adapter空闲
-};
+
 
 // AP对象 TODO 没研究过JTAG AP，以后添加。
 struct ap{
@@ -383,4 +376,4 @@ void adapter_DAP_CleanCommandQueue(AdapterObject *adapterObj);
 const char *adapter_Transport2Str(enum transportType type);
 const char *adapter_Status2Str(enum adapterStatus type);
 
-#endif /* SRC_ADAPTER_ADAPTER_H_ */
+#endif /* SRC_ADAPTER_ADAPTER_PRIVATE_H_ */
