@@ -23,16 +23,14 @@
 enum {
 	ADPT_SUCCESS = 0,	// 成功
 	ADPT_FAILED,	// 失败
-	ADPT_ERR_
+	ADPT_ERR_TRANSPORT_ERROR,	// 底层传输错误
+	ADPT_ERR_PROTOCOL_ERROR,	// 传输协议错误
+	ADPT_ERR_NO_DEVICE,	// 找不到设备
+	ADPT_ERR_INTERNAL_ERROR,	// 内部错误,不是由于Adapter功能部分造成的失败
 };
 
-/**
- * 仿真器工作模式,JTAG模式还是DAP模式
- */
-enum transfertMode {
-	ADPT_MODE_JTAG,
-	ADPT_MODE_SWD
-};
+/* 仿真器对象 */
+typedef struct adapter *Adapter;
 
 // 仿真器的状态
 enum adapterStatus {
@@ -41,9 +39,6 @@ enum adapterStatus {
 	ADPT_STATUS_RUNING,		// Adapter正在运行
 	ADPT_STATUS_IDLE		// Adapter空闲
 };
-
-/*  */
-typedef struct adapter *Adapter;
 
 /**
  * Status - 设置仿真器状态
@@ -90,7 +85,15 @@ typedef int (*ADPT_RESET)(
 );
 
 /**
- * SetTransferType - 设置传输类型:DAP还是JTAG
+ * 仿真器工作模式,JTAG模式还是DAP模式
+ */
+enum transfertMode {
+	ADPT_MODE_JTAG,
+	ADPT_MODE_SWD
+};
+
+/**
+ * SetTransferMode - 设置传输类型:DAP还是JTAG
  * 参数:
  *	self:Adapter对象自身
  *	mode:仿真器工作模式,DAP还是JTAG
@@ -118,7 +121,6 @@ typedef int (*ADPT_SET_TRANSFER_MODE)(
 #define SWJ_PIN_TDO				0x1 << SWJ_PIN_TDO_POS			// TDO
 #define SWJ_PIN_nTRST			0x1 << SWJ_PIN_nTRST_POS		// nTRST
 #define SWJ_PIN_nRESET			0x1 << SWJ_PIN_nRESET_POS       // nRESET
-
 
 /**
  * JtagPins - 读写仿真器的JTAG引脚
@@ -318,46 +320,28 @@ typedef int (*ADPT_DAP_CLEAN_PENDING)(
  */
 struct adapter {
 	/* 属性 */
-	// JTAG 当前状态
-	enum JTAG_TAP_State currState;
-	// 当前传输协议
-	enum transfertMode currTransMode;
+	enum JTAG_TAP_State currState;		// JTAG 当前状态
+	enum transfertMode currTransMode;	// 当前传输协议
 
 	/* 服务 */
-	// 仿真器状态指示
-	ADPT_SET_STATUS SetStatus;
-	// 设置仿真器的工作频率
-	ADPT_SET_FREQUENT SetFrequent;
-	// 仿真器复位
-	ADPT_RESET Reset;
-	// 设置传输类型:DAP还是JTAG
-	ADPT_SET_TRANSFER_MODE SetTransferMode;
+	ADPT_SET_STATUS SetStatus;				// 仿真器状态指示
+	ADPT_SET_FREQUENT SetFrequent;			// 设置仿真器的工作频率
+	ADPT_RESET Reset;						// 仿真器复位
+	ADPT_SET_TRANSFER_MODE SetTransferMode;	// 设置传输类型:DAP还是JTAG
 
-	// 读写仿真器的JTAG引脚
-	ADPT_JTAG_PINS JtagPins;
-	// 交换TDI和TDO的数据
-	ADPT_JTAG_EXCHANGE_DATA JtagExchangeData;
-	// 在Idle状态等待几个周期
-	ADPT_JTAG_IDLE JtagIdle;
-	// 切换到JTAG状态机的某个状态
-	ADPT_JTAG_TO_STATE JtagToState;
-	// 提交Pending的动作
-	ADPT_JTAG_COMMIT JtagCommit;
-	// 清除pending的动作
-	ADPT_JTAG_CLEAN_PENDING JtagCleanPending;
+	ADPT_JTAG_PINS JtagPins;					// 读写仿真器的JTAG引脚
+	ADPT_JTAG_EXCHANGE_DATA JtagExchangeData;	// 交换TDI和TDO的数据
+	ADPT_JTAG_IDLE JtagIdle;					// 在Idle状态等待几个周期
+	ADPT_JTAG_TO_STATE JtagToState;				// 切换到JTAG状态机的某个状态
+	ADPT_JTAG_COMMIT JtagCommit;				// 提交Pending的动作
+	ADPT_JTAG_CLEAN_PENDING JtagCleanPending;	// 清除pending的动作
 
-	// 单次读:AP或者DP,寄存器编号
-	ADPT_DAP_SINGLE_READ DapSingleRead;
-	// 单次写:AP或者DP,寄存器编号
-	ADPT_DAP_SINGLE_WRITE DapSingleWrite;
-	// 连续读
-	ADPT_DAP_MULTI_READ DapMultiRead;
-	// 连续写
-	ADPT_DAP_MULTI_WRITE DapMultiWrite;
-	// 提交Pending动作
-	ADPT_DAP_COMMIT DapCommit;
-	// 清除Pending的动作
-	ADPT_DAP_CLEAN_PENDING DapCleanPending;
+	ADPT_DAP_SINGLE_READ DapSingleRead;		// 单次读:AP或者DP,寄存器编号
+	ADPT_DAP_SINGLE_WRITE DapSingleWrite;	// 单次写:AP或者DP,寄存器编号
+	ADPT_DAP_MULTI_READ DapMultiRead;		// 连续读
+	ADPT_DAP_MULTI_WRITE DapMultiWrite;		// 连续写
+	ADPT_DAP_COMMIT DapCommit;				// 提交Pending动作
+	ADPT_DAP_CLEAN_PENDING DapCleanPending;	// 清除Pending的动作
 };
 
 /**

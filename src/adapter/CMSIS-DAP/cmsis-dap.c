@@ -10,28 +10,9 @@
 #include <string.h>
 
 #include "misc/log.h"
-#include "debugger/cmsis-dap.h"
+#include "adapter/CMSIS-DAP/cmsis-dap.h"
 
 #include "misc/misc.h"
-
-/**
- * 这个宏是用来作为与cmsis-dap通信函数的外包部分
- * 该宏实现自动申请cmsis-dap返回包缓冲空间并且带函数执行结束后
- * 释放该空间
- */
-#define CMDAP_FUN_WARP(pa,func,...) ({	\
-	uint8_t *responseBuff; BOOL result = FALSE;	\
-	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap*, (pa));	\
-	assert(cmsis_dapObj->PacketSize > 0);	\
-	if((responseBuff = calloc(cmsis_dapObj->PacketSize, sizeof(uint8_t))) == NULL){	\
-		log_warn("Alloc reply packet buffer memory failed.");	\
-		result = FALSE;	\
-	}else{	\
-		result = (func)(responseBuff, pa, ##__VA_ARGS__);	\
-		free(responseBuff);	\
-	}	\
-	result;	\
-})
 
 /**
  * 由多少个比特位构造出多少个字节，包括控制字
@@ -48,8 +29,9 @@
 })
 
 // CMSIS-DAP支持的仿真传输协议类型
-static const enum transportType supportTrans[] = {JTAG, SWD, UNKNOW_NULL};	// 必须以UNKNOW_NULL结尾
-static BOOL init(AdapterObject *adapterObj);
+static const enum transfertMode supportTrans[] = {ADPT_MODE_JTAG, ADPT_MODE_SWD};
+
+static BOOL init(struct cmsis_dap *cmdapObj);
 static BOOL deinit(AdapterObject *adapterObj);
 static BOOL selectTrans(AdapterObject *adapterObj, enum transportType type);
 static BOOL operate(AdapterObject *adapterObj, int operate, ...);
@@ -57,82 +39,117 @@ static void destroy(AdapterObject *adapterObj);
 
 /**
  * 创建新的CMSIS-DAP仿真器对象
+ * 参数:
+ * 	usbObj:USB对象
  */
-BOOL NewCMSIS_DAP(struct cmsis_dap *cmsis_dapObj){
-	assert(cmsis_dapObj != NULL);
-	AdapterObject *adapterObj = CAST(AdapterObject *, cmsis_dapObj);
-	// 清空数据
-	memset(cmsis_dapObj, 0x0, sizeof(struct cmsis_dap));
-	// 构造Adapter对象
-	if(__CONSTRUCT(Adapter)(adapterObj, "ARM CMSIS-DAP") == FALSE){
-		log_warn("Failed to Init AdapterObject.");
-		return FALSE;
+Adapter CreateCmsisDap(void){
+	struct cmsis_dap *obj = calloc(1, sizeof(struct cmsis_dap));
+	if(!obj){
+		log_error("CreateCmsisDap:Can not create object.");
+		return NULL;
 	}
-	// 构造USB对象
-	if(__CONSTRUCT(USB)(&cmsis_dapObj->usbObj) == FALSE){
-		__DESTORY(Adapter)(adapterObj);
-		log_warn("Failed to create USB object.");
-		return FALSE;
+	// 创建USB对象
+	USB usbObj = CreateUSB();
+	if(!usbObj){
+		log_error("Failed to get USB object.");
+		free(obj);
+		return NULL;
 	}
+	// 设置参数
+	obj->usbObj = usbObj;
+	// 设置接口参数
+	obj->adaperAPI.SetStatus = NULL;
+	obj->adaperAPI.SetFrequent = NULL;
+	obj->adaperAPI.Reset = NULL;
+	obj->adaperAPI.SetTransferMode = NULL;
 
-	// 设置该设备支持的传输类型
-	adapterObj->supportedTrans = supportTrans;
-	adapterObj->currTrans = UNKNOW_NULL;
-	// 配置方法函数
-	adapterObj->Init = init;
-	adapterObj->Deinit = deinit;
-	adapterObj->SelectTrans = selectTrans;
-	adapterObj->Operate = operate;
-	adapterObj->Destroy = destroy;
+	obj->adaperAPI.JtagPins = NULL;
+	obj->adaperAPI.JtagExchangeData = NULL;
+	obj->adaperAPI.JtagIdle = NULL;
+	obj->adaperAPI.JtagToState = NULL;
+	obj->adaperAPI.JtagCommit = NULL;
+	obj->adaperAPI.JtagCleanPending = NULL;
 
-	cmsis_dapObj->Connected = FALSE;
-	return TRUE;
+	obj->adaperAPI.DapSingleRead = NULL;
+	obj->adaperAPI.DapSingleWrite = NULL;
+	obj->adaperAPI.DapMultiRead = NULL;
+	obj->adaperAPI.DapMultiWrite = NULL;
+	obj->adaperAPI.DapCommit = NULL;
+	obj->adaperAPI.DapCleanPending = NULL;
+
+	obj->connected = FALSE;
+	return (Adapter)&obj->adaperAPI;
 }
 
 // 释放CMSIS-DAP对象
-static void destroy(AdapterObject *adapterObj){
-	assert(adapterObj != NULL);
-	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
+void DestroyCmsisDap(Adapter *adapterObj){
+	assert(*adapterObj != NULL);
+	struct cmsis_dap *cmdapObj = container_of(*adapterObj, struct cmsis_dap, adaperAPI);
 	// 关闭USB对象
-	if(cmsis_dapObj->Connected == TRUE){
-		USBClose(&cmsis_dapObj->usbObj);
-		cmsis_dapObj->Connected = FALSE;
+	if(cmdapObj->connected == TRUE){
+		log_debug("DestroyCmsisDap: Disconnect USB.");
+		// 断开USB
+		cmdapObj->usbObj->Close(cmdapObj->usbObj);
+		cmdapObj->connected = FALSE;
 	}
 	// 释放USB对象
-	__DESTORY(USB)(&cmsis_dapObj->usbObj);
-	// 反初始化Adapter对象
-	__DESTORY(Adapter)(adapterObj);
+	DestoryUSB(&cmdapObj->usbObj);
+	free(cmdapObj);
+	*adapterObj = NULL;
 }
 
 // 搜索并连接CMSIS-DAP仿真器
-BOOL Connect_CMSIS_DAP(struct cmsis_dap *cmsis_dapObj, const uint16_t *vids, const uint16_t *pids, const char *serialNum){
-	assert(cmsis_dapObj != NULL);
-	int idx = 0;
-	//如果当前已连接则不重新连接
-	if(cmsis_dapObj->Connected == TRUE) return TRUE;
+int ConnectCmsisDap(Adapter self, const uint16_t *vids, const uint16_t *pids, const char *serialNum){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
 
-	for(; vids[idx] && pids[idx]; idx++){
-		log_debug("Try connecting vid: 0x%02x, pid: 0x%02x usb device.", vids[idx], pids[idx]);
-		if(USBOpen(&cmsis_dapObj->usbObj, vids[idx], pids[idx], serialNum)){
-			log_info("Successful connection vid: 0x%02x, pid: 0x%02x usb device.", vids[idx], pids[idx]);
-			// 复位设备
-			USBResetDevice(&cmsis_dapObj->usbObj);
-			// 标志已连接
-			cmsis_dapObj->Connected = TRUE;
-			// 选择配置和声明接口
-			if(USBSetConfiguration(&cmsis_dapObj->usbObj, 0) != TRUE){
-				log_warn("USBSetConfiguration Failed.");
-				return FALSE;
+	int idx = 0;
+	//如果当前没有连接,则连接CMSIS-DAP设备
+	if(cmdapObj->connected != TRUE) {
+		for(; vids[idx] && pids[idx]; idx++){
+			log_debug("Try connecting vid: 0x%02x, pid: 0x%02x usb device.", vids[idx], pids[idx]);
+			if(cmdapObj->usbObj->Open(cmdapObj->usbObj, vids[idx], pids[idx], serialNum) == USB_SUCCESS){
+				log_info("Successful connection vid: 0x%02x, pid: 0x%02x usb device.", vids[idx], pids[idx]);
+				// 复位设备
+				USBResetDevice(&cmdapObj->usbObj);
+				// 标志已连接
+				cmdapObj->Connected = TRUE;
+				// 选择配置和声明接口
+				if(cmdapObj->usbObj->SetConfiguration(cmdapObj->usbObj, 0) != USB_SUCCESS){
+					log_warn("USB.SetConfiguration failed.");
+					return ADPT_ERR_TRANSPORT_ERROR;
+				}
+				if(cmdapObj->usbObj->ClaimInterface(cmdapObj->usbObj, 3, 0, 0, 3) != USB_SUCCESS){
+					log_warn("USB.SetConfiguration failed.");
+					return ADPT_ERR_TRANSPORT_ERROR;
+				}
+				return ADPT_SUCCESS;
 			}
-			if(USBClaimInterface(&cmsis_dapObj->usbObj, 3, 0, 0, 3) != TRUE){
-				log_warn("Claim interface failed.");
-				return FALSE;
-			}
-			return TRUE;
 		}
+		log_warn("No suitable device found.");
+		return ADPT_ERR_NO_DEVICE;
 	}
-	log_warn("No suitable device found.");
-	return FALSE;
+	// 执行初始化
+	if(cmdapObj->inited != TRUE) {
+
+	}
+
+	return ADPT_FAILED;
+}
+
+/**
+ *
+ */
+BOOL DisconnectCmsisDap(uint8_t *respBuff, AdapterObject *adapterObj){
+	assert(adapterObj != NULL);
+	uint8_t command[1] = {CMDAP_ID_DAP_Disconnect};
+	DAP_EXCHANGE_DATA(adapterObj, command, 1, respBuff);
+	// 检查返回值
+	if(respBuff[1] != DAP_OK){
+		log_warn("Disconnect execution failed.");
+		return FALSE;
+	}
+	return TRUE;
 }
 
 /**
@@ -170,116 +187,100 @@ static int DAPWrite(AdapterObject *adapterObj, uint8_t *data, int len){
 	DAPRead((pa), (buff));
 
 // 初始化CMSIS-DAP设备
-static BOOL init(AdapterObject *adapterObj){
-	assert(adapterObj != NULL);
-	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
-	// 判断是否已经执行过初始化
-	if(adapterObj->isInit == TRUE){
-		return TRUE;
-	}
+static int init(struct cmsis_dap *cmdapObj){
+	assert(cmdapObj != NULL);
 	char capablity;
+	int transferred;	// usb传输字节数
 
-	USBObject *usbObj = &cmsis_dapObj->usbObj;
-	uint8_t command[2] = {ID_DAP_Info, DAP_ID_PACKET_SIZE}, *resp;	// 命令存储缓冲和返回值缓冲区
-	if((resp = calloc(usbObj->readEPMaxPackSize, sizeof(uint8_t))) == NULL){
+	uint8_t command[2] = {CMDAP_ID_DAP_Info, CMDAP_ID_PACKET_SIZE}, *resp;	// 命令存储缓冲和返回值缓冲区
+	if((resp = calloc(cmdapObj->usbObj->readMaxPackSize, sizeof(uint8_t))) == NULL){
 		log_warn("Alloc response buffer failed.");
-		return FALSE;
+		return ADPT_ERR_INTERNAL_ERROR;
 	}
 	// 获得DAP_Info 判断
-	log_info("CMSIS-DAP Init.");
+	log_info("Init CMSIS-DAP.");
 	// 先以endpoint最大包长读取packet大小，然后读取剩下的
-	usbObj->Write(usbObj, command, 2, 0);
-	usbObj->Read(usbObj, resp, usbObj->readEPMaxPackSize, 0);
+	cmdapObj->usbObj->Write(cmdapObj->usbObj, command, 2, 0, &transferred);
+	cmdapObj->usbObj->Read(cmdapObj->usbObj, resp, cmdapObj->usbObj->readMaxPackSize, 0, &transferred);
 
 	// 判断返回值是否是一个16位的数字
 	if(resp[0] != 0 || resp[1] != 2){
 		free(resp);
 		log_warn("Get packet size failed.");
-		return FALSE;
+		return ADPT_ERR_PROTOCOL_ERROR;
 	}
 	// 取得包长度
-	cmsis_dapObj->PacketSize = *CAST(uint16_t *, resp+2);
-	if(cmsis_dapObj->PacketSize == 0){
+	cmdapObj->PacketSize = *CAST(uint16_t *, resp+2);
+	if(cmdapObj->PacketSize == 0){
 		free(resp);
 		log_warn("Packet Size is Zero!!!");
-		return FALSE;
+		return ADPT_ERR_PROTOCOL_ERROR;
 	}
-	// 重新分配缓冲区大小
-	if((resp = realloc(resp, cmsis_dapObj->PacketSize * sizeof(uint8_t))) == NULL){
+	// 重新分配缓冲区大小 XXX realloc 这块没有检查失败时内存释放?
+	if((resp = realloc(resp, cmdapObj->PacketSize * sizeof(uint8_t))) == NULL){
 		log_warn("Alloc response buffer failed.");
-		return FALSE;
+		return ADPT_ERR_INTERNAL_ERROR;
 	}
-	log_info("CMSIS-DAP the maximum Packet Size is %d.", cmsis_dapObj->PacketSize);
+	log_info("CMSIS-DAP the maximum Packet Size is %d.", cmdapObj->PacketSize);
 	// 读取剩下的内容
-	if(cmsis_dapObj->PacketSize > usbObj->readEPMaxPackSize){
-		int rest_len = cmsis_dapObj->PacketSize - usbObj->readEPMaxPackSize;
-		usbObj->Read(usbObj, resp, rest_len > usbObj->readEPMaxPackSize ? rest_len : usbObj->readEPMaxPackSize, 0);
+	if(cmdapObj->PacketSize > cmdapObj->usbObj->readMaxPackSize){
+		int rest_len = cmdapObj->PacketSize - cmdapObj->usbObj->readMaxPackSize;
+		// XXX 当初为什么这样写?
+		// FIXME 读取剩下的内容,不应该是追加到resp后面吗
+		cmdapObj->usbObj->Read(cmdapObj->usbObj, resp,
+				rest_len > cmdapObj->usbObj->readMaxPackSize ? rest_len : cmdapObj->usbObj->readMaxPackSize,
+						0, &transferred);
 	}
 	// 获得CMSIS-DAP固件版本
-	command[1] = DAP_ID_FW_VER;
+	command[1] = CMDAP_ID_FW_VER;
 	DAP_EXCHANGE_DATA(adapterObj, command, 2, resp);
 
-	cmsis_dapObj->Version = (int)(atof(resp+2) * 100); // XXX 改成了整数
-	log_info("CMSIS-DAP FW Version is %f.", cmsis_dapObj->Version / 100.0);
+	cmdapObj->Version = (int)(atof(resp+2) * 100); // XXX 改成了整数
+	log_info("CMSIS-DAP FW Version is %f.", cmdapObj->Version / 100.0);
 
 	// 获得CMSIS-DAP的最大包长度和最大包个数
 	command[1] = DAP_ID_PACKET_COUNT;
 	DAP_EXCHANGE_DATA(adapterObj, command, 2, resp);
-	cmsis_dapObj->MaxPcaketCount = *CAST(uint8_t *, resp+2);
-	log_info("CMSIS-DAP the maximum Packet Count is %d.", cmsis_dapObj->MaxPcaketCount);
+	cmdapObj->MaxPcaketCount = *CAST(uint8_t *, resp+2);
+	log_info("CMSIS-DAP the maximum Packet Count is %d.", cmdapObj->MaxPcaketCount);
 
 	// Capabilities. The information BYTE contains bits that indicate which communication methods are provided to the Device.
 	command[1] = DAP_ID_CAPABILITIES;
 	DAP_EXCHANGE_DATA(adapterObj, command, 2, resp);
 
 	// XXX Version改成了整数，乘以100
-	switch(cmsis_dapObj->Version){
+	switch(cmdapObj->Version){
 	case 110: // 1.1f
 		// 获得info0
 		capablity = *CAST(uint8_t *, resp+2);
-		CMSIS_DAP_SET_CAP(cmsis_dapObj, capablity, 2, CMDAP_CAP_SWO_UART);
-		CMSIS_DAP_SET_CAP(cmsis_dapObj, capablity, 3, CMDAP_CAP_SWO_MANCHESTER);
-		CMSIS_DAP_SET_CAP(cmsis_dapObj, capablity, 4, CMDAP_CAP_ATOMIC);
-		CMSIS_DAP_SET_CAP(cmsis_dapObj, capablity, 5, CMDAP_CAP_SWD_SEQUENCE);
-		CMSIS_DAP_SET_CAP(cmsis_dapObj, capablity, 6, CMDAP_CAP_TEST_DOMAIN_TIMER);
+		CMSIS_DAP_SET_CAP(cmdapObj, capablity, 2, CMDAP_CAP_SWO_UART);
+		CMSIS_DAP_SET_CAP(cmdapObj, capablity, 3, CMDAP_CAP_SWO_MANCHESTER);
+		CMSIS_DAP_SET_CAP(cmdapObj, capablity, 4, CMDAP_CAP_ATOMIC);
+		CMSIS_DAP_SET_CAP(cmdapObj, capablity, 5, CMDAP_CAP_SWD_SEQUENCE);
+		CMSIS_DAP_SET_CAP(cmdapObj, capablity, 6, CMDAP_CAP_TEST_DOMAIN_TIMER);
 
 		if(*CAST(uint8_t *, resp+1) == 2){	// 是否存在info1
 			// 获得info1
 			capablity = *CAST(uint8_t *, resp+3);
-			CMSIS_DAP_SET_CAP(cmsis_dapObj, capablity, 0, CMDAP_CAP_TRACE_DATA_MANAGE);
+			CMSIS_DAP_SET_CAP(cmdapObj, capablity, 0, CMDAP_CAP_TRACE_DATA_MANAGE);
 		}
 		/* no break */
 
 	case 100: // 1.0f
 		// 获得info0
 		capablity = *CAST(uint8_t *, resp+2);
-		CMSIS_DAP_SET_CAP(cmsis_dapObj, capablity, 0, CMDAP_CAP_SWD);
-		CMSIS_DAP_SET_CAP(cmsis_dapObj, capablity, 1, CMDAP_CAP_JTAG);
+		CMSIS_DAP_SET_CAP(cmdapObj, capablity, 0, CMDAP_CAP_SWD);
+		CMSIS_DAP_SET_CAP(cmdapObj, capablity, 1, CMDAP_CAP_JTAG);
 		break;
 
 	default: break;
 	}
-	log_info("CMSIS-DAP Capabilities 0x%X.", cmsis_dapObj->capablityFlag);
+	log_info("CMSIS-DAP Capabilities 0x%X.", cmdapObj->capablityFlag);
 	// 在初始化过程中不选择transport
 	adapterObj->currTrans = UNKNOW_NULL;
 	free(resp);
 	// 标记当前Adapter已经执行过初始化
 	adapterObj->isInit = TRUE;
-	return TRUE;
-}
-
-/**
- * Disconnect
- */
-static BOOL DAP_Disconnect(uint8_t *respBuff, AdapterObject *adapterObj){
-	assert(adapterObj != NULL);
-	uint8_t command[1] = {ID_DAP_Disconnect};
-	DAP_EXCHANGE_DATA(adapterObj, command, 1, respBuff);
-	// 检查返回值
-	if(respBuff[1] != DAP_OK){
-		log_warn("Disconnect execution failed.");
-		return FALSE;
-	}
 	return TRUE;
 }
 

@@ -199,6 +199,11 @@ typedef int (*USB_READ_WRITE)(
  * USB接口定义结构体
  */
 struct usb {
+	/* 属性,只读!! */
+	uint16_t readMaxPackSize;	// 读端点支持的最大包长度
+	uint16_t writeMaxPackSize;	// 写端点支持的最大包长度
+
+	/* 服务 */
 	USB_OPEN Open;
 	USB_CLOSE Close;
 	USB_RESET Reset;

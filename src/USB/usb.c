@@ -31,13 +31,13 @@ static int unsupportRW(USBObject *usbObj, uint8_t *data, int dataLength, int tim
 USB CreateUSB(void){
 	struct _usb_private *usbObj = calloc(1, sizeof(struct _usb_private));
 	if(!usbObj){
-		log_error("CreateUSB:Can not Create Object!");
-		return 0;
+		log_error("CreateUSB:Can not create object!");
+		return NULL;
 	}
 	if (libusb_init(&usbObj->libusbContext) < 0){
 		log_error("libusb_init() failed.");
 		free(usbObj);
-		return 0;
+		return NULL;
 	}
 	// 填入初始接口
 	usbObj->usbInterface.Read = usbObj->usbInterface.Write = unsupportRW;
@@ -62,7 +62,7 @@ void DestoryUSB(USB *self){
 	assert(usbObj->libusbContext != NULL);
 	libusb_exit(usbObj->libusbContext);
 	free(usbObj);
-	*self = 0;
+	*self = NULL;
 }
 
 /**
@@ -420,10 +420,12 @@ static int USBClaimInterface(USB self, uint8_t IFClass, uint8_t IFSubclass, uint
 				usbObj->readEP = epNum;
 				// 获得传输的包大小
 				usbObj->readEPMaxPackSize = epDesc->wMaxPacketSize & 0x7ff;
+				usbObj->usbInterface.readMaxPackSize = usbObj->readEPMaxPackSize;
 				log_debug("usb end point 'in' 0x%02x, max packet size %d bytes.", epNum, usbObj->readEPMaxPackSize);
 			}else{
 				usbObj->writeEP = epNum;
 				usbObj->writeEPMaxPackSize = epDesc->wMaxPacketSize & 0x7ff;
+				usbObj->usbInterface.writeMaxPackSize = usbObj->writeEPMaxPackSize;
 				log_debug("usb end point 'out' 0x%02x, max packet size %d bytes.", epNum, usbObj->writeEPMaxPackSize);
 			}
 
