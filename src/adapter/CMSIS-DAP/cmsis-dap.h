@@ -80,8 +80,8 @@
 #define CMDAP_ID_DAP_Invalid                  0xFFU
 
 // DAP Status Code
-#define DAP_OK                          0U
-#define DAP_ERROR                       0xFFU
+#define CMDAP_OK                          0U
+#define CMDAP_ERROR                       0xFFU
 
 // DAP ID
 #define CMDAP_ID_VENDOR                   1U
@@ -133,11 +133,11 @@ enum JTAG_InstrType{
 // JTAG指令对象
 struct JTAG_Command{
 	enum JTAG_InstrType type;	// JTAG指令类型
-	struct list_head list_entry;	// 链表对象
+	struct list_head list_entry;	// JTAG指令链表对象
 	// 指令结构共用体
 	union {
 		struct {
-			TMS_SeqInfo seqInfo;
+			enum JTAG_TAP_State toState;
 		} statusMove;
 		struct {
 			uint8_t *data;	// 需要交换的数据地址
@@ -158,7 +158,7 @@ enum DAP_InstrType{
 // DAP指令对象
 struct DAP_Command{
 	enum DAP_InstrType type;	// DAP指令类型
-	struct list_head list_entry;
+	struct list_head list_entry;	// DAP指令链表对象
 	// 指令结构共用体
 	union {
 		struct {
@@ -186,7 +186,7 @@ struct DAP_Command{
 			// 指令的数据
 			uint32_t *data;
 			int count;	// 读写次数
-		} MultiReg;	// 多次读写寄存器
+		} multiReg;	// 多次读写寄存器
 	} instr;
 };
 
@@ -201,43 +201,72 @@ struct cmsis_dap {
 	int Version;	// CMSIS-DAP 版本
 	int MaxPcaketCount;	// 缓冲区最多容纳包的个数
 	int PacketSize;	// 包最大长度
+	uint8_t *respBuffer;	// 应答缓冲区
 	uint32_t capablityFlag;	// 该仿真器支持的功能
 
 	enum JTAG_TAP_State currState;	// JTAG 当前状态
 	struct list_head JtagInsQueue;	// JTAG指令队列，元素类型：struct JTAG_Command
 	struct list_head DapInsQueue;	// DAP指令队列，元素类型struct DAP_Command
-
+	int tapIndex;	// TAP在扫描链中的索引,在DAP相关函数中会用到
 	// TODO 实现更高版本仿真器支持 SWO、
 };
 
-// 判断是否支持某些功能
-#define CMSIS_DAP_HAS_CAPALITY(p,flags) (((p)->capablityFlag & (flags)) == (flags))
+/*
+Available transfer protocols to target:
+    Info0 - Bit 0: 1 = SWD Serial Wire Debug communication is implemented (0 = SWD Commands not implemented).
+    Info0 - Bit 1: 1 = JTAG communication is implemented (0 = JTAG Commands not implemented).
 
+Serial Wire Trace (SWO) support:
+    Info0 - Bit 2: 1 = SWO UART - UART Serial Wire Output is implemented (0 = not implemented).
+    Info0 - Bit 3: 1 = SWO Manchester - Manchester Serial Wire Output is implemented (0 = not implemented).
+
+Command extensions for transfer protocol:
+    Info0 - Bit 4: 1 = Atomic Commands - Atomic Commands support is implemented (0 = Atomic Commands not implemented).
+
+Time synchronisation via Test Domain Timer:
+    Info0 - Bit 5: 1 = Test Domain Timer - debug unit support for Test Domain Timer is implemented (0 = not implemented).
+
+SWO Streaming Trace support:
+    Info0 - Bit 6: 1 = SWO Streaming Trace is implemented (0 = not implemented).
+ */
 // CMSIS功能标志位
-#define CMDAP_CAP_SWD					0x1 << 0
-#define CMDAP_CAP_JTAG					0x1 << 1
-#define CMDAP_CAP_SWO_UART				0x1 << 2
-#define CMDAP_CAP_SWO_MANCHESTER		0x1 << 3
-#define CMDAP_CAP_ATOMIC				0x1 << 4
-#define CMDAP_CAP_SWD_SEQUENCE			0x1 << 5
-#define CMDAP_CAP_TEST_DOMAIN_TIMER		0x1 << 6
-#define CMDAP_CAP_TRACE_DATA_MANAGE		0x1 << 7
-
-// 设置标志位
-// 如果ca的第bit位为1，则执行p->capablityFlag |= flag
-#define CMSIS_DAP_SET_CAP(p,ca,bit,flag) \
-	if( ((ca) & (0x1 << (bit))) != 0) (p)->capablityFlag |= (flag);
+#define CMDAP_CAP_SWD					0
+#define CMDAP_CAP_JTAG					1
+#define CMDAP_CAP_SWO_UART				2
+#define CMDAP_CAP_SWO_MANCHESTER		3
+#define CMDAP_CAP_ATOMIC				4
+#define CMDAP_CAP_SWD_SEQUENCE			5
+#define CMDAP_CAP_TEST_DOMAIN_TIMER		6
+#define CMDAP_CAP_TRACE_DATA_MANAGE		7
 
 // 创建CMSIS-DAP对象
-BOOL NewCMSIS_DAP(struct cmsis_dap *cmsis_dapObj);
+Adapter CreateCmsisDap(void);
 // 销毁CMSIS-DAP对象
+void DestroyCmsisDap(
+		IN Adapter *self
+);
 
-// 搜索并连接CMSIS-DAP仿真器
-BOOL Connect_CMSIS_DAP(struct cmsis_dap *cmsis_dapObj, const uint16_t *vids, const uint16_t *pids, const char *serialNum);
-// 断开仿真器
+/**
+ * ConnectCmsisDap - 连接CMSIS-DAP仿真器
+ * 参数:
+ * vids: Vendor ID 列表
+ * pids: Product ID 列表
+ * serialNum:设备序列号
+ * 返回:
+ */
+int ConnectCmsisDap(
+		IN Adapter self,
+		IN const uint16_t *vids,
+		IN const uint16_t *pids,
+		IN const char *serialNum
+);
 
-BOOL CMSIS_DAP_JTAG_Configure(AdapterObject *adapterObj, uint8_t count, uint8_t *irData);
-BOOL CMSIS_DAP_TransferConfigure(AdapterObject *adapterObj, uint8_t idleCycle, uint16_t waitRetry, uint16_t matchRetry);
-BOOL CMSIS_DAP_SWD_Configure(AdapterObject *adapterObj, uint8_t cfg);
+/**
+ * DisconnectCmsisDap - 断开CMSIS-DAP设备
+ *
+ */
+int DisconnectCmsisDap(
+		IN Adapter self
+);
 
 #endif /* SRC_ADAPTER_CMSIS_DAP_CMSIS_DAP_H_ */

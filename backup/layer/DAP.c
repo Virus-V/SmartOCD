@@ -154,7 +154,7 @@ static int dap_select_ap(lua_State *L){
 static int dap_write_abort(lua_State *L){
 	DAPObject *dapObj = luaL_checkudata(L, 1, "obj.DAP");
 	uint32_t abort = (uint32_t)luaL_checkinteger(L, 2);
-	if(DAP_WriteAbort(dapObj, abort) == FALSE){
+	if(CmdapWriteAbort(dapObj, abort) == FALSE){
 		return luaL_error(L, "Read DP Register Failed!");
 	}
 	return 0;

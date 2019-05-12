@@ -380,7 +380,7 @@ BOOL DAP_CheckError(DAPObject *dapObj){
 /**
  * 写入Abort寄存器
  */
-BOOL DAP_WriteAbort(DAPObject *dapObj, uint32_t abort){
+BOOL CmdapWriteAbort(DAPObject *dapObj, uint32_t abort){
 	assert(dapObj != NULL);
 	int retry = dapObj->retry;
 	jmp_buf exception;

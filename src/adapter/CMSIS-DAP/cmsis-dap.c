@@ -28,77 +28,65 @@
 	byteCnt += tmp ? ((tmp + 7) >> 3) + 1 : 0;	\
 })
 
-// CMSIS-DAP支持的仿真传输协议类型
-static const enum transfertMode supportTrans[] = {ADPT_MODE_JTAG, ADPT_MODE_SWD};
-
-static BOOL init(struct cmsis_dap *cmdapObj);
-static BOOL deinit(AdapterObject *adapterObj);
-static BOOL selectTrans(AdapterObject *adapterObj, enum transportType type);
-static BOOL operate(AdapterObject *adapterObj, int operate, ...);
-static void destroy(AdapterObject *adapterObj);
+static int dapInit(struct cmsis_dap *cmdapObj);
 
 /**
- * 创建新的CMSIS-DAP仿真器对象
- * 参数:
- * 	usbObj:USB对象
+ * 从仿真器读数据放入cmdapObj->respBuffer中
+ * transferred:成功读取的字节数,当该函数返回成功时该值才有效
+ * 注意：该函数会读取固定大小 cmsis_dapObj->PacketSize
  */
-Adapter CreateCmsisDap(void){
-	struct cmsis_dap *obj = calloc(1, sizeof(struct cmsis_dap));
-	if(!obj){
-		log_error("CreateCmsisDap:Can not create object.");
-		return NULL;
+static int dapRead(struct cmsis_dap *cmdapObj, int *transferred){
+	assert(cmdapObj != NULL);
+	assert(cmdapObj->PacketSize != 0);
+	// 永久阻塞,所以函数返回时transferred肯定等于cmdapObj->PacketSize
+	if(cmdapObj->usbObj->Read(cmdapObj->usbObj, cmdapObj->respBuffer, cmdapObj->PacketSize, 0, transferred) != USB_SUCCESS){
+		log_error("Read from CMSIS-USB failed.");
+		return ADPT_ERR_TRANSPORT_ERROR;
 	}
-	// 创建USB对象
-	USB usbObj = CreateUSB();
-	if(!usbObj){
-		log_error("Failed to get USB object.");
-		free(obj);
-		return NULL;
-	}
-	// 设置参数
-	obj->usbObj = usbObj;
-	// 设置接口参数
-	obj->adaperAPI.SetStatus = NULL;
-	obj->adaperAPI.SetFrequent = NULL;
-	obj->adaperAPI.Reset = NULL;
-	obj->adaperAPI.SetTransferMode = NULL;
-
-	obj->adaperAPI.JtagPins = NULL;
-	obj->adaperAPI.JtagExchangeData = NULL;
-	obj->adaperAPI.JtagIdle = NULL;
-	obj->adaperAPI.JtagToState = NULL;
-	obj->adaperAPI.JtagCommit = NULL;
-	obj->adaperAPI.JtagCleanPending = NULL;
-
-	obj->adaperAPI.DapSingleRead = NULL;
-	obj->adaperAPI.DapSingleWrite = NULL;
-	obj->adaperAPI.DapMultiRead = NULL;
-	obj->adaperAPI.DapMultiWrite = NULL;
-	obj->adaperAPI.DapCommit = NULL;
-	obj->adaperAPI.DapCleanPending = NULL;
-
-	obj->connected = FALSE;
-	return (Adapter)&obj->adaperAPI;
+	log_trace("Read %d byte(s) from CMSIS-DAP.", *transferred);
+	return ADPT_SUCCESS;
 }
 
-// 释放CMSIS-DAP对象
-void DestroyCmsisDap(Adapter *adapterObj){
-	assert(*adapterObj != NULL);
-	struct cmsis_dap *cmdapObj = container_of(*adapterObj, struct cmsis_dap, adaperAPI);
-	// 关闭USB对象
-	if(cmdapObj->connected == TRUE){
-		log_debug("DestroyCmsisDap: Disconnect USB.");
-		// 断开USB
-		cmdapObj->usbObj->Close(cmdapObj->usbObj);
-		cmdapObj->connected = FALSE;
+/**
+ * 从仿真器写数据
+ * data:数据缓冲区指针
+ * len:要发送的数据长度
+ * transferred:成功读取的字节数,当该函数返回成功时该值才有效
+ */
+static int dapWrite(struct cmsis_dap *cmdapObj, uint8_t *data, int len, int *transferred){
+	assert(cmdapObj != NULL);
+	assert(cmdapObj->PacketSize != 0);
+	if(cmdapObj->usbObj->Write(cmdapObj->usbObj, data, len, 0, transferred) != USB_SUCCESS){
+		log_error("Write to CMSIS-USB failed.");
+		return ADPT_ERR_TRANSPORT_ERROR;
 	}
-	// 释放USB对象
-	DestoryUSB(&cmdapObj->usbObj);
-	free(cmdapObj);
-	*adapterObj = NULL;
+	//log_debug("-------------------------------------------");
+	//misc_PrintBulk(data, len, 16);
+	//log_debug("-------------------------------------------");
+	log_trace("Write %d byte(s) to CMSIS-DAP.", *transferred);
+	return ADPT_SUCCESS;
 }
 
-// 搜索并连接CMSIS-DAP仿真器
+/**
+ * 简单封装的数据交换的宏,该宏中的代码如果出错会造成函数返回
+ */
+#define DAP_EXCHANGE_DATA(cmObj,data,len) do {\
+	int _tmp,_resu;	\
+	_resu = dapWrite((cmObj), (data), (len), &_tmp); \
+	if(_resu != ADPT_SUCCESS){	\
+		log_error("Send command/data to CMSIS-DAP failed.");	\
+		return ADPT_ERR_TRANSPORT_ERROR;	\
+	}	\
+	_resu = dapRead((cmObj), &_tmp);	\
+	if(_resu != ADPT_SUCCESS){	\
+		log_error("Read command/data from CMSIS-DAP failed.");	\
+		return ADPT_ERR_TRANSPORT_ERROR;	\
+	}	\
+}while(0);
+
+/**
+ * 搜索并连接CMSIS-DAP仿真器
+ */
 int ConnectCmsisDap(Adapter self, const uint16_t *vids, const uint16_t *pids, const char *serialNum){
 	assert(self != NULL);
 	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
@@ -111,7 +99,7 @@ int ConnectCmsisDap(Adapter self, const uint16_t *vids, const uint16_t *pids, co
 			if(cmdapObj->usbObj->Open(cmdapObj->usbObj, vids[idx], pids[idx], serialNum) == USB_SUCCESS){
 				log_info("Successful connection vid: 0x%02x, pid: 0x%02x usb device.", vids[idx], pids[idx]);
 				// 复位设备
-				USBResetDevice(&cmdapObj->usbObj);
+				cmdapObj->usbObj->Reset(cmdapObj->usbObj);
 				// 标志已连接
 				cmdapObj->Connected = TRUE;
 				// 选择配置和声明接口
@@ -123,77 +111,51 @@ int ConnectCmsisDap(Adapter self, const uint16_t *vids, const uint16_t *pids, co
 					log_warn("USB.SetConfiguration failed.");
 					return ADPT_ERR_TRANSPORT_ERROR;
 				}
-				return ADPT_SUCCESS;
+				goto _TOINIT;	// 跳转到初始化部分
 			}
 		}
 		log_warn("No suitable device found.");
 		return ADPT_ERR_NO_DEVICE;
 	}
+_TOINIT:
 	// 执行初始化
 	if(cmdapObj->inited != TRUE) {
-
+		if(dapInit(cmdapObj) != ADPT_SUCCESS){
+			log_error("Cannot init CMSIS-DAP.");
+			return ADPT_FAILED;
+		}
+		cmdapObj->inited = TRUE;
 	}
-
-	return ADPT_FAILED;
+	// 发送连接包
+	log_info("CMSIS-DAP has been initialized.");
+	return ADPT_SUCCESS;
 }
 
 /**
- *
+ * 发送断开指令
  */
-BOOL DisconnectCmsisDap(uint8_t *respBuff, AdapterObject *adapterObj){
-	assert(adapterObj != NULL);
+int DisconnectCmsisDap(Adapter self){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
 	uint8_t command[1] = {CMDAP_ID_DAP_Disconnect};
-	DAP_EXCHANGE_DATA(adapterObj, command, 1, respBuff);
+	DAP_EXCHANGE_DATA(cmdapObj, command, 1);
 	// 检查返回值
-	if(respBuff[1] != DAP_OK){
+	if(cmdapObj->respBuffer[1] != CMDAP_OK){
 		log_warn("Disconnect execution failed.");
-		return FALSE;
+		return ADPT_FAILED;
 	}
-	return TRUE;
+	return ADPT_SUCCESS;
 }
-
-/**
- * 从仿真器读数据
- * buff是保存数据的缓冲区
- * 注意：该函数会读取固定大小 cmsis_dapObj->PacketSize
- */
-static int DAPRead(AdapterObject *adapterObj, uint8_t *buff){
-	assert(adapterObj != NULL);
-	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
-	assert(cmsis_dapObj->PacketSize != 0);
-	int length = cmsis_dapObj->usbObj.Read(&cmsis_dapObj->usbObj, buff, cmsis_dapObj->PacketSize, 0);
-	log_trace("Read %d byte(s) from %s.", length, adapterObj->DeviceDesc);
-	return length;
-}
-
-/**
- * 从仿真器写数据
- * data数数据缓冲区指针
- * len是要发送的数据长度
- */
-static int DAPWrite(AdapterObject *adapterObj, uint8_t *data, int len){
-	assert(adapterObj != NULL);
-	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
-	int length =  cmsis_dapObj->usbObj.Write(&cmsis_dapObj->usbObj, data, len, 0);
-	//log_debug("-------------------------------------------");
-	//misc_PrintBulk(data, len, 16);
-	//log_debug("-------------------------------------------");
-	log_trace("Write %d byte(s) to %s.", length, adapterObj->DeviceDesc);
-	return length;
-}
-
-#define DAP_EXCHANGE_DATA(pa,data,len,buff) \
-	DAPWrite((pa), (data), (len)); \
-	DAPRead((pa), (buff));
 
 // 初始化CMSIS-DAP设备
-static int init(struct cmsis_dap *cmdapObj){
+static int dapInit(struct cmsis_dap *cmdapObj){
 	assert(cmdapObj != NULL);
 	char capablity;
 	int transferred;	// usb传输字节数
 
-	uint8_t command[2] = {CMDAP_ID_DAP_Info, CMDAP_ID_PACKET_SIZE}, *resp;	// 命令存储缓冲和返回值缓冲区
-	if((resp = calloc(cmdapObj->usbObj->readMaxPackSize, sizeof(uint8_t))) == NULL){
+	uint8_t command[2] = {CMDAP_ID_DAP_Info, CMDAP_ID_PACKET_SIZE};
+	// 这块空间在cmsis_dap对象销毁时释放
+	if((cmdapObj->respBuffer = calloc(cmdapObj->usbObj->readMaxPackSize, sizeof(uint8_t))) == NULL){
 		log_warn("Alloc response buffer failed.");
 		return ADPT_ERR_INTERNAL_ERROR;
 	}
@@ -201,216 +163,196 @@ static int init(struct cmsis_dap *cmdapObj){
 	log_info("Init CMSIS-DAP.");
 	// 先以endpoint最大包长读取packet大小，然后读取剩下的
 	cmdapObj->usbObj->Write(cmdapObj->usbObj, command, 2, 0, &transferred);
-	cmdapObj->usbObj->Read(cmdapObj->usbObj, resp, cmdapObj->usbObj->readMaxPackSize, 0, &transferred);
+	cmdapObj->usbObj->Read(cmdapObj->usbObj, cmdapObj->respBuffer, cmdapObj->usbObj->readMaxPackSize, 0, &transferred);
 
 	// 判断返回值是否是一个16位的数字
-	if(resp[0] != 0 || resp[1] != 2){
-		free(resp);
+	if(cmdapObj->respBuffer[0] != 0 || cmdapObj->respBuffer[1] != 2){
 		log_warn("Get packet size failed.");
 		return ADPT_ERR_PROTOCOL_ERROR;
 	}
 	// 取得包长度
-	cmdapObj->PacketSize = *CAST(uint16_t *, resp+2);
+	cmdapObj->PacketSize = *CAST(uint16_t *, cmdapObj->respBuffer+2);
 	if(cmdapObj->PacketSize == 0){
-		free(resp);
 		log_warn("Packet Size is Zero!!!");
 		return ADPT_ERR_PROTOCOL_ERROR;
 	}
-	// 重新分配缓冲区大小 XXX realloc 这块没有检查失败时内存释放?
-	if((resp = realloc(resp, cmdapObj->PacketSize * sizeof(uint8_t))) == NULL){
-		log_warn("Alloc response buffer failed.");
+
+	// 重新分配缓冲区大小
+	uint8_t *resp_new;
+	if((resp_new = realloc(cmdapObj->respBuffer, cmdapObj->PacketSize * sizeof(uint8_t))) == NULL){
+		log_warn("realloc response buffer failed.");
 		return ADPT_ERR_INTERNAL_ERROR;
 	}
+	cmdapObj->respBuffer = resp_new;
+
 	log_info("CMSIS-DAP the maximum Packet Size is %d.", cmdapObj->PacketSize);
 	// 读取剩下的内容
 	if(cmdapObj->PacketSize > cmdapObj->usbObj->readMaxPackSize){
 		int rest_len = cmdapObj->PacketSize - cmdapObj->usbObj->readMaxPackSize;
-		// XXX 当初为什么这样写?
-		// FIXME 读取剩下的内容,不应该是追加到resp后面吗
-		cmdapObj->usbObj->Read(cmdapObj->usbObj, resp,
-				rest_len > cmdapObj->usbObj->readMaxPackSize ? rest_len : cmdapObj->usbObj->readMaxPackSize,
-						0, &transferred);
+		log_debug("Enlarge response buffer %d bytes.", rest_len);
+		cmdapObj->usbObj->Read(cmdapObj->usbObj, cmdapObj->respBuffer + cmdapObj->usbObj->readMaxPackSize,
+				rest_len, 0, &transferred);
 	}
+
 	// 获得CMSIS-DAP固件版本
 	command[1] = CMDAP_ID_FW_VER;
-	DAP_EXCHANGE_DATA(adapterObj, command, 2, resp);
-
-	cmdapObj->Version = (int)(atof(resp+2) * 100); // XXX 改成了整数
-	log_info("CMSIS-DAP FW Version is %f.", cmdapObj->Version / 100.0);
+	DAP_EXCHANGE_DATA(cmdapObj, command, 2);
+	cmdapObj->Version = (int)(atof(cmdapObj->respBuffer+2) * 100); // XXX 改成了整数
+	log_info("CMSIS-DAP FW Version is %s.", cmdapObj->respBuffer+2);
 
 	// 获得CMSIS-DAP的最大包长度和最大包个数
-	command[1] = DAP_ID_PACKET_COUNT;
-	DAP_EXCHANGE_DATA(adapterObj, command, 2, resp);
-	cmdapObj->MaxPcaketCount = *CAST(uint8_t *, resp+2);
+	command[1] = CMDAP_ID_PACKET_COUNT;
+	DAP_EXCHANGE_DATA(cmdapObj, command, 2);
+	cmdapObj->MaxPcaketCount = *CAST(uint8_t *, cmdapObj->respBuffer+2);
 	log_info("CMSIS-DAP the maximum Packet Count is %d.", cmdapObj->MaxPcaketCount);
 
 	// Capabilities. The information BYTE contains bits that indicate which communication methods are provided to the Device.
-	command[1] = DAP_ID_CAPABILITIES;
-	DAP_EXCHANGE_DATA(adapterObj, command, 2, resp);
+	command[1] = CMDAP_ID_CAPABILITIES;
+	DAP_EXCHANGE_DATA(cmdapObj, command, 2);
 
-	// XXX Version改成了整数，乘以100
-	switch(cmdapObj->Version){
-	case 110: // 1.1f
-		// 获得info0
-		capablity = *CAST(uint8_t *, resp+2);
-		CMSIS_DAP_SET_CAP(cmdapObj, capablity, 2, CMDAP_CAP_SWO_UART);
-		CMSIS_DAP_SET_CAP(cmdapObj, capablity, 3, CMDAP_CAP_SWO_MANCHESTER);
-		CMSIS_DAP_SET_CAP(cmdapObj, capablity, 4, CMDAP_CAP_ATOMIC);
-		CMSIS_DAP_SET_CAP(cmdapObj, capablity, 5, CMDAP_CAP_SWD_SEQUENCE);
-		CMSIS_DAP_SET_CAP(cmdapObj, capablity, 6, CMDAP_CAP_TEST_DOMAIN_TIMER);
-
-		if(*CAST(uint8_t *, resp+1) == 2){	// 是否存在info1
-			// 获得info1
-			capablity = *CAST(uint8_t *, resp+3);
-			CMSIS_DAP_SET_CAP(cmdapObj, capablity, 0, CMDAP_CAP_TRACE_DATA_MANAGE);
-		}
+	cmdapObj->capablityFlag = 0;	// 先把capablityFlag字段清零
+	switch(*CAST(uint8_t *, cmdapObj->respBuffer+1)){
+	case 4:
+		cmdapObj->capablityFlag |= *CAST(uint8_t *, cmdapObj->respBuffer+5) << 24;	// INFO3
 		/* no break */
-
-	case 100: // 1.0f
-		// 获得info0
-		capablity = *CAST(uint8_t *, resp+2);
-		CMSIS_DAP_SET_CAP(cmdapObj, capablity, 0, CMDAP_CAP_SWD);
-		CMSIS_DAP_SET_CAP(cmdapObj, capablity, 1, CMDAP_CAP_JTAG);
+	case 3:
+		cmdapObj->capablityFlag |= *CAST(uint8_t *, cmdapObj->respBuffer+4) << 16;	// INFO2
+		/* no break */
+	case 2:
+		cmdapObj->capablityFlag |= *CAST(uint8_t *, cmdapObj->respBuffer+3) << 8;	// INFO1
+		/* no break */
+	case 1:
+		cmdapObj->capablityFlag |= *CAST(uint8_t *, cmdapObj->respBuffer+2);	// INFO0
 		break;
-
-	default: break;
+	default:
+		log_warn("Capablity Data has unknow length: %d.", *CAST(uint8_t *, cmdapObj->respBuffer+1));
 	}
+
 	log_info("CMSIS-DAP Capabilities 0x%X.", cmdapObj->capablityFlag);
-	// 在初始化过程中不选择transport
-	adapterObj->currTrans = UNKNOW_NULL;
-	free(resp);
-	// 标记当前Adapter已经执行过初始化
-	adapterObj->isInit = TRUE;
-	return TRUE;
-}
 
-// 反初始化
-static BOOL deinit(AdapterObject *adapterObj){
-	assert(adapterObj != NULL);
-	// 判断是否初始化
-	if(adapterObj->isInit == FALSE){
-		return TRUE;
+	// 发送Connect命令,自动选择模式
+	command[0] = CMDAP_ID_DAP_Connect;
+	command[1] = CMDAP_PORT_AUTODETECT;
+	DAP_EXCHANGE_DATA(cmdapObj, command, 2);
+	uint8_t mode = *CAST(uint8_t *, cmdapObj->respBuffer+1);
+	switch(mode){
+	default:
+	case 0:
+		log_warn("Cant auto select transfer mode! please use Adapter.SetTransferMode() service to select mode manually.");
+		cmdapObj->currTransMode = ADPT_MODE_MAX;
+		break;
+	case CMDAP_PORT_SWD:
+		log_info("Auto select SWD transfer mode.");
+		cmdapObj->currTransMode = ADPT_MODE_SWD;
+		break;
+	case CMDAP_PORT_JTAG:
+		log_info("Auto select JTAG transfer mode.");
+		cmdapObj->currTransMode = ADPT_MODE_JTAG;
+		break;
 	}
-	// 断开连接
-	if(CMDAP_FUN_WARP(adapterObj, DAP_Disconnect) == TRUE){
-		adapterObj->isInit = FALSE;
-		return TRUE;
-	}else{
-		return FALSE;
-	}
+	return ADPT_SUCCESS;
 }
 
 /**
  * JTAG协议转SWD
  * 转换后自动增加一个lineReset操作
  */
-static BOOL SWJ_JTAG2SWD(uint8_t *respBuff, AdapterObject *adapterObj){
-	assert(adapterObj != NULL);
+static int swjJtag2Swd(struct cmsis_dap *cmdapObj){
+	assert(cmdapObj != NULL);
 	//SWJ发送 0xE79E，老版本的ARM发送0xB76D强制切换
 	// 12 76 FF FF FF FF FF FF 7B 9E FF FF FF FF FF FF 0F
-	uint8_t switchSque[] = {ID_DAP_SWJ_Sequence, 136, // 144
+	uint8_t switchSque[] = {CMDAP_ID_DAP_SWJ_Sequence, 136, // 144
 			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // 56 bit
 			0x9e, 0xe7,	// 16 bit
 			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // 56 bit
 			0x00,	// 8 bit
 	};	// DAP_SWJ_Sequence Command
-	DAP_EXCHANGE_DATA(adapterObj, switchSque, sizeof(switchSque), respBuff);
-	return TRUE;
+	DAP_EXCHANGE_DATA(cmdapObj, switchSque, sizeof(switchSque));
+	return ADPT_SUCCESS;
 }
 
 /**
  * SWD协议转JTAG
- *
  */
-static BOOL SWJ_SWD2JTAG(uint8_t *respBuff, AdapterObject *adapterObj){
-	assert(adapterObj != NULL);
+static int swjSwd2Jtag(struct cmsis_dap *cmdapObj){
+	assert(cmdapObj != NULL);
 	//SWJ发送 0xE79E，老版本的ARM发送0xB76D强制切换
-	uint8_t switchSque[] = {ID_DAP_SWJ_Sequence, 84,
+	uint8_t switchSque[] = {CMDAP_ID_DAP_SWJ_Sequence, 84,
 			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // 56 bit
 			0x3c, 0xe7,	// 16 bit
 			0xff, 0x00,	// 8 bit
 	};	// DAP_SWJ_Sequence Command
-	DAP_EXCHANGE_DATA(adapterObj, switchSque, sizeof(switchSque), respBuff);
-	return TRUE;
+	DAP_EXCHANGE_DATA(cmdapObj, switchSque, sizeof(switchSque));
+	return ADPT_SUCCESS;
 }
 
 /**
  * line reset
  */
-static BOOL SWD_LineReset(uint8_t *respBuff, AdapterObject *adapterObj){
-	uint8_t resetSque[] = {ID_DAP_SWJ_Sequence, 55,
+int CmdapSwdLineReset(struct cmsis_dap *cmdapObj){
+	assert(cmdapObj != NULL);
+	uint8_t resetSque[] = {CMDAP_ID_DAP_SWJ_Sequence, 55,
 			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x03, // 51 bit，后面跟一个0
 	};	// DAP_SWJ_Sequence Command
-	DAP_EXCHANGE_DATA(adapterObj, resetSque, sizeof(resetSque), respBuff);
-	return TRUE;
+	DAP_EXCHANGE_DATA(cmdapObj, resetSque, sizeof(resetSque));
+	return ADPT_SUCCESS;
 }
 
 // 选择和切换传输协议
-static BOOL selectTrans(AdapterObject *adapterObj, enum transportType type){
+static int dapSetTransMode(Adapter self, enum transfertMode mode){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
 	int idx;
-	assert(adapterObj != NULL);
-	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
-	assert(cmsis_dapObj->PacketSize != 0);
+	uint8_t command[2] = {CMDAP_ID_DAP_Connect};
 
-	uint8_t command[2] = {ID_DAP_Connect, DAP_PORT_AUTODETECT}, *resp;	// 命令存储缓冲和返回值缓冲区
-
-	if((resp = calloc(cmsis_dapObj->PacketSize, sizeof(uint8_t))) == NULL){
-		log_error("Failed to calloc receive buffer space.");
-		return FALSE;
-	}
-	// 先断开
-	if(CMDAP_FUN_WARP(adapterObj, DAP_Disconnect) == FALSE){
+	// 先发送断开命令
+	if(DisconnectCmsisDap(cmdapObj) != ADPT_SUCCESS){
 		log_warn("Failed to disconnect.");
-		return FALSE;
+		return ADPT_FAILED;
 	}
+
 	// 切换协议
-	switch(type){
-	case SWD:
-		if(!CMSIS_DAP_HAS_CAPALITY(cmsis_dapObj, CMDAP_CAP_SWD)){
-			goto EXIT_FAILED;
+	switch(mode){
+	case ADPT_MODE_SWD:
+		// 检查是否支持SWD模式
+		if(cmdapObj->capablityFlag & (0x1 << CMDAP_CAP_SWD) == 0){
+			log_error("This device not support SWD mode.");
+			return ADPT_ERR_UNSUPPORT;
 		}
 		// 切换到SWD模式
-		command[1] = DAP_PORT_SWD;
-		DAP_EXCHANGE_DATA(adapterObj, command, 2, resp);
-		if(*CAST(uint8_t *, resp+1) != DAP_PORT_SWD){
+		command[1] = CMDAP_PORT_SWD;
+		DAP_EXCHANGE_DATA(cmdapObj, command, 2);
+		if(*CAST(uint8_t *, cmdapObj->respBuffer+1) != CMDAP_PORT_SWD){
 			log_warn("Switching SWD mode failed.");
-			goto EXIT_FAILED;
+			return ADPT_FAILED;
 		}else{
 			// 发送切换swd序列
-			CMDAP_FUN_WARP(adapterObj, SWJ_JTAG2SWD);
+			swjJtag2Swd(cmdapObj);
 			log_info("Switch to SWD mode.");
-			goto EXIT_TRUE;
+			return ADPT_SUCCESS;
 		}
-		break;
-
-	case JTAG:
-		if(!CMSIS_DAP_HAS_CAPALITY(cmsis_dapObj, CMDAP_CAP_JTAG)){
-			goto EXIT_FAILED;
+	case ADPT_MODE_JTAG:
+		// 检查是否支持JTAG模式
+		if(cmdapObj->capablityFlag & (0x1 << CMDAP_CAP_JTAG) == 0){
+			log_error("This device not support JTAG mode.");
+			return ADPT_ERR_UNSUPPORT;
 		}
 		// 切换到JTAG模式
-		command[1] = DAP_PORT_JTAG;
-		DAP_EXCHANGE_DATA(adapterObj, command, 2, resp);
-		if(*CAST(uint8_t *, resp+1) != DAP_PORT_JTAG){
+		command[1] = CMDAP_PORT_JTAG;
+		DAP_EXCHANGE_DATA(cmdapObj, command, 2);
+		if(*CAST(uint8_t *, cmdapObj->respBuffer+1) != CMDAP_PORT_JTAG){
 			log_warn("Switching JTAG mode failed.");
-			goto EXIT_FAILED;
+			return ADPT_FAILED;
 		}else{
 			// 发送切换JTAG序列
-			CMDAP_FUN_WARP(adapterObj, SWJ_SWD2JTAG);
+			swjSwd2Jtag(cmdapObj);
 			log_info("Switch to JTAG mode.");
-			goto EXIT_TRUE;
+			return ADPT_SUCCESS;
 		}
-		break;
 	default :
-		goto EXIT_FAILED;
+		log_error("Unsupports specified mode.");
+		return ADPT_ERR_UNSUPPORT;
 	}
-
-EXIT_FAILED:
-	// 协议不支持
-	free(resp);
-	return FALSE;
-EXIT_TRUE:
-	free(resp);
-	return TRUE;
 }
 
 /**
@@ -421,25 +363,25 @@ EXIT_TRUE:
  * matchRetry：如果在匹配模式下发现值不匹配，重试的次数
  * SWD、JTAG模式下均有效
  */
-static BOOL DAP_TransferConfigure(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t idleCycle, uint16_t waitRetry, uint16_t matchRetry){
-	assert(adapterObj != NULL);
-	uint8_t DAPTransfer[6] = {ID_DAP_TransferConfigure};
+int CmdapTransferConfigure(Adapter self, uint8_t idleCycle, uint16_t waitRetry, uint16_t matchRetry){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+
+	uint8_t DAPTransfer[6] = {CMDAP_ID_DAP_TransferConfigure};
 	DAPTransfer[1] = idleCycle;	// Number of extra idle cycles after each transfer.
 	DAPTransfer[2] = BYTE_IDX(waitRetry, 0);
 	DAPTransfer[3] = BYTE_IDX(waitRetry, 1);
 	DAPTransfer[4] = BYTE_IDX(matchRetry, 0);
 	DAPTransfer[5] = BYTE_IDX(matchRetry, 1);
 
-	DAP_EXCHANGE_DATA(adapterObj, DAPTransfer, sizeof(DAPTransfer), respBuff);
-	// 增加判断是否成功
-	if(respBuff[1] != DAP_OK){
+	DAP_EXCHANGE_DATA(cmdapObj, DAPTransfer, sizeof(DAPTransfer));
+	// 判断是否成功
+	if(cmdapObj->respBuffer[1] != CMDAP_OK){
 		log_warn("Transfer config execution failed.");
-		return FALSE;
+		return ADPT_FAILED;
 	}
-	// 更新对象数据副本
-	adapterObj->dap.Retry = waitRetry;
-	adapterObj->dap.IdleCycle = idleCycle;
-	return TRUE;
+	// XXX 是否需要记录上面这些数据?
+	return ADPT_SUCCESS;
 }
 
 /**
@@ -447,31 +389,33 @@ static BOOL DAP_TransferConfigure(uint8_t *respBuff, AdapterObject *adapterObj, 
  * DAP_HostStatus 设置仿真器状态灯
  * 参数：status 状态
  */
-static BOOL DAP_HostStatus(uint8_t *respBuff, AdapterObject *adapterObj, int status){
-	assert(adapterObj != NULL);
-	uint8_t DAP_HostStatusPack[] = {ID_DAP_HostStatus, 0, 0};
+static int dapHostStatus(Adapter self, enum adapterStatus status){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+
+	uint8_t DAP_HostStatusPack[] = {CMDAP_ID_DAP_HostStatus, 0, 0};
 	switch(status){
-	case ADAPTER_STATUS_CONNECTED:
+	case ADPT_STATUS_CONNECTED:
 		DAP_HostStatusPack[1] = 0;
 		DAP_HostStatusPack[2] = 1;
 		break;
-	case ADAPTER_STATUS_DISCONNECT:
+	case ADPT_STATUS_DISCONNECT:
 		DAP_HostStatusPack[1] = 0;
 		DAP_HostStatusPack[2] = 0;
 		break;
-	case ADAPTER_STATUS_RUNING:
+	case ADPT_STATUS_RUNING:
 		DAP_HostStatusPack[1] = 1;
 		DAP_HostStatusPack[2] = 1;
 		break;
-	case ADAPTER_STATUS_IDLE:
+	case ADPT_STATUS_IDLE:
 		DAP_HostStatusPack[1] = 1;
 		DAP_HostStatusPack[2] = 0;
 		break;
 	default:
-		return FALSE;
+		return ADPT_ERR_UNSUPPORT;
 	}
-	DAP_EXCHANGE_DATA(adapterObj, DAP_HostStatusPack,  3, respBuff);
-	return TRUE;
+	DAP_EXCHANGE_DATA(cmdapObj, DAP_HostStatusPack,  3);
+	return ADPT_SUCCESS;
 }
 
 // 格式化时钟频率
@@ -498,26 +442,27 @@ static double formatFreq(double freq, const char **unit){
  * 设置SWJ的最大频率
  * 参数 clockHz 时钟频率，单位是 Hz
  */
-static BOOL DAP_SWJ_Clock (uint8_t *respBuff, AdapterObject *adapterObj, uint32_t clockHz){
-	assert(adapterObj != NULL);
-	uint8_t clockHzPack[5] = {ID_DAP_SWJ_Clock};
+static int dapSwjClock (Adapter self, unsigned int freq){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+	uint8_t clockHzPack[5] = {CMDAP_ID_DAP_SWJ_Clock};
+	uint32_t clockHz = CAST(uint32_t, freq);
 
 	clockHzPack[1] = BYTE_IDX(clockHz, 0);
 	clockHzPack[2] = BYTE_IDX(clockHz, 1);
 	clockHzPack[3] = BYTE_IDX(clockHz, 2);
 	clockHzPack[4] = BYTE_IDX(clockHz, 3);
 
-	DAP_EXCHANGE_DATA(adapterObj, clockHzPack, sizeof(clockHzPack), respBuff);
-	// 增加判断是否成功
-	if(respBuff[1] != DAP_OK){
+	DAP_EXCHANGE_DATA(cmdapObj, clockHzPack, sizeof(clockHzPack));
+	// 判断是否成功
+	if(cmdapObj->respBuffer[1] != CMDAP_OK){
 		log_warn("SWJ Clock execution failed.");
-		return FALSE;
+		return ADPT_FAILED;
 	}
-	// 计算格式
 	const char *unit;
-	double freq = formatFreq(clockHz, &unit);
-	log_info("CMSIS-DAP Clock Frequency: %.2lf%s.", freq, unit);
-	return TRUE;
+	double freq_tmp = formatFreq(clockHz, &unit);
+	log_info("CMSIS-DAP Clock Frequency: %.2lf%s.", freq_tmp, unit);
+	return ADPT_SUCCESS;
 }
 
 /**
@@ -526,30 +471,33 @@ static BOOL DAP_SWJ_Clock (uint8_t *respBuff, AdapterObject *adapterObj, uint32_
  * data ：时序表示数据
  * response：TDO返回数据
  */
-static BOOL DAP_JTAG_Sequence(uint8_t *respBuff, AdapterObject *adapterObj, int sequenceCount, uint8_t *data, uint8_t *response){
-	assert(adapterObj != NULL);
+int CmdapJtagSequence(Adapter self, int sequenceCount, uint8_t *data, uint8_t *response){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+	assert(cmdapObj->PacketSize != 0 && cmdapObj->MaxPcaketCount != 0);
 	// 判断当前是否是JTAG模式
-	if(adapterObj->currTrans != JTAG) return FALSE;
-	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
-	assert(cmsis_dapObj->PacketSize != 0);
-	/**
-	 * 分配所有缓冲区，包括max packet count和packet buff
-	 */
-	uint8_t *buff = calloc(sizeof(int) * cmsis_dapObj->MaxPcaketCount + cmsis_dapObj->PacketSize, sizeof(uint8_t));
+	if(cmdapObj->currTransMode != ADPT_MODE_JTAG) {
+		log_error("Current transfer mode is not JTAG.");
+		return ADPT_FAILED;
+	}
+
+	//分配所有缓冲区，包括max packet count和packet buff
+	uint8_t *buff = calloc(sizeof(int) * cmdapObj->MaxPcaketCount + cmdapObj->PacketSize, sizeof(uint8_t));
 	if(buff == NULL){
-		log_warn("Unable to allocate send packet buffer, the heap may be full.");
-		return FALSE;
+		log_error("Unable to allocate send packet buffer, the heap may be full.");
+		return ADPT_ERR_INTERNAL_ERROR;
 	}
 	// 记录每次分包需要接收的result
 	int *resultLength = CAST(int *,buff);
 	// 发送包缓冲区
-	uint8_t *sendPackBuff = buff + sizeof(int) * cmsis_dapObj->MaxPcaketCount;
+	uint8_t *sendPackBuff = buff + sizeof(int) * cmdapObj->MaxPcaketCount;
 	int inputIdx = 0,outputIdx = 0, seqIdx = 0;	// data数据索引，response数据索引，sequence索引
 	int packetStartIdx = 0;	// 当前的data的偏移
 	int sendPackCnt = 0;	// 当前发包计数
 	int readPayloadLen, sendPayloadLen;	// 要发送和接收的载荷总字节，不包括头部
+	int transferred;	// USB传输字节数
 	uint8_t seqCount;	// 统计当前有多少个seq
-	sendPackBuff[0] = ID_DAP_JTAG_Sequence;	// 指令头部 0
+	sendPackBuff[0] = CMDAP_ID_DAP_JTAG_Sequence;	// 指令头部 0
 
 MAKE_PACKT:
 	seqCount = 0;
@@ -564,7 +512,7 @@ MAKE_PACKT:
 		uint8_t tdiByte = (tckCount + 7) >> 3;	// 将TCK个数圆整到字节，表示后面跟几个byte的tdi数据
 		//log_debug("Offset:%d, seqIdx:%d, Seq:0x%02x, tck:%d, tdiByte:%d, TMS:%d.", inputIdx, seqIdx, data[inputIdx], tckCount, tdiByte, !!(data[inputIdx] & 0x40));
 		// 如果当前数据长度加上tdiByte之后大于包长度，+3的意思是两个指令头部和SeqInfo字节
-		if(sendPayloadLen + tdiByte + 3 > cmsis_dapObj->PacketSize){
+		if(sendPayloadLen + tdiByte + 3 > cmdapObj->PacketSize){
 			break;
 		}else sendPayloadLen += tdiByte + 1;	// FIX:+1是要计算头部
 		//如果TDO Capture标志置位，则从TDO接收tdiByte字节的数据
@@ -589,22 +537,24 @@ MAKE_PACKT:
 	memcpy(sendPackBuff + 2, data + packetStartIdx, sendPayloadLen);
 
 	// 发送包
-	DAPWrite(adapterObj, sendPackBuff, sendPayloadLen + 2);
+	dapWrite(cmdapObj, sendPackBuff, sendPayloadLen + 2, &transferred);
+	log_trace("Write %d byte.", transferred);
 	resultLength[sendPackCnt++] = readPayloadLen;	// 本次包的响应包包含多少个数据
 
 	/**
 	 * 如果没发完，而且没有达到最大包数量，则再构建一个包发送过去
 	 */
-	if(seqIdx < (sequenceCount-1) && sendPackCnt < cmsis_dapObj->MaxPcaketCount) goto MAKE_PACKT;
+	if(seqIdx < (sequenceCount-1) && sendPackCnt < cmdapObj->MaxPcaketCount) goto MAKE_PACKT;
 
 	BOOL result = TRUE;
 	// 读数据
 	for(int readPackCnt = 0; readPackCnt < sendPackCnt; readPackCnt++){
-		DAPRead(adapterObj, respBuff);
-		if(result == TRUE && respBuff[1] == DAP_OK){
+		dapRead(cmdapObj, &transferred);
+		log_trace("Read %d byte.", transferred);
+		if(result == TRUE && cmdapObj->respBuffer[1] == CMDAP_OK){
 			// 拷贝数据
 			if(response){
-				memcpy(response + outputIdx, respBuff + 2, resultLength[readPackCnt]);
+				memcpy(response + outputIdx, cmdapObj->respBuffer + 2, resultLength[readPackCnt]);
 				outputIdx += resultLength[readPackCnt];
 			}
 		}else{
@@ -614,7 +564,8 @@ MAKE_PACKT:
 	// 中间有错误发生
 	if(result == FALSE){
 		free(buff);
-		return FALSE;
+		log_error("An error occurred during the transfer.");
+		return ADPT_FAILED;
 	}
 	// 判断是否处理完，如果没有则跳回去重新处理
 	if(seqIdx < (sequenceCount-1)) {
@@ -624,7 +575,7 @@ MAKE_PACKT:
 	}
 	//log_debug("Write Back Len:%d.", outputIdx);
 	free(buff);
-	return TRUE;
+	return ADPT_SUCCESS;
 }
 
 /**
@@ -636,41 +587,51 @@ MAKE_PACKT:
  * 1 .. 3000000 = time in µs (max 3s)
  * 返回值 TRUE；
  */
-static BOOL DAP_SWJ_Pins(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t pinSelect, uint8_t *pinData, uint32_t pinWait){
-	assert(adapterObj != NULL);
-	uint8_t DAP_PinPack[7] = {ID_DAP_SWJ_Pins};
+static int dapSwjPins(Adapter self, uint8_t pinMask, uint8_t pinDataIn, uint8_t *pinDataOut, unsigned int pinWait){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+	uint8_t DAP_PinPack[7] = {CMDAP_ID_DAP_SWJ_Pins};
+	uint32_t wait_us = CAST(uint32_t, pinWait);
 	// 构造包数据
-	DAP_PinPack[1] = *pinData;
-	DAP_PinPack[2] = pinSelect;
-	DAP_PinPack[3] = BYTE_IDX(pinWait, 0);
-	DAP_PinPack[4] = BYTE_IDX(pinWait, 1);
-	DAP_PinPack[5] = BYTE_IDX(pinWait, 2);
-	DAP_PinPack[6] = BYTE_IDX(pinWait, 3);
-
-	DAP_EXCHANGE_DATA(adapterObj, DAP_PinPack, sizeof(DAP_PinPack), respBuff);
-	*pinData = *(respBuff + 1);
-	return TRUE;
+	DAP_PinPack[1] = pinDataIn;
+	DAP_PinPack[2] = pinMask;
+	DAP_PinPack[3] = BYTE_IDX(wait_us, 0);
+	DAP_PinPack[4] = BYTE_IDX(wait_us, 1);
+	DAP_PinPack[5] = BYTE_IDX(wait_us, 2);
+	DAP_PinPack[6] = BYTE_IDX(wait_us, 3);
+	DAP_EXCHANGE_DATA(cmdapObj, DAP_PinPack, sizeof(DAP_PinPack));
+	*pinDataOut = *(cmdapObj->respBuffer + 1);
+	return ADPT_SUCCESS;
 }
 
-/* 设置JTAG */
-static BOOL DAP_JTAG_Config(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t count, uint8_t *irData){
-	assert(adapterObj != NULL);
+/**
+ * 设置JTAG信息
+ * count：扫描链中TAP的个数，不超过8个
+ * irData：每个TAP的IR寄存器长度
+ */
+int CmdapJtagConfig(Adapter self, uint8_t count, uint8_t *irData){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+
 	if(count > 8){
 		log_warn("TAP Too lot.");
-		return FALSE;
+		return ADPT_FAILED;
 	}
 	uint8_t *DAP_JTAG_ConfigPack = malloc((2 + count) * sizeof(uint8_t));
+	if(!DAP_JTAG_ConfigPack){
+		return ADPT_ERR_INTERNAL_ERROR;
+	}
 	// 构造包数据
-	DAP_JTAG_ConfigPack[0] = ID_DAP_JTAG_Configure;
+	DAP_JTAG_ConfigPack[0] = CMDAP_ID_DAP_JTAG_Configure;
 	DAP_JTAG_ConfigPack[1] = count;
 	memcpy(DAP_JTAG_ConfigPack + 2, irData, count);
 
-	DAP_EXCHANGE_DATA(adapterObj, DAP_JTAG_ConfigPack, 2 + count, respBuff);
+	DAP_EXCHANGE_DATA(cmdapObj, DAP_JTAG_ConfigPack, 2 + count);
 	free(DAP_JTAG_ConfigPack);
-	if(*(respBuff + 1) == DAP_OK){
-		return TRUE;
+	if(*(cmdapObj->respBuffer + 1) != CMDAP_OK){
+		return ADPT_FAILED;
 	}
-	return FALSE;
+	return ADPT_SUCCESS;
 }
 
 struct dap_pack_info {
@@ -683,21 +644,19 @@ struct dap_pack_info {
  * sequenceCnt:要发送的Sequence个数
  * okSeqCnt：执行成功的Sequence个数
  * XXX：由于DAP指令可能会出错，出错之后要立即停止执行后续指令，所以就
- * 不使用批量功能 cmsis_dapObj->MaxPcaketCount = 1
+ * 不使用批量功能 ,此函数内默认cmsis_dapObj->MaxPcaketCount = 1
  */
-static BOOL DAP_Transfer(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t index,
-		int sequenceCnt, uint8_t *data, uint8_t *response, int *okSeqCnt)
-{
-	assert(adapterObj != NULL && okSeqCnt != NULL);
-	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
-	assert(cmsis_dapObj->PacketSize != 0);
+int CmdapTransfer(Adapter self, uint8_t index, int sequenceCnt, uint8_t *data, uint8_t *response, int *okSeqCnt){
+	assert(self != NULL && okSeqCnt != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+	assert(cmdapObj->PacketSize != 0);
 	// 先清零
 	*okSeqCnt = 0;
 	/**
 	 * 分配所有缓冲区，包括max packet count和packet buff
 	 */
 	// uint8_t *buff = calloc(sizeof(struct dap_pack_info) * cmsis_dapObj->MaxPcaketCount + cmsis_dapObj->PacketSize, sizeof(uint8_t));
-	uint8_t *buff = calloc(sizeof(struct dap_pack_info) * 1 + cmsis_dapObj->PacketSize, sizeof(uint8_t));
+	uint8_t *buff = calloc(sizeof(struct dap_pack_info) * 1 + cmdapObj->PacketSize, sizeof(uint8_t));
 	if(buff == NULL){
 		log_warn("Unable to allocate send packet buffer, the heap may be full.");
 		return FALSE;
@@ -709,6 +668,7 @@ static BOOL DAP_Transfer(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t i
 	uint8_t *sendPackBuff = buff + sizeof(struct dap_pack_info) * 1;
 	int readCount = 0, writeCount = 0, seqIdx = 0;
 	int idx = 0,outIdx = 0, packetStartIdx, sendPackCnt = 0;	// 指向下一个sequence控制字节的索引，数据包的开始索引，发送数据包的个数
+	int transferred;
 	uint8_t thisPackSeqCnt;	//本次数据包中Sequence个数
 
 	// ===============构造本次数据包==================
@@ -724,14 +684,14 @@ MAKE_PACKT:
 		// 判断是否是读寄存器
 		if((data[idx] & DAP_TRANSFER_RnW) == DAP_TRANSFER_RnW){
 			// 判断是否超出最大包长度
-			if((3 + readCount + 4) > cmsis_dapObj->PacketSize || (3 + writeCount + 1) > cmsis_dapObj->PacketSize){
+			if((3 + readCount + 4) > cmdapObj->PacketSize || (3 + writeCount + 1) > cmdapObj->PacketSize){
 				break;
 			}
 			idx += 1;
 			readCount += 4;
 			writeCount ++;
 		}else{	// 写寄存器
-			if((3 + writeCount + 5) > cmsis_dapObj->PacketSize){
+			if((3 + writeCount + 5) > cmdapObj->PacketSize){
 				break;
 			}
 			idx += 5;
@@ -745,14 +705,15 @@ MAKE_PACKT:
 		}
 	}
 	// 构造数据包头部
-	sendPackBuff[0] = ID_DAP_Transfer;
+	sendPackBuff[0] = CMDAP_ID_DAP_Transfer;
 	sendPackBuff[1] = index;	// DAP index, JTAG ScanChain 中的位置，在SWD模式下忽略该参数
 	sendPackBuff[2] = thisPackSeqCnt;	// 传输多少个request
 
 	// 将数据拷贝到包中
 	memcpy(sendPackBuff + 3, data + packetStartIdx, writeCount);
 	// 交换数据
-	DAPWrite(adapterObj, sendPackBuff, 3 + writeCount);
+	dapWrite(cmdapObj, sendPackBuff, 3 + writeCount, &transferred);
+	log_trace("Write %d byte.", transferred);
 	packetInfo[sendPackCnt].dataLen = readCount;	// 本次包的响应包包含多少个数据
 	packetInfo[sendPackCnt].seqCnt = thisPackSeqCnt;
 	sendPackCnt++;
@@ -764,24 +725,26 @@ MAKE_PACKT:
 
 	BOOL result = TRUE;
 	for(int readPackCnt = 0; readPackCnt < sendPackCnt; readPackCnt++){	// NOTIC 这个循环也就执行一次
-		DAPRead(adapterObj, respBuff);
+		dapRead(cmdapObj, &transferred);
+		log_trace("Read %d byte.", transferred);
 		// 本次执行的Sequence是否等于应该执行的个数
 		if(result == TRUE){
-			*okSeqCnt += respBuff[1];
-			if(respBuff[1] != packetInfo[readPackCnt].seqCnt){
-				log_warn("Last Response: %d.", respBuff[2]);
+			*okSeqCnt += cmdapObj->respBuffer[1];
+			if(cmdapObj->respBuffer[1] != packetInfo[readPackCnt].seqCnt){
+				log_warn("Last Response: %d.", cmdapObj->respBuffer[2]);
 				result = FALSE;
 			}
 			// 拷贝数据
 			if(response){
-				memcpy(response + outIdx, respBuff + 3, packetInfo[readPackCnt].dataLen);
+				memcpy(response + outIdx, cmdapObj->respBuffer + 3, packetInfo[readPackCnt].dataLen);
 				outIdx += packetInfo[readPackCnt].dataLen;
 			}
 		}
 	}
 	if(result == FALSE){
 		free(buff);
-		return FALSE;
+		log_error("An error occurred during the transfer.");
+		return ADPT_FAILED;
 	}
 	// 判断是否处理完，如果没有则跳回去重新处理
 	if(seqIdx < (sequenceCnt-1)) {
@@ -790,7 +753,7 @@ MAKE_PACKT:
 		goto MAKE_PACKT;
 	}
 	free(buff);
-	return TRUE;
+	return ADPT_SUCCESS;
 }
 
 /**
@@ -798,26 +761,25 @@ MAKE_PACKT:
  * 对单个寄存器进行多次读写，常配合地址自增使用
  * 参数列表和意义与DAP_Transfer相同
  */
-static BOOL DAP_TransferBlock(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t index,
-		int sequenceCnt, uint8_t *data, uint8_t *response, int *okSeqCnt)
-{
-	assert(adapterObj != NULL && okSeqCnt != NULL);
-	struct cmsis_dap *cmsis_dapObj = CAST(struct cmsis_dap *, adapterObj);
-	assert(cmsis_dapObj->PacketSize != 0);
-	BOOL result = FALSE;
+int CmdapTransferBlock(Adapter self, uint8_t index, int sequenceCnt, uint8_t *data, uint8_t *response, int *okSeqCnt){
+	assert(self != NULL && okSeqCnt != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+
+	assert(cmdapObj->PacketSize != 0);
+	int result = ADPT_FAILED;
 	// 本次传输长度
 	int restCnt = 0, readCnt = 0, writeCnt = 0;
-	int sentPacketMaxCnt = (cmsis_dapObj->PacketSize - 5) >> 2;	// 发送数据包可以装填的数据个数
-	int readPacketMaxCnt = (cmsis_dapObj->PacketSize - 4) >> 2;	// 接收数据包可以装填的数据个数
+	int sentPacketMaxCnt = (cmdapObj->PacketSize - 5) >> 2;	// 发送数据包可以装填的数据个数
+	int readPacketMaxCnt = (cmdapObj->PacketSize - 4) >> 2;	// 接收数据包可以装填的数据个数
 
 	// 开辟本次数据包的空间
-	uint8_t *buff = calloc(cmsis_dapObj->PacketSize, sizeof(uint8_t));
+	uint8_t *buff = calloc(cmdapObj->PacketSize, sizeof(uint8_t));
 	if(buff == NULL){
 		log_warn("Unable to allocate send packet buffer, the heap may be full.");
-		return FALSE;
+		return ADPT_ERR_INTERNAL_ERROR;
 	}
 	// 构造数据包头部
-	buff[0] = ID_DAP_TransferBlock;
+	buff[0] = CMDAP_ID_DAP_TransferBlock;
 	buff[1] = index;	// DAP index, JTAG ScanChain 中的位置，在SWD模式下忽略该参数
 	for(*okSeqCnt = 0; *okSeqCnt < sequenceCnt; (*okSeqCnt)++){
 		restCnt = *CAST(int *, data + readCnt); readCnt += sizeof(int);
@@ -828,10 +790,10 @@ static BOOL DAP_TransferBlock(uint8_t *respBuff, AdapterObject *adapterObj, uint
 					*CAST(uint16_t *, buff + 2) = readPacketMaxCnt;
 					buff[4] = seq;
 					// 交换数据
-					DAP_EXCHANGE_DATA(adapterObj, buff, 5, respBuff);
+					DAP_EXCHANGE_DATA(cmdapObj, buff, 5);
 					// 判断操作成功，写回数据 XXX 小端字节序
-					if(*CAST(uint16_t *, respBuff + 1) == readPacketMaxCnt && respBuff[3] == DAP_TRANSFER_OK){	// 成功
-						memcpy(response + writeCnt, respBuff + 4, readPacketMaxCnt << 2);	// 将数据拷贝到
+					if(*CAST(uint16_t *, cmdapObj->respBuffer + 1) == readPacketMaxCnt && cmdapObj->respBuffer[3] == CMDAP_TRANSFER_OK){	// 成功
+						memcpy(response + writeCnt, cmdapObj->respBuffer + 4, readPacketMaxCnt << 2);	// 将数据拷贝到
 						writeCnt += readPacketMaxCnt << 2;
 						restCnt -= readPacketMaxCnt;	// 成功读取readPacketMaxCnt个字
 					}else{	// 失败
@@ -841,10 +803,10 @@ static BOOL DAP_TransferBlock(uint8_t *respBuff, AdapterObject *adapterObj, uint
 					*CAST(uint16_t *, buff + 2) = restCnt;
 					buff[4] = seq;
 					// 交换数据
-					DAP_EXCHANGE_DATA(adapterObj, buff, 5, respBuff);
+					DAP_EXCHANGE_DATA(cmdapObj, buff, 5);
 					// 判断操作成功，写回数据 XXX 小端字节序
-					if(*CAST(uint16_t *, respBuff + 1) == restCnt && respBuff[3] == DAP_TRANSFER_OK){	// 成功
-						memcpy(response + writeCnt, respBuff + 4, restCnt << 2);	// 将数据拷贝到
+					if(*CAST(uint16_t *, cmdapObj->respBuffer + 1) == restCnt && cmdapObj->respBuffer[3] == CMDAP_TRANSFER_OK){	// 成功
+						memcpy(response + writeCnt, cmdapObj->respBuffer + 4, restCnt << 2);	// 将数据拷贝到
 						writeCnt += restCnt << 2;
 						restCnt = 0;	// 全部发送完了
 					}else{	// 失败
@@ -861,9 +823,9 @@ static BOOL DAP_TransferBlock(uint8_t *respBuff, AdapterObject *adapterObj, uint
 					memcpy(buff + 5, data + readCnt, sentPacketMaxCnt << 2);	// 将数据拷贝到
 					readCnt += sentPacketMaxCnt << 2;
 					// 交换数据
-					DAP_EXCHANGE_DATA(adapterObj, buff, 5 + (sentPacketMaxCnt << 2), respBuff);
+					DAP_EXCHANGE_DATA(cmdapObj, buff, 5 + (sentPacketMaxCnt << 2));
 					// 判断操作成功 XXX 小端字节序
-					if(*CAST(uint16_t *, respBuff + 1) == sentPacketMaxCnt && respBuff[3] == DAP_TRANSFER_OK){	// 成功
+					if(*CAST(uint16_t *, cmdapObj->respBuffer + 1) == sentPacketMaxCnt && cmdapObj->respBuffer[3] == CMDAP_TRANSFER_OK){	// 成功
 						restCnt -= sentPacketMaxCnt;
 					}else{	// 失败
 						goto END;
@@ -875,9 +837,9 @@ static BOOL DAP_TransferBlock(uint8_t *respBuff, AdapterObject *adapterObj, uint
 					memcpy(buff + 5, data + readCnt, restCnt << 2);	// 将数据拷贝到
 					readCnt += restCnt << 2;
 					// 交换数据 FIXED 以后运算符根据优先级都要打上括号！！MMP
-					DAP_EXCHANGE_DATA(adapterObj, buff, 5 + (restCnt << 2), respBuff);
+					DAP_EXCHANGE_DATA(cmdapObj, buff, 5 + (restCnt << 2));
 					// 判断操作成功 XXX 小端字节序
-					if(*CAST(uint16_t *, respBuff + 1) == restCnt && respBuff[3] == DAP_TRANSFER_OK){	// 成功
+					if(*CAST(uint16_t *, cmdapObj->respBuffer + 1) == restCnt && cmdapObj->respBuffer[3] == CMDAP_TRANSFER_OK){	// 成功
 						restCnt = 0;
 					}else{	// 失败
 						goto END;
@@ -886,7 +848,7 @@ static BOOL DAP_TransferBlock(uint8_t *respBuff, AdapterObject *adapterObj, uint
 			}
 		}
 	}
-	result = TRUE;
+	result = ADPT_SUCCESS;
 END:
 	free(buff);
 	return result;
@@ -899,54 +861,78 @@ END:
  * pinWait：死区时间
  * 注意：有的电路没有连接nTRST，所以TAP状态机复位尽量使用软复位
  */
-static BOOL DAP_Reset(uint8_t *respBuff, AdapterObject *adapterObj, BOOL hard, BOOL srst, int pinWait){
-	assert(adapterObj != NULL);
-	if(adapterObj->currTrans == JTAG){
-		if(hard == TRUE){	// 硬复位
-			uint8_t pinData = 0, pinSelect = 1 << SWJ_PIN_nTRST;	// 状态机复位，
-			if(srst == TRUE){	// 系统复位
-				pinSelect |= 1 << SWJ_PIN_nRESET;
-			}
-			if(DAP_SWJ_Pins(respBuff, adapterObj, pinSelect, &pinData, pinWait) == FALSE){
-				log_warn("Assert Hard Reset Failed!");
-				return FALSE;
-			}
-			// 取消复位
-			pinData = 0xFF;
-			if(DAP_SWJ_Pins(respBuff, adapterObj, pinSelect, &pinData, pinWait) == FALSE){
-				log_warn("Deassert Hard Reset Failed!");
-				return FALSE;
-			}
-		}else{
-			uint8_t resetSeq[] = {0x45, 0x00};
-			// 执行队列
-			if(DAP_JTAG_Sequence(respBuff, adapterObj, 1, resetSeq, NULL) == FALSE){
-				return FALSE;
-			}
-		}
-		return TRUE;
-	}else if(adapterObj->currTrans == SWD){	// line reset ，忽略硬复位和srst
-		// 执行line reset
-		return SWD_LineReset(respBuff, adapterObj);
-	}else{
-		return FALSE;
-	}
+static int dapReset(Adapter self, enum targetResetType type){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+
+//	if(cmdapObj->currTransMode == JTAG){
+//		uint8_t pinData = 0, pinMask = 0;	// 状态机复位，
+//		switch(type){
+//		case ADPT_RESET_SYSTEM_RESET:
+//			pinMask |= 1 << SWJ_PIN_nRESET;
+//			/* no break */
+//		case ADPT_RESET_TAP_RESET:
+//			pinMask |= 1 << SWJ_PIN_nTRST;
+//			if(DAP_SWJ_Pins(self, pinMask, pinData, &pinData, 50000) != ADPT_SUCCESS){	// 死区时间50ms
+//				log_warn("Assert reset pin failed!");
+//				return ADPT_FAILED;
+//			}
+//			// 取消复位
+//			pinData = 0xFF;
+//			if(DAP_SWJ_Pins(self, pinMask, pinData, &pinData, 0) != ADPT_SUCCESS){
+//				log_warn("Deassert reset pin failed!");
+//				return ADPT_FAILED;
+//			}
+//
+//		}
+///////////////////////////////////////////////////////////////////////////////
+//		if(hard == TRUE){	// 硬复位
+//			uint8_t pinData = 0, pinSelect = 1 << SWJ_PIN_nTRST;	// 状态机复位，
+//			if(srst == TRUE){	// 系统复位
+//				pinSelect |= 1 << SWJ_PIN_nRESET;
+//			}
+//			if(DAP_SWJ_Pins(respBuff, adapterObj, pinSelect, &pinData, pinWait) == FALSE){
+//				log_warn("Assert Hard Reset Failed!");
+//				return FALSE;
+//			}
+//			// 取消复位
+//			pinData = 0xFF;
+//			if(DAP_SWJ_Pins(respBuff, adapterObj, pinSelect, &pinData, pinWait) == FALSE){
+//				log_warn("Deassert Hard Reset Failed!");
+//				return FALSE;
+//			}
+//		}else{
+//			uint8_t resetSeq[] = {0x45, 0x00};
+//			// 执行队列
+//			if(DAP_JTAG_Sequence(respBuff, adapterObj, 1, resetSeq, NULL) == FALSE){
+//				return FALSE;
+//			}
+//		}
+//		return TRUE;
+//	}else if(adapterObj->currTrans == SWD){	// line reset ，忽略硬复位和srst
+//		// 执行line reset
+//		return SWD_LineReset(respBuff, adapterObj);
+//	}else{
+//		return FALSE;
+//	}
+	return ADPT_ERR_UNSUPPORT;
 }
 
 /**
  * 配置SWD
  */
-static BOOL DAP_SWD_Config(uint8_t *respBuff, AdapterObject *adapterObj, uint8_t cfg){
-	assert(adapterObj != NULL);
-	uint8_t DAP_SWDCFGPack[2] = {ID_DAP_SWD_Configure};
+int CmdapSwdConfig(Adapter self, uint8_t cfg){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+	uint8_t DAP_SWDCFGPack[2] = {CMDAP_ID_DAP_SWD_Configure};
 	// 构造包数据
 	DAP_SWDCFGPack[1] = cfg;
 
-	DAP_EXCHANGE_DATA(adapterObj, DAP_SWDCFGPack, sizeof(DAP_SWDCFGPack), respBuff);
-	if(*(respBuff + 1) == DAP_OK){
-		return TRUE;
+	DAP_EXCHANGE_DATA(cmdapObj, DAP_SWDCFGPack, sizeof(DAP_SWDCFGPack));
+	if(*(cmdapObj->respBuffer + 1) != CMDAP_OK){
+		return ADPT_FAILED;
 	}
-	return FALSE;
+	return ADPT_SUCCESS;
 }
 
 /**
@@ -1043,24 +1029,39 @@ static int parseIDLEWait(uint8_t *buff, int wait, int *seqCnt){
 /**
  * 解析执行JTAG指令队列
  */
-static BOOL Execute_JTAG_Cmd(uint8_t *respBuff, AdapterObject *adapterObj){
-	assert(adapterObj != NULL);
+static int executeJtagCmd(Adapter self){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+
+	enum JTAG_TAP_State tempState = cmdapObj->currState;	// 临时JTAG状态机状态
 	int seqCnt = 0;	// CMSIS-DAP的Sequence个数，具体看CMSIS-DAP手册
 	int writeBuffLen = 0;	// 生成指令缓冲区的长度
 	int readBuffLen = 0;	// 需要读的字节个数
 	int writeCnt = 0, readCnt = 0;	// 写入数据个数，读取数据个数
 	// 遍历指令，计算解析后的数据长度，开辟空间
 	struct JTAG_Command *cmd, *cmd_t;
-	list_for_each_entry(cmd, &adapterObj->tap.instrQueue, list_entry){
+	list_for_each_entry(cmd, &cmdapObj->JtagInsQueue, list_entry){
 		switch(cmd->type){
 		case JTAG_INS_STATUS_MOVE:	// 状态机切换
-			// 电平状态数乘以2，因为CMSIS-DAP的JTAG指令格式是一个seqinfo加一个tdi数据，而且TAP状态机的任意两个状态切换tms不会多于8个时钟
-			writeBuffLen += JTAG_Cal_TMS_LevelStatus(cmd->instr.statusMove.seqInfo >> 8, cmd->instr.statusMove.seqInfo & 0xff) * 2;
+			if(cmd->instr.statusMove.toState == tempState){	// 如果要到达的状态与当前状态一致,则跳过该指令
+				continue;
+			}
+			do{
+				// 电平状态数乘以2，因为CMSIS-DAP的JTAG指令格式是一个seqinfo加一个tdi数据，而且TAP状态机的任意两个状态切换tms不会多于8个时钟
+				TMS_SeqInfo tmsSeq = JtagGetTmsSequence(tempState, cmd->instr.statusMove.toState);	// 高8位为时序信息
+				writeBuffLen += JtagCalTmsLevelState(tmsSeq >> 8, tmsSeq & 0xff) * 2;
+			}while(0);
+			// 更新当前临时状态机
+			tempState = cmd->instr.statusMove.toState;
 			break;
-		case JTAG_INS_EXCHANGE_IO:	// 交换IO
+		case JTAG_INS_EXCHANGE_DATA:	// 交换TDI和TDO之间的数据
+			if(tempState != JTAG_TAP_DRSHIFT && tempState != JTAG_TAP_IRSHIFT){	//检查当前TAP状态
+				log_error("Current TAP status is not JTAG_TAP_DRSHIFT or JTAG_TAP_IRSHIFT!");
+				return ADPT_FAILED;
+			}
 			do{
 				int writeCnt = 0, readCnt = 0;
-				for(int n = cmd->instr.exchangeIO.bitNum - 1; n>0;){
+				for(int n = cmd->instr.exchangeData.bitCount - 1; n>0;){
 					if(n >= 64){
 						n-=64; readCnt += 8;
 						writeCnt += 9;	// 数据加上一个头部
@@ -1074,12 +1075,18 @@ static BOOL Execute_JTAG_Cmd(uint8_t *respBuff, AdapterObject *adapterObj){
 				writeBuffLen += writeCnt + 2;	// 最后加2是跳出SHIFT-xR状态
 				readBuffLen += readCnt + 1;	// 最后+1是跳出SHIFT-xR的状态需要的一位数据
 			}while(0);
+			// 更新当前JTAG状态机到下一个状态
+			tempState++;
 			break;
 
 		case JTAG_INS_IDLE_WAIT:
+			if(tempState != JTAG_TAP_IDLE){	//检查当前TAP状态
+				log_error("Current TAP status is not JTAG_TAP_IDLE!");
+				return ADPT_FAILED;
+			}
 			// 根据等待时钟周期数来计算需要多少个控制字，因为CMSIS-DAP的等待时钟周期每个控制字最多可以有64个
 			// 所以等待周期多的时候会需要多个控制字
-			writeBuffLen += BIT2BYTE(cmd->instr.idleWait.wait);
+			writeBuffLen += BIT2BYTE(cmd->instr.idleWait.clkCount);
 			break;
 		}
 	}
@@ -1089,105 +1096,195 @@ static BOOL Execute_JTAG_Cmd(uint8_t *respBuff, AdapterObject *adapterObj){
 	uint8_t *writeBuff = malloc(writeBuffLen * sizeof(uint8_t));
 	if(writeBuff == NULL){
 		log_warn("CMSIS-DAP JTAG Instruct buff allocte failed.");
-		return FALSE;
+		return ADPT_ERR_INTERNAL_ERROR;
 	}
 	uint8_t *readBuff = malloc(readBuffLen * sizeof(uint8_t));
 	if(readBuff == NULL){
 		log_warn("CMSIS-DAP JTAG Read buff allocte failed.");
 		free(writeBuff);
-		return FALSE;
+		return ADPT_ERR_INTERNAL_ERROR;
 	}
 
+	tempState = cmdapObj->currState;	// 重置临时JTAG状态机状态
 	// 第二次遍历，生成指令对应的数据
-	list_for_each_entry(cmd, &adapterObj->tap.instrQueue, list_entry){
+	list_for_each_entry(cmd, &cmdapObj->JtagInsQueue, list_entry){
 		switch(cmd->type){
 		case JTAG_INS_STATUS_MOVE:	// 状态机切换
-			writeCnt += parseTMS(writeBuff + writeCnt, cmd->instr.statusMove.seqInfo, &seqCnt);
+			do{
+				TMS_SeqInfo tmsSeq = JtagGetTmsSequence(tempState, cmd->instr.statusMove.toState);	// 高8位为时序信息
+				writeCnt += parseTMS(writeBuff + writeCnt, tmsSeq, &seqCnt);
+				// 更新当前临时状态机
+				tempState = cmd->instr.statusMove.toState;
+			}while(0);
 			break;
-		case JTAG_INS_EXCHANGE_IO:	// 交换IO
-			writeCnt += parseTDI(writeBuff + writeCnt, cmd->instr.exchangeIO.data, cmd->instr.exchangeIO.bitNum, &seqCnt);
+		case JTAG_INS_EXCHANGE_DATA:	// 交换IO
+			writeCnt += parseTDI(writeBuff + writeCnt, cmd->instr.exchangeData.data, cmd->instr.exchangeData.bitCount, &seqCnt);
+			// 更新当前JTAG状态机到下一个状态
+			tempState++;
 			break;
 		case JTAG_INS_IDLE_WAIT:	// 进入IDLE状态等待
-			writeCnt += parseIDLEWait(writeBuff + writeCnt, cmd->instr.idleWait.wait, &seqCnt);
+			writeCnt += parseIDLEWait(writeBuff + writeCnt, cmd->instr.idleWait.clkCount, &seqCnt);
 			break;
 		}
 	}
 	// 执行指令
-	if(DAP_JTAG_Sequence(respBuff, adapterObj, seqCnt, writeBuff, readBuff) == FALSE){
+	if(CmdapJtagSequence(self, seqCnt, writeBuff, readBuff) != ADPT_SUCCESS){
 		log_warn("Execute JTAG Instruction Failed.");
 		free(writeBuff);
 		free(readBuff);
-		return FALSE;
+		return ADPT_FAILED;
 	}
 
 	// 第三次遍历：同步数据，并删除执行成功的指令
-	list_for_each_entry_safe(cmd, cmd_t, &adapterObj->tap.instrQueue, list_entry){
+	list_for_each_entry_safe(cmd, cmd_t, &cmdapObj->JtagInsQueue, list_entry){
 		// 跳过状态机改变指令
 		if(cmd->type == JTAG_INS_STATUS_MOVE || cmd->type == JTAG_INS_IDLE_WAIT) {
 			goto FREE_CMD;
 		}
 		// 所占的数据长度
-		int byteCnt = (cmd->instr.exchangeIO.bitNum + 7) >> 3;
-		int restBit = (cmd->instr.exchangeIO.bitNum - 1) & 0x7;	// 剩余二进制位个数
-		memcpy(cmd->instr.exchangeIO.data, readBuff + readCnt, byteCnt);
+		int byteCnt = (cmd->instr.exchangeData.bitCount + 7) >> 3;
+		int restBit = (cmd->instr.exchangeData.bitCount - 1) & 0x7;	// 剩余二进制位个数
+		memcpy(cmd->instr.exchangeData.data, readBuff + readCnt, byteCnt);
 		readCnt += byteCnt;
 		/**
 		 * bitCnt-1之后如果是8的倍数，就不需要组合最后一字节的数据
 		 */
 		if(restBit != 0){	// 将最后一个字节的数据组合到前一个字节上
-			*(cmd->instr.exchangeIO.data + byteCnt - 1) |= (*(readBuff + readCnt) & 1) << restBit;
+			*(cmd->instr.exchangeData.data + byteCnt - 1) |= (*(readBuff + readCnt) & 1) << restBit;
 			readCnt ++;
 		}
 		FREE_CMD:
 		list_del(&cmd->list_entry);	// 将链表中删除
 		free(cmd);
 	}
+	// 更新当前TAP状态机
+	cmdapObj->currState = tempState;
+	cmdapObj->adaperAPI->currState = tempState;
 
 	// 释放资源
 	free(writeBuff);
 	free(readBuff);
-	return TRUE;
+	return ADPT_SUCCESS;
+}
+
+// 创建新的JTAG指令对象，并将其插入JTAG指令队列尾部
+static struct JTAG_Command *newJtagCommand(struct cmsis_dap *cmdapObj){
+	assert(cmdapObj != NULL);
+	// 新建指令对象
+	struct JTAG_Command *command = calloc(1, sizeof(struct JTAG_Command));
+	if(command == NULL){
+		log_error("Failed to create a new JTAG Command object.");
+		return NULL;
+	}
+	// 将指令插入链表尾部
+	list_add_tail(&command->list_entry, &cmdapObj->JtagInsQueue);
+	return command;
+}
+
+/**
+ * 交换TDI和TDO的数据，在传输完成后会自动将状态机从SHIFT-xR跳转到EXTI1-xR
+ * bitCount：需要传输的位个数
+ * dataPtr:传输的数据
+ */
+static int addJtagExchangeData(Adapter self, uint8_t *dataPtr, unsigned int bitCount){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+	// 新建指令
+	struct JTAG_Command *command = newJtagCommand(cmdapObj);
+	if(command == NULL){
+		return ADPT_ERR_INTERNAL_ERROR;
+	}
+	command->type = JTAG_INS_EXCHANGE_DATA;
+	command->instr.exchangeData.bitCount = bitCount;
+	command->instr.exchangeData.data = dataPtr;
+	return ADPT_SUCCESS;
+}
+
+/**
+ * JTAG Idle
+ */
+static int addJtagIdle(Adapter self, unsigned int clkCnt){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+	// 新建指令
+	struct JTAG_Command *command = newJtagCommand(cmdapObj);
+	if(command == NULL){
+		return ADPT_ERR_INTERNAL_ERROR;
+	}
+	command->type = JTAG_INS_IDLE_WAIT;
+	command->instr.idleWait.clkCount = clkCnt;
+	return ADPT_SUCCESS;
+}
+
+/**
+ * JTAG to state
+ */
+static int addJtagToState(Adapter self, enum JTAG_TAP_State toState){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+	// 新建指令
+	struct JTAG_Command *command = newJtagCommand(cmdapObj);
+	if(command == NULL){
+		return ADPT_ERR_INTERNAL_ERROR;
+	}
+	command->type = JTAG_INS_STATUS_MOVE;
+	command->instr.statusMove.toState = toState;
+	return ADPT_SUCCESS;
+}
+
+/**
+ * JTAG Clean pending
+ */
+static int cleanJtagInsQueue(Adapter self){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+
+	struct JTAG_Command *cmd, *cmd_t;
+	list_for_each_entry_safe(cmd, cmd_t, &cmdapObj->JtagInsQueue, list_entry){
+		list_del(&cmd->list_entry);	// 将链表中删除
+		free(cmd);
+	}
+	return ADPT_SUCCESS;
 }
 
 /**
  * 解析执行DAP指令队列
  * 注意：对于读操作，成功之后才写入内存地址，如果读取失败，则值保持不变，不要清零
  */
-static BOOL Execute_DAP_Cmd(uint8_t *respBuff, AdapterObject *adapterObj){
-	assert(adapterObj != NULL);
+static int executeDapCmd(Adapter self){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+
 	struct DAP_Command *cmd, *cmd_t;
 	int readCnt, writeCnt, seqCnt;
 	int readBuffLen, writeBuffLen;
-	if(adapterObj->dap.DAP_Index > 7){
-		log_warn("DAP TAP Index Too large.");
-		return FALSE;
-	}
+
 REEXEC:;
 	readCnt = 0; writeCnt = 0; seqCnt = 0;
 	readBuffLen = 0;writeBuffLen = 0;
 	// 本次处理的指令类型，找到指令队列中第一个指令的类型
-	enum DAP_InstrType thisType = container_of(adapterObj->dap.instrQueue.next, struct DAP_Command, list_entry)->type;
+	enum DAP_InstrType thisType = container_of(cmdapObj->DapInsQueue.next, struct DAP_Command, list_entry)->type;
 	// 第一次遍历，计算所占用的空间
-	list_for_each_entry(cmd, &adapterObj->dap.instrQueue, list_entry){
+	list_for_each_entry(cmd, &cmdapObj->DapInsQueue, list_entry){
 		if(cmd->type != thisType){
 			break;
 		}
 		switch(cmd->type){
 		case DAP_INS_RW_REG_SINGLE:	// 单次读写寄存器
 			writeBuffLen += 1;
-			if(cmd->instr.RWRegSingle.RnW == 1){	// 读操作
+			if(cmd->instr.singleReg.request & 0x2 == 0x2){	// 读操作
 				readBuffLen += 4;
 			}else{
 				writeBuffLen += 4;
 			}
 			break;
 
-		case DAP_INS_RW_REG_BLOCK:	// 多次读写寄存器
+		case DAP_INS_RW_REG_MULTI:	// 多次读写寄存器
 			writeBuffLen += 1 + sizeof(int);	// int:blockCnt, byte:seq
-			if(cmd->instr.RWRegBlock.RnW == 1){	// 读操作
-				readBuffLen += cmd->instr.RWRegBlock.blockCnt << 2;
+			if(cmd->instr.multiReg.request & 0x2 == 0x2){	// 读操作
+				readBuffLen += cmd->instr.multiReg.count << 2;
 			}else{
-				writeBuffLen += cmd->instr.RWRegBlock.blockCnt << 2;
+				writeBuffLen += cmd->instr.multiReg.count << 2;
 			}
 			break;
 		}
@@ -1198,25 +1295,23 @@ REEXEC:;
 	uint8_t *writeBuff = malloc(writeBuffLen * sizeof(uint8_t));
 	if(writeBuff == NULL){
 		log_warn("CMSIS-DAP DAP Instruct buff allocte failed.");
-		return FALSE;
+		return ADPT_ERR_INTERNAL_ERROR;
 	}
 	uint8_t *readBuff = malloc(readBuffLen * sizeof(uint8_t));
 	if(readBuff == NULL){
 		log_warn("CMSIS-DAP DAP Read buff allocte failed.");
 		free(writeBuff);
-		return FALSE;
+		return ADPT_ERR_INTERNAL_ERROR;
 	}
 
 	// 第二次遍历 生成指令数据
-	list_for_each_entry(cmd, &adapterObj->dap.instrQueue, list_entry){
+	list_for_each_entry(cmd, &cmdapObj->DapInsQueue, list_entry){
 		if(cmd->type != thisType){
 			break;
 		}
 		switch(cmd->type){
 		case DAP_INS_RW_REG_SINGLE:
-			*(writeBuff + writeCnt++) = (cmd->instr.RWRegSingle.reg & 0xC)
-				| (cmd->instr.RWRegSingle.RnW ? DAP_TRANSFER_RnW : 0)
-				| (cmd->instr.RWRegSingle.APnDP ? DAP_TRANSFER_APnDP : 0);
+			*(writeBuff + writeCnt++) = cmd->instr.singleReg.request;
 			
 //			do{
 //				log_debug("-----------------------------");
@@ -1230,26 +1325,24 @@ REEXEC:;
 //			}while(0);
 
 			// 如果是写操作
-			if(cmd->instr.RWRegSingle.RnW == 0){
+			if(cmd->instr.singleReg.request & 0x2 == 0){
 				// XXX 小端字节序
-				memcpy(writeBuff + writeCnt, CAST(uint8_t *, &cmd->instr.RWRegSingle.data.write), 4);
+				memcpy(writeBuff + writeCnt, CAST(uint8_t *, &cmd->instr.singleReg.data.write), 4);
 				writeCnt += 4;
 			}
 			seqCnt++;
 			break;
 
-		case DAP_INS_RW_REG_BLOCK:
+		case DAP_INS_RW_REG_MULTI:
 			// 写入本次操作的次数
-			*CAST(int *, writeBuff + writeCnt) = cmd->instr.RWRegBlock.blockCnt;
+			*CAST(int *, writeBuff + writeCnt) = cmd->instr.multiReg.count;
 			writeCnt += sizeof(int);
-			*(writeBuff + writeCnt++) = (cmd->instr.RWRegSingle.reg & 0xC)
-				| (cmd->instr.RWRegBlock.RnW ? DAP_TRANSFER_RnW : 0)
-				| (cmd->instr.RWRegBlock.APnDP ? DAP_TRANSFER_APnDP : 0);
+			*(writeBuff + writeCnt++) = cmd->instr.multiReg.request;
 			// 如果是写操作
-			if(cmd->instr.RWRegBlock.RnW == 0){
+			if(cmd->instr.multiReg.request & 0x2 == 0){
 				// XXX 小端字节序
-				memcpy(writeBuff + writeCnt, CAST(uint8_t *, cmd->instr.RWRegBlock.data.write), cmd->instr.RWRegBlock.blockCnt << 2);
-				writeCnt += cmd->instr.RWRegBlock.blockCnt << 2;
+				memcpy(writeBuff + writeCnt, CAST(uint8_t *, cmd->instr.multiReg.data), cmd->instr.multiReg.count << 2);
+				writeCnt += cmd->instr.multiReg.count << 2;
 			}
 			seqCnt++;
 			break;
@@ -1258,27 +1351,27 @@ REEXEC:;
 
 	// 执行成功的Sequence个数
 	int okSeqCnt = 0;
-	BOOL result = TRUE;
+	int result = ADPT_SUCCESS;
 	switch(thisType){
 	case DAP_INS_RW_REG_SINGLE:
 		// 执行指令 DAP_Transfer
-		if(DAP_Transfer(respBuff, adapterObj, adapterObj->dap.DAP_Index, seqCnt, writeBuff, readBuff, &okSeqCnt) == FALSE){
+		if(CmdapTransfer(self, cmdapObj->tapIndex, seqCnt, writeBuff, readBuff, &okSeqCnt) != ADPT_SUCCESS){
 			log_warn("DAP_Transfer:Some DAP Instruction Execute Failed. Success:%d, All:%d.", okSeqCnt, seqCnt);
-			result = FALSE;
+			result = ADPT_FAILED;
 		}
 	break;
 
-	case DAP_INS_RW_REG_BLOCK:
+	case DAP_INS_RW_REG_MULTI:
 		// transfer block
-		if(DAP_TransferBlock(respBuff, adapterObj, adapterObj->dap.DAP_Index, seqCnt, writeBuff, readBuff, &okSeqCnt) == FALSE){
+		if(CmdapTransferBlock(self, cmdapObj->tapIndex, seqCnt, writeBuff, readBuff, &okSeqCnt) != ADPT_SUCCESS){
 			log_warn("DAP_TransferBlock:Some DAP Instruction Execute Failed. Success:%d, All:%d.", okSeqCnt, seqCnt);
-			result = FALSE;
+			result = ADPT_FAILED;
 		}
 	break;
 	}
 
 	// 第三次遍历：同步数据
-	list_for_each_entry_safe(cmd, cmd_t, &adapterObj->dap.instrQueue, list_entry){
+	list_for_each_entry_safe(cmd, cmd_t, &cmdapObj->DapInsQueue, list_entry){
 		if(cmd->type != thisType){
 			break;
 		}
@@ -1287,12 +1380,12 @@ REEXEC:;
 			break;
 		}
 		okSeqCnt--;	// 只同步执行成功的Seq个数
-		if(cmd->type == DAP_INS_RW_REG_SINGLE && cmd->instr.RWRegSingle.RnW == 1){	// 单次读寄存器
-			memcpy(cmd->instr.RWRegSingle.data.read, readBuff + readCnt, 4);
+		if(cmd->type == DAP_INS_RW_REG_SINGLE && (cmd->instr.singleReg.request & 0x2) == 0x2){	// 单次读寄存器
+			memcpy(cmd->instr.singleReg.data.read, readBuff + readCnt, 4);
 			readCnt += 4;
-		}else if(cmd->type == DAP_INS_RW_REG_BLOCK && cmd->instr.RWRegSingle.RnW == 1){	// 多次读寄存器
-			memcpy(cmd->instr.RWRegBlock.data.read, readBuff + readCnt, cmd->instr.RWRegBlock.blockCnt << 2);
-			readCnt += cmd->instr.RWRegBlock.blockCnt << 2;
+		}else if(cmd->type == DAP_INS_RW_REG_MULTI && (cmd->instr.multiReg.request & 0x2) == 0x2){	// 多次读寄存器
+			memcpy(cmd->instr.multiReg.data, readBuff + readCnt, cmd->instr.multiReg.count << 2);
+			readCnt += cmd->instr.multiReg.count << 2;
 		}
 		list_del(&cmd->list_entry);	// 将链表中删除
 		free(cmd);
@@ -1300,161 +1393,198 @@ REEXEC:;
 	free(writeBuff);
 	free(readBuff);
 	// 判断是否继续执行
-	if(result && !list_empty(&adapterObj->dap.instrQueue)){
+	if(result && !list_empty(&cmdapObj->DapInsQueue)){
 		goto REEXEC;
 	}
 	return result;
 }
 
+// 创建新的DAP指令对象，并将其插入JTAG指令队列尾部
+static struct DAP_Command *newDapCommand(struct cmsis_dap *cmdapObj){
+	assert(cmdapObj != NULL);
+	// 新建指令对象
+	struct DAP_Command *command = calloc(1, sizeof(struct DAP_Command));
+	if(command == NULL){
+		log_error("Failed to create a new DAP Command object.");
+		return NULL;
+	}
+	// 将指令插入链表尾部
+	list_add_tail(&command->list_entry, &cmdapObj->DapInsQueue);
+	return command;
+}
+
+/* 增加单次读寄存器指令 */
+static int addDapSingleRead(Adapter self, enum dapRegType type, int reg, uint32_t *data){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+
+	// 新建指令
+	struct DAP_Command *command = newDapCommand(cmdapObj);
+	if(command == NULL){
+		return ADPT_ERR_INTERNAL_ERROR;
+	}
+	command->type = DAP_INS_RW_REG_SINGLE;
+	command->instr.singleReg.request = (reg & 0xC) | 0x2;
+	if(type == ADPT_DAP_AP_REG){
+		command->instr.singleReg.request |= 0x1;
+	}
+	command->instr.singleReg.data.read = data;
+	return ADPT_SUCCESS;
+}
+
+/* 增加单次写寄存器指令 */
+static int addDapSingleWrite(Adapter self, enum dapRegType type, int reg, uint32_t data){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+
+	// 新建指令
+	struct DAP_Command *command = newDapCommand(cmdapObj);
+	if(command == NULL){
+		return ADPT_ERR_INTERNAL_ERROR;
+	}
+	command->type = DAP_INS_RW_REG_SINGLE;
+	command->instr.singleReg.request = (reg & 0xC);
+	if(type == ADPT_DAP_AP_REG){
+		command->instr.singleReg.request |= 0x1;
+	}
+	command->instr.singleReg.data.write = data;
+	return ADPT_SUCCESS;
+}
+
+/* 增加多次读寄存器指令 */
+static int addDapMultiRead(Adapter self, enum dapRegType type, int reg, uint32_t *data){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+
+	// 新建指令
+	struct DAP_Command *command = newDapCommand(cmdapObj);
+	if(command == NULL){
+		return ADPT_ERR_INTERNAL_ERROR;
+	}
+	command->type = DAP_INS_RW_REG_MULTI;
+	command->instr.singleReg.request = (reg & 0xC) | 0x2;
+	if(type == ADPT_DAP_AP_REG){
+		command->instr.singleReg.request |= 0x1;
+	}
+	command->instr.singleReg.data = data;
+	return ADPT_SUCCESS;
+}
+
+/* 增加多次写寄存器指令 */
+static int addDapMultiWrite(Adapter self, enum dapRegType type, int reg, uint32_t *data){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+
+	// 新建指令
+	struct DAP_Command *command = newDapCommand(cmdapObj);
+	if(command == NULL){
+		return ADPT_ERR_INTERNAL_ERROR;
+	}
+	command->type = DAP_INS_RW_REG_MULTI;
+	command->instr.singleReg.request = (reg & 0xC);
+	if(type == ADPT_DAP_AP_REG){
+		command->instr.singleReg.request |= 0x1;
+	}
+	command->instr.singleReg.data = data;
+	return ADPT_SUCCESS;
+}
+
+/* 清空DAP指令队列 */
+static int cleanDapInsQueue(Adapter self){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+
+	struct DAP_Command *cmd, *cmd_t;
+	list_for_each_entry_safe(cmd, cmd_t, &cmdapObj->DapInsQueue, list_entry){
+		list_del(&cmd->list_entry);	// 将链表中删除
+		free(cmd);
+	}
+	return ADPT_SUCCESS;
+}
+
+
 /**
  * DAP写ABORT寄存器
  * The DAP_WriteABORT Command writes an abort request to the CoreSight ABORT register of the Target Device.
  */
-static BOOL DAP_WriteAbort(uint8_t *respBuff, AdapterObject *adapterObj, uint32_t data){
-	assert(respBuff != NULL && adapterObj != NULL);
-	uint8_t DAP_AbortPacket[6] = {ID_DAP_WriteABORT};
-	DAP_AbortPacket[1] = adapterObj->dap.DAP_Index;
+int CmdapWriteAbort(Adapter self, uint32_t data){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+
+	uint8_t DAP_AbortPacket[6] = {CMDAP_ID_DAP_WriteABORT};
+	DAP_AbortPacket[1] = cmdapObj->tapIndex;
 	DAP_AbortPacket[2] = BYTE_IDX(data, 0);
 	DAP_AbortPacket[3] = BYTE_IDX(data, 1);
 	DAP_AbortPacket[4] = BYTE_IDX(data, 2);
 	DAP_AbortPacket[5] = BYTE_IDX(data, 3);
-	DAP_EXCHANGE_DATA(adapterObj, DAP_AbortPacket, sizeof(DAP_AbortPacket), respBuff);
-	if(respBuff[1] != DAP_OK){
-		return FALSE;
+	DAP_EXCHANGE_DATA(cmdapObj, DAP_AbortPacket, sizeof(DAP_AbortPacket));
+	if(cmdapObj->respBuffer[1] != CMDAP_OK){
+		return ADPT_FAILED;
 	}
-	return TRUE;
+	return ADPT_SUCCESS;
 }
 
 /**
- * 执行仿真器指令
+ * 创建新的CMSIS-DAP仿真器对象
+ * 参数:
+ * 	usbObj:USB对象
  */
-static BOOL operate(AdapterObject *adapterObj, int operate, ...){
-	assert(adapterObj != NULL);
-	va_list parames;
-	BOOL result = FALSE;
-	va_start(parames, operate);	// 确定可变参数起始位置
-	// 根据指令选择操作
-	switch(operate){
-	case AINS_SET_STATUS:
-		log_trace("Execution command: Set Status.");
-		do{
-			int status = va_arg(parames, int);
-			result = CMDAP_FUN_WARP(adapterObj, DAP_HostStatus, status);
-		}while(0);
-		break;
-
-	case AINS_SET_CLOCK:
-		log_trace("Execution command: Set SWJ Clock.");
-		do{
-			uint32_t clockHz = va_arg(parames, uint32_t);
-			result = CMDAP_FUN_WARP(adapterObj, DAP_SWJ_Clock, clockHz);
-		}while(0);
-		break;
-
-	case AINS_RESET:
-		log_trace("Execution command: Reset.");
-		do{
-			BOOL hard = (BOOL)va_arg(parames, BOOL);
-			BOOL srst = (BOOL)va_arg(parames, BOOL);
-			int pinWait = va_arg(parames, int);
-			result = CMDAP_FUN_WARP(adapterObj, DAP_Reset, hard, srst, pinWait);
-		}while(0);
-		break;
-
-	case AINS_JTAG_CMD_EXECUTE:
-		log_trace("Execution command: Execute JTAG Command.");
-		do{
-			result = CMDAP_FUN_WARP(adapterObj, Execute_JTAG_Cmd);
-		}while(0);
-		break;
-
-	case AINS_JTAG_PINS:
-		log_trace("Execution command: JTAG Pins.");
-		do{
-			uint8_t pinSelect = (uint8_t)va_arg(parames, int);
-			uint8_t *pinData = va_arg(parames, uint8_t *);
-			uint32_t pinWait = (uint32_t)va_arg(parames, int);
-			result = CMDAP_FUN_WARP(adapterObj, DAP_SWJ_Pins, pinSelect, pinData, pinWait);
-		}while(0);
-		break;
-
-	case AINS_DAP_CMD_EXECUTE:
-		log_trace("Execution command: Execute_DAP_Cmd.");
-		do {
-			uint8_t dap_index = (uint8_t)va_arg(parames, int);
-			uint8_t count = (uint8_t)va_arg(parames, int);
-			uint8_t *data = va_arg(parames, uint8_t *);
-			uint8_t *response = va_arg(parames, uint8_t *);
-			result = CMDAP_FUN_WARP(adapterObj, Execute_DAP_Cmd);
-		}while(0);
-		break;
-
-	case AINS_DAP_WRITE_ABOTR:
-		do{
-			uint32_t data = (uint32_t)va_arg(parames, int);
-			result = CMDAP_FUN_WARP(adapterObj, DAP_WriteAbort, data);
-		}while(0);
-		break;
-
-	case CMDAP_TRANSFER_CONFIG:	// CMSIS-DAP指定的的接口
-		log_trace("Execution command: Transfer Config.");
-		do{
-			uint8_t idleCycle = (uint8_t)va_arg(parames, int);	// 在每次传输后面加多少个空闲时钟周期
-			uint16_t waitRetry = (uint16_t)va_arg(parames, int);	// 得到WAIT Response后重试次数
-			uint16_t matchRetry = (uint16_t)va_arg(parames, int);	// 匹配模式下重试次数
-			log_info("Set Transfer Configure: Idle:%d, Wait:%d, Match:%d.", idleCycle, waitRetry, matchRetry);
-			result = CMDAP_FUN_WARP(adapterObj, DAP_TransferConfigure, idleCycle, waitRetry, matchRetry);
-		}while(0);
-		break;
-
-	case CMDAP_JTAG_CONFIGURE:
-		do{
-			uint8_t count = (uint8_t)va_arg(parames, int);
-			uint8_t *irData = (uint8_t *)va_arg(parames, uint8_t *);
-			log_info("Set JTAG Configure: Count:%d, irData[0]:%d.", count, irData[0]);
-			result = CMDAP_FUN_WARP(adapterObj, DAP_JTAG_Config, count, irData);
-		}while(0);
-		break;
-
-	case CMDAP_SWD_CONFIGURE:
-		do{
-			uint8_t cfg = (uint8_t)va_arg(parames, int);
-			log_info("SWD: Turnaround clock period: %d clock cycles. DataPhase: %s.", (cfg & 0x3)+1, (cfg >> 2) ? "Always" : "No");
-			result = CMDAP_FUN_WARP(adapterObj, DAP_SWD_Config, cfg);
-		}while(0);
-		break;
-
-	default:
-		log_warn("Unsupported operation: %d.", operate);
-		break;
+Adapter CreateCmsisDap(void){
+	struct cmsis_dap *obj = calloc(1, sizeof(struct cmsis_dap));
+	if(!obj){
+		log_error("CreateCmsisDap:Can not create object.");
+		return NULL;
 	}
-	va_end(parames);
-	return result;
+	// 创建USB对象
+	USB usbObj = CreateUSB();
+	if(!usbObj){
+		log_error("Failed to get USB object.");
+		free(obj);
+		return NULL;
+	}
+	// 设置参数
+	obj->usbObj = usbObj;
+	// 设置接口参数
+	obj->adaperAPI.SetStatus = dapHostStatus;
+	obj->adaperAPI.SetFrequent = dapSwjClock;
+	obj->adaperAPI.Reset = dapReset;
+	obj->adaperAPI.SetTransferMode = dapSetTransMode;
+
+	obj->adaperAPI.JtagPins = dapSwjPins;
+	obj->adaperAPI.JtagExchangeData = addJtagExchangeData;
+	obj->adaperAPI.JtagIdle = addJtagIdle;
+	obj->adaperAPI.JtagToState = addJtagToState;
+	obj->adaperAPI.JtagCommit = executeJtagCmd;
+	obj->adaperAPI.JtagCleanPending = cleanJtagInsQueue;
+
+	obj->adaperAPI.DapSingleRead = addDapSingleRead;
+	obj->adaperAPI.DapSingleWrite = addDapSingleWrite;
+	obj->adaperAPI.DapMultiRead = addDapMultiRead;
+	obj->adaperAPI.DapMultiWrite = addDapMultiWrite;
+	obj->adaperAPI.DapCommit = executeDapCmd;
+	obj->adaperAPI.DapCleanPending = cleanDapInsQueue;
+
+	obj->connected = FALSE;
+	return (Adapter)&obj->adaperAPI;
 }
 
-/* CMSIS-DAP specific operation */
-/**
- * 设置JTAG信息
- * count：扫描链中TAP的个数，不超过8个
- * irData：每个TAP的IR寄存器长度
- * 返回 成功 失败
- */
-BOOL CMSIS_DAP_JTAG_Configure(AdapterObject *adapterObj, uint8_t count, uint8_t *irData){
-	assert(adapterObj != NULL);
-	return adapterObj->Operate(adapterObj, CMDAP_JTAG_CONFIGURE, count, irData);
+// 释放CMSIS-DAP对象
+void DestroyCmsisDap(Adapter *self){
+	assert(*self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(*self, struct cmsis_dap, adaperAPI);
+	// 关闭USB对象
+	if(cmdapObj->connected == TRUE){
+		log_debug("DestroyCmsisDap: Disconnect USB.");
+		// 断开USB
+		cmdapObj->usbObj->Close(cmdapObj->usbObj);
+		cmdapObj->connected = FALSE;
+	}
+	// 释放USB对象
+	DestoryUSB(&cmdapObj->usbObj);
+	// 释放respBuffer
+	if(cmdapObj->respBuffer != NULL){
+		free(cmdapObj->respBuffer);
+	}
+	free(cmdapObj);
+	*self = NULL;
 }
-
-/**
- * 配置DAP传输参数，同时会修改AdapterObject.DAP里面的Retry、IdleCycle对象
- */
-BOOL CMSIS_DAP_TransferConfigure(AdapterObject *adapterObj, uint8_t idleCycle, uint16_t waitRetry, uint16_t matchRetry){
-	assert(adapterObj != NULL);
-	return adapterObj->Operate(adapterObj, CMDAP_TRANSFER_CONFIG, idleCycle, waitRetry, matchRetry);
-}
-
-BOOL CMSIS_DAP_SWD_Configure(AdapterObject *adapterObj, uint8_t cfg){
-	assert(adapterObj != NULL);
-	return adapterObj->Operate(adapterObj, CMDAP_SWD_CONFIGURE, cfg);
-}
-
-// 文件结束

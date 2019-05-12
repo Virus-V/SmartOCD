@@ -26,6 +26,7 @@ enum {
 	ADPT_ERR_TRANSPORT_ERROR,	// 底层传输错误
 	ADPT_ERR_PROTOCOL_ERROR,	// 传输协议错误
 	ADPT_ERR_NO_DEVICE,	// 找不到设备
+	ADPT_ERR_UNSUPPORT,	// 不支持的操作
 	ADPT_ERR_INTERNAL_ERROR,	// 内部错误,不是由于Adapter功能部分造成的失败
 };
 
@@ -68,20 +69,31 @@ typedef int (*ADPT_SET_STATUS)(
  */
 typedef int (*ADPT_SET_FREQUENT)(
 		IN Adapter self,
-		IN unsigned int clock
+		IN unsigned int freq
 );
+
+/**
+ * target复位类型
+ */
+enum targetResetType {
+	ADPT_RESET_SYSTEM_RESET,	// 系统复位
+	ADPT_RESET_TAP_RESET,	// JTAG状态机复位
+	ADPT_RESET_DAP_RESET,	// DAP复位
+};
 
 /**
  * Reset - 仿真器复位
  * 参数:
  * 	self:Adapter对象自身
+ * 	type:目标复位类型
  * 返回:
  * 	ADPT_SUCCESS:成功
  * 	ADPT_FAILED:失败
  * 	或者其他错误
  */
 typedef int (*ADPT_RESET)(
-		IN Adapter self
+		IN Adapter self,
+		IN enum targetResetType type
 );
 
 /**
@@ -89,7 +101,8 @@ typedef int (*ADPT_RESET)(
  */
 enum transfertMode {
 	ADPT_MODE_JTAG,
-	ADPT_MODE_SWD
+	ADPT_MODE_SWD,
+	ADPT_MODE_MAX
 };
 
 /**
