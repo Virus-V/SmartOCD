@@ -28,6 +28,9 @@
 	byteCnt += tmp ? ((tmp + 7) >> 3) + 1 : 0;	\
 })
 
+// 调试用
+int misc_PrintBulk(char *data, int length, int rowLen);
+
 static int dapInit(struct cmsis_dap *cmdapObj);
 
 /**
@@ -310,6 +313,12 @@ static int dapSetTransMode(Adapter self, enum transfertMode mode){
 	int idx;
 	uint8_t command[2] = {CMDAP_ID_DAP_Connect};
 
+	// 判断当前模式是否相同
+	if(mode == cmdapObj->currTransMode){
+		log_info("Already the specified mode.");
+		return ADPT_SUCCESS;
+	}
+
 	// 先发送断开命令
 	if(DisconnectCmsisDap(self) != ADPT_SUCCESS){
 		log_warn("Failed to disconnect.");
@@ -334,6 +343,9 @@ static int dapSetTransMode(Adapter self, enum transfertMode mode){
 			// 发送切换swd序列
 			swjJtag2Swd(cmdapObj);
 			log_info("Switch to SWD mode.");
+			// 更新当前模式
+			cmdapObj->currTransMode = ADPT_MODE_SWD;
+			cmdapObj->adaperAPI.currTransMode = ADPT_MODE_SWD;
 			return ADPT_SUCCESS;
 		}
 	case ADPT_MODE_JTAG:
@@ -352,6 +364,12 @@ static int dapSetTransMode(Adapter self, enum transfertMode mode){
 			// 发送切换JTAG序列
 			swjSwd2Jtag(cmdapObj);
 			log_info("Switch to JTAG mode.");
+			// 更新当前模式
+			cmdapObj->currTransMode = ADPT_MODE_JTAG;
+			cmdapObj->adaperAPI.currTransMode = ADPT_MODE_JTAG;
+			// 更新当前TAP状态机
+			cmdapObj->currState = JTAG_TAP_RESET;
+			cmdapObj->adaperAPI.currState = JTAG_TAP_RESET;
 			return ADPT_SUCCESS;
 		}
 	default :
@@ -556,6 +574,7 @@ MAKE_PACKT:
 	for(int readPackCnt = 0; readPackCnt < sendPackCnt; readPackCnt++){
 		dapRead(cmdapObj, &transferred);
 		log_trace("Read %d byte.", transferred);
+		//misc_PrintBulk(cmdapObj->respBuffer, transferred, 16);
 		if(result == TRUE && cmdapObj->respBuffer[1] == CMDAP_OK){
 			// 拷贝数据
 			if(response){
@@ -585,27 +604,27 @@ MAKE_PACKT:
 
 /**
  * pinSelect：选择哪一个pin
- * pinOutput：引脚将要输出的信号
- * pinInput：pinOutput的信号稳定后，读取全部的引脚数据
+ * pinDataOut：引脚将要输出的信号
+ * pinDataIn：pinDataOut的信号稳定后，读取全部的引脚数据
  * pinWait：死区时间
  * 0 = no wait
  * 1 .. 3000000 = time in µs (max 3s)
  * 返回值 TRUE；
  */
-static int dapSwjPins(Adapter self, uint8_t pinMask, uint8_t pinDataIn, uint8_t *pinDataOut, unsigned int pinWait){
+static int dapSwjPins(Adapter self, uint8_t pinMask, uint8_t pinDataOut, uint8_t *pinDataIn, unsigned int pinWait){
 	assert(self != NULL);
 	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
 	uint8_t DAP_PinPack[7] = {CMDAP_ID_DAP_SWJ_Pins};
 	uint32_t wait_us = CAST(uint32_t, pinWait);
 	// 构造包数据
-	DAP_PinPack[1] = pinDataIn;
+	DAP_PinPack[1] = pinDataOut;
 	DAP_PinPack[2] = pinMask;
 	DAP_PinPack[3] = BYTE_IDX(wait_us, 0);
 	DAP_PinPack[4] = BYTE_IDX(wait_us, 1);
 	DAP_PinPack[5] = BYTE_IDX(wait_us, 2);
 	DAP_PinPack[6] = BYTE_IDX(wait_us, 3);
 	DAP_EXCHANGE_DATA(cmdapObj, DAP_PinPack, sizeof(DAP_PinPack));
-	*pinDataOut = *(cmdapObj->respBuffer + 1);
+	*pinDataIn = *(cmdapObj->respBuffer + 1);
 	return ADPT_SUCCESS;
 }
 
@@ -869,57 +888,41 @@ END:
 static int dapReset(Adapter self, enum targetResetType type){
 	assert(self != NULL);
 	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
-
-//	if(cmdapObj->currTransMode == JTAG){
-//		uint8_t pinData = 0, pinMask = 0;	// 状态机复位，
-//		switch(type){
-//		case ADPT_RESET_SYSTEM_RESET:
-//			pinMask |= 1 << SWJ_PIN_nRESET;
-//			/* no break */
-//		case ADPT_RESET_TAP_RESET:
-//			pinMask |= 1 << SWJ_PIN_nTRST;
-//			if(DAP_SWJ_Pins(self, pinMask, pinData, &pinData, 50000) != ADPT_SUCCESS){	// 死区时间50ms
-//				log_warn("Assert reset pin failed!");
-//				return ADPT_FAILED;
-//			}
-//			// 取消复位
-//			pinData = 0xFF;
-//			if(DAP_SWJ_Pins(self, pinMask, pinData, &pinData, 0) != ADPT_SUCCESS){
-//				log_warn("Deassert reset pin failed!");
-//				return ADPT_FAILED;
-//			}
-//
-//		}
-///////////////////////////////////////////////////////////////////////////////
-//		if(hard == TRUE){	// 硬复位
-//			uint8_t pinData = 0, pinSelect = 1 << SWJ_PIN_nTRST;	// 状态机复位，
-//			if(srst == TRUE){	// 系统复位
-//				pinSelect |= 1 << SWJ_PIN_nRESET;
-//			}
-//			if(DAP_SWJ_Pins(respBuff, adapterObj, pinSelect, &pinData, pinWait) == FALSE){
-//				log_warn("Assert Hard Reset Failed!");
-//				return FALSE;
-//			}
-//			// 取消复位
-//			pinData = 0xFF;
-//			if(DAP_SWJ_Pins(respBuff, adapterObj, pinSelect, &pinData, pinWait) == FALSE){
-//				log_warn("Deassert Hard Reset Failed!");
-//				return FALSE;
-//			}
-//		}else{
-//			uint8_t resetSeq[] = {0x45, 0x00};
-//			// 执行队列
-//			if(DAP_JTAG_Sequence(respBuff, adapterObj, 1, resetSeq, NULL) == FALSE){
-//				return FALSE;
-//			}
-//		}
-//		return TRUE;
-//	}else if(adapterObj->currTrans == SWD){	// line reset ，忽略硬复位和srst
-//		// 执行line reset
-//		return SWD_LineReset(respBuff, adapterObj);
-//	}else{
-//		return FALSE;
-//	}
+	uint8_t pinData = 0, pinMask = 0;	// 状态机复位，
+	switch(type){
+	case ADPT_RESET_SYSTEM_RESET:	// 系统复位,assert nSRST
+		pinMask |= SWJ_PIN_nRESET;
+		if(dapSwjPins(self, pinMask, pinData, &pinData, 100000) != ADPT_SUCCESS){	// 死区时间100ms
+			log_error("Assert reset pin failed!");
+			return ADPT_FAILED;
+		}
+		// 取消复位
+		pinData = 0xFF;
+		if(dapSwjPins(self, pinMask, pinData, &pinData, 0) != ADPT_SUCCESS){
+			log_error("Deassert reset pin failed!");
+			return ADPT_FAILED;
+		}
+		// 更新TAP状态机
+		cmdapObj->currState = JTAG_TAP_RESET;
+		cmdapObj->adaperAPI.currState = JTAG_TAP_RESET;
+		return ADPT_SUCCESS;
+	case ADPT_RESET_DEBUG_RESET:
+		if(cmdapObj->currTransMode == ADPT_MODE_JTAG){	// TMS上面5周期的高电平
+			uint8_t resetSeq[] = {0x45, 0x00};
+			if(CmdapJtagSequence(self, 1, resetSeq, NULL) != ADPT_SUCCESS){
+				log_error("Failed to send 5 clock high level signal to TMS.");
+				return ADPT_FAILED;;
+			}
+		}else if(cmdapObj->currTransMode == ADPT_MODE_SWD){	// 发送SWD Line Reset
+			return CmdapSwdLineReset(self);
+		}else{
+			return ADPT_ERR_UNSUPPORT;
+		}
+		// 更新TAP状态机
+		cmdapObj->currState = JTAG_TAP_RESET;
+		cmdapObj->adaperAPI.currState = JTAG_TAP_RESET;
+		return ADPT_SUCCESS;
+	}
 	return ADPT_ERR_UNSUPPORT;
 }
 
@@ -1132,6 +1135,7 @@ static int executeJtagCmd(Adapter self){
 			break;
 		}
 	}
+
 	// 执行指令
 	if(CmdapJtagSequence(self, seqCnt, writeBuff, readBuff) != ADPT_SUCCESS){
 		log_warn("Execute JTAG Instruction Failed.");
@@ -1139,6 +1143,9 @@ static int executeJtagCmd(Adapter self){
 		free(readBuff);
 		return ADPT_FAILED;
 	}
+//	int misc_PrintBulk(char *data, int length, int rowLen);
+//	misc_PrintBulk(writeBuff, writeBuffLen, 32);
+//	misc_PrintBulk(readBuff, readBuffLen, 32);
 
 	// 第三次遍历：同步数据，并删除执行成功的指令
 	list_for_each_entry_safe(cmd, cmd_t, &cmdapObj->JtagInsQueue, list_entry){
@@ -1547,6 +1554,9 @@ Adapter CreateCmsisDap(void){
 		free(obj);
 		return NULL;
 	}
+	// 初始化指令链表
+	INIT_LIST_HEAD(&obj->JtagInsQueue);
+	INIT_LIST_HEAD(&obj->DapInsQueue);
 	// 设置参数
 	obj->usbObj = usbObj;
 	// 设置接口参数

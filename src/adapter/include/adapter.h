@@ -76,9 +76,8 @@ typedef int (*ADPT_SET_FREQUENT)(
  * target复位类型
  */
 enum targetResetType {
-	ADPT_RESET_SYSTEM_RESET,	// 系统复位
-	ADPT_RESET_TAP_RESET,	// JTAG状态机复位
-	ADPT_RESET_DAP_RESET,	// DAP复位
+	ADPT_RESET_SYSTEM_RESET,	// 全部系统复位
+	ADPT_RESET_DEBUG_RESET,	// 调试系统复位
 };
 
 /**
@@ -140,8 +139,8 @@ typedef int (*ADPT_SET_TRANSFER_MODE)(
  * 参数:
  *	self:Adapter对象自身
  *	pinMask:选中哪些引脚,见上面的宏定义
- *	pinDataIn:将对应的二进制位写入到pinMask选中的引脚中
- *	pinDataOut:设置引脚后,等引脚的信号稳定,读取的全部引脚的值
+ *	pinDataOut:将对应的二进制位写入到pinMask选中的引脚中
+ *	pinDataIn:设置引脚后,等引脚的信号稳定,读取的全部引脚的值
  *	pinWait:死区时间,引脚电平切换到信号稳定的时间
  *		0 = no wait
  * 		1 .. 3000000 = time in µs (max 3s)
@@ -153,8 +152,8 @@ typedef int (*ADPT_SET_TRANSFER_MODE)(
 typedef int (*ADPT_JTAG_PINS)(
 		IN Adapter self,
 		IN uint8_t pinMask,
-		IN uint8_t pinDataIn,
-		OUT uint8_t *pinDataOut,
+		IN uint8_t pinDataOut,
+		OUT uint8_t *pinDataIn,
 		IN unsigned int pinWait
 );
 

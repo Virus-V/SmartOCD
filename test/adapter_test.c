@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <unistd.h>
 
 #include "misc/log.h"
 #include "adapter/include/adapter.h"
@@ -13,24 +14,61 @@ uint16_t pids[] = {0xf001, 0};
 #define USE_JTAG
 
 int main(){
+	uint32_t idcode[2] = {0xdeadbeef,0xdeadbeef};
+
 	printf("Hello world\n");
 
-//	log_set_level(LOG_DEBUG);
-//	uint32_t dpidr = 0;
-//	// 初始化CMSIS-DAP对象
-//	if(NewCMSIS_DAP(&cmsis_dapObj) == FALSE){
-//		log_fatal("failed to new cmsis dap.");
-//		return -1;
+	log_set_level(LOG_DEBUG);
+	Adapter cmdap = CreateCmsisDap();
+	if(!cmdap){
+		log_error("Failed!");
+		return 1;
+	}
+	if(ConnectCmsisDap(cmdap, vids, pids, NULL) != ADPT_SUCCESS){
+		log_error("Connect Failed!");
+		return 1;
+	}
+	// 测试状态灯
+	cmdap->SetStatus(cmdap, ADPT_STATUS_RUNING);
+//	for(int i=0;i<60;i++){
+//		cmdap->SetStatus(cmdap, ADPT_STATUS_CONNECTED);
+//		sleep (1);
+//		cmdap->SetStatus(cmdap, ADPT_STATUS_RUNING);
+//		sleep (1);
+//		cmdap->SetStatus(cmdap, ADPT_STATUS_IDLE);
+//		sleep (1);
+//		cmdap->SetStatus(cmdap, ADPT_STATUS_DISCONNECT);
+//		sleep (1);
 //	}
-//	// 连接
-//	if(Connect_CMSIS_DAP(&cmsis_dapObj, vids, pids, NULL) == FALSE){
-//		log_fatal("failed to connect.");
-//		return -1;
-//	}
-//
-//	// 初始化adapter
-//	adapterObj->Init(adapterObj);
-//	adapter_SetStatus(adapterObj, ADAPTER_STATUS_RUNING);
+	// 设置频率
+	cmdap->SetFrequent(cmdap, 1000);	// 2MHz
+	// 选择传输模式
+	cmdap->SetTransferMode(cmdap, ADPT_MODE_JTAG);
+	// 读取引脚值
+	uint8_t pinData;
+	cmdap->JtagPins(cmdap, 0, 0x0, &pinData, 3000);
+	log_info("JTAG Pins :0x%02X.", pinData);
+	//getchar();
+	//printf("%s:%d\n", __FILE__, __LINE__);
+	// 读取idcode
+	cmdap->Reset(cmdap, ADPT_RESET_DEBUG_RESET);	// 调试系统复位
+	//printf("%s:%d\n", __FILE__, __LINE__);
+	//sleep (3);
+	// 当前状态机切换到DRSHIFT状态
+	cmdap->JtagToState(cmdap, JTAG_TAP_DRSHIFT);
+	//printf("%s:%d\n", __FILE__, __LINE__);
+	cmdap->JtagExchangeData(cmdap, CAST(uint8_t *, idcode), 64);
+
+	cmdap->JtagToState(cmdap, JTAG_TAP_IDLE);
+
+	cmdap->JtagCommit(cmdap);
+	//printf("%s\n", JtagStateToStr(cmdap->currState));
+	//printf("%s:%d\n", __FILE__, __LINE__);
+	log_debug("Origin Method read IDCODE: 0x%08X, 0x%08X.", idcode[0], idcode[1]);
+
+	cmdap->SetStatus(cmdap, ADPT_STATUS_IDLE);
+	DisconnectCmsisDap(cmdap);
+	DestroyCmsisDap(&cmdap);
 //	// 设置频率
 //	adapter_SetClock(adapterObj, 5000000);	// 5MHz
 //#ifdef USE_JTAG
