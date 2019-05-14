@@ -49,43 +49,23 @@ int main(){
 	cmdap->JtagPins(cmdap, 0, 0x0, &pinData, 3000);
 	log_info("JTAG Pins :0x%02X.", pinData);
 	//getchar();
-	//printf("%s:%d\n", __FILE__, __LINE__);
 	// 读取idcode
 	cmdap->Reset(cmdap, ADPT_RESET_DEBUG_RESET);	// 调试系统复位
-	//printf("%s:%d\n", __FILE__, __LINE__);
-	//sleep (3);
 	// 当前状态机切换到DRSHIFT状态
 	cmdap->JtagToState(cmdap, JTAG_TAP_DRSHIFT);
-	//printf("%s:%d\n", __FILE__, __LINE__);
 	cmdap->JtagExchangeData(cmdap, CAST(uint8_t *, idcode), 64);
 
 	cmdap->JtagToState(cmdap, JTAG_TAP_IDLE);
 
 	cmdap->JtagCommit(cmdap);
-	//printf("%s\n", JtagStateToStr(cmdap->currState));
-	//printf("%s:%d\n", __FILE__, __LINE__);
+	log_info("Current TAP State: %s\n", JtagStateToStr(cmdap->currState));
 	log_debug("Origin Method read IDCODE: 0x%08X, 0x%08X.", idcode[0], idcode[1]);
+
 
 	cmdap->SetStatus(cmdap, ADPT_STATUS_IDLE);
 	DisconnectCmsisDap(cmdap);
 	DestroyCmsisDap(&cmdap);
-//	// 设置频率
-//	adapter_SetClock(adapterObj, 5000000);	// 5MHz
-//#ifdef USE_JTAG
-//	// 选择JTAG传输方式
-//	if(adapter_SelectTransmission(adapterObj, JTAG) == FALSE){
-//		log_fatal("failed to select JTAG.");
-//		return -1;
-//	}
-//	// 复位
-//	adapter_Reset(adapterObj, FALSE, FALSE, 0);
-//	uint32_t idcode[2] = {0,0};
-//	adapter_JTAG_StatusChange(adapterObj, JTAG_TAP_DRSHIFT);
-//	adapter_JTAG_Exchange_IO(adapterObj, CAST(uint8_t *, idcode), 64);
-//	adapter_JTAG_StatusChange(adapterObj, JTAG_TAP_IDLE);	// 要保持在IDLE状态，JTAG模式下DAP_Transfer才能用
-//	adapter_JTAG_Execute(adapterObj);
-//	log_debug("Origin Method read IDCODE: 0x%08X, 0x%08X.", idcode[0], idcode[1]);
-//
+
 //	uint16_t irss[2] = {4, 5};
 //	adapter_JTAG_Set_TAP_Info(adapterObj, 2, irss);
 //

@@ -207,7 +207,8 @@ struct cmsis_dap {
 	enum JTAG_TAP_State currState;	// JTAG 当前状态
 	struct list_head JtagInsQueue;	// JTAG指令队列，元素类型：struct JTAG_Command
 	struct list_head DapInsQueue;	// DAP指令队列，元素类型struct DAP_Command
-	int tapIndex;	// TAP在扫描链中的索引,在DAP相关函数中会用到
+	unsigned int tapCount;	// TAP个数
+	unsigned int tapIndex;	// 要操作的TAP在扫描链中的索引,在DAP Transfer相关函数中会用到
 	// TODO 实现更高版本仿真器支持 SWO、
 };
 
@@ -279,14 +280,6 @@ int DisconnectCmsisDap(
 );
 
 /**
- * 发送line reset 指令
- * 只可用在SWD传输模式下
- */
-int CmdapSwdLineReset(
-		IN Adapter self
-);
-
-/**
  * 设置传输参数
  * 在调用DapTransfer和DapTransferBlock之前要先调用该函数
  * idleCycle：每一次传输后面附加的空闲时钟周期数
@@ -302,19 +295,6 @@ int CmdapTransferConfigure(
 );
 
 /**
- * 执行JTAG时序
- * sequenceCount:需要产生多少组时序
- * data ：时序表示数据
- * response：TDO返回数据
- */
-int CmdapJtagSequence(
-		IN Adapter self,
-		IN int sequenceCount,
-		IN uint8_t *data,
-		OUT uint8_t *response
-);
-
-/**
  * 设置JTAG信息
  * count：扫描链中TAP的个数，不超过8个
  * irData：每个TAP的IR寄存器长度
@@ -323,37 +303,6 @@ int CmdapJtagConfig(
 		IN Adapter self,
 		IN uint8_t count,
 		IN uint8_t *irData
-);
-
-/**
- * SWD和JTAG模式下均有效
- * 具体手册参考CMSIS-DAP DAP_Transfer这一小节
- * sequenceCnt:要发送的Sequence个数
- * okSeqCnt：执行成功的Sequence个数
- * XXX：由于DAP指令可能会出错，出错之后要立即停止执行后续指令，所以就
- * 不使用批量功能 ,此函数内默认cmsis_dapObj->MaxPcaketCount = 1
- */
-int CmdapTransfer(
-		IN Adapter self,
-		IN uint8_t index,
-		IN int sequenceCnt,
-		IN uint8_t *data,
-		IN uint8_t *response,
-		OUT int *okSeqCnt
-);
-
-/**
- * DAP_TransferBlock
- * 对单个寄存器进行多次读写，常配合地址自增使用
- * 参数列表和意义与DAP_Transfer相同
- */
-int CmdapTransferBlock(
-		IN Adapter self,
-		IN uint8_t index,
-		IN int sequenceCnt,
-		IN uint8_t *data,
-		OUT uint8_t *response,
-		OUT int *okSeqCnt
 );
 
 /**
@@ -372,6 +321,15 @@ int CmdapSwdConfig(
 int CmdapWriteAbort(
 		IN Adapter self,
 		IN uint32_t data
+);
+
+/**
+ * 选中DAP模式下JTAG扫描链中的TAP对象
+ * index:不得大于CmdapJtagConfig中设置的个数
+ */
+int CmdapSetTapIndex(
+		IN Adapter self,
+		IN int index
 );
 
 #endif /* SRC_ADAPTER_CMSIS_DAP_CMSIS_DAP_H_ */

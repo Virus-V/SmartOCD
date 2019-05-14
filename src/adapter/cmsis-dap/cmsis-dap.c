@@ -100,7 +100,7 @@ int ConnectCmsisDap(Adapter self, const uint16_t *vids, const uint16_t *pids, co
 		for(; vids[idx] && pids[idx]; idx++){
 			log_debug("Try connecting vid: 0x%02x, pid: 0x%02x usb device.", vids[idx], pids[idx]);
 			if(cmdapObj->usbObj->Open(cmdapObj->usbObj, vids[idx], pids[idx], serialNum) == USB_SUCCESS){
-				log_info("Successful connection vid: 0x%02x, pid: 0x%02x usb device.", vids[idx], pids[idx]);
+				log_info("Successfully connected vid: 0x%02x, pid: 0x%02x usb device.", vids[idx], pids[idx]);
 				// 复位设备
 				cmdapObj->usbObj->Reset(cmdapObj->usbObj);
 				// 标志已连接
@@ -292,7 +292,7 @@ static int swjSwd2Jtag(struct cmsis_dap *cmdapObj){
 /**
  * line reset
  */
-int CmdapSwdLineReset(Adapter self){
+static int CmdapSwdLineReset(Adapter self){
 	assert(self != NULL);
 	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
 	if(cmdapObj->currTransMode != ADPT_MODE_SWD){
@@ -493,8 +493,9 @@ static int dapSwjClock (Adapter self, unsigned int freq){
  * sequenceCount:需要产生多少组时序
  * data ：时序表示数据
  * response：TDO返回数据
+ * 该函数会造成TAP状态机状态与CMSIS-DAP类记录的不一样
  */
-int CmdapJtagSequence(Adapter self, int sequenceCount, uint8_t *data, uint8_t *response){
+static int CmdapJtagSequence(Adapter self, int sequenceCount, uint8_t *data, uint8_t *response){
 	assert(self != NULL);
 	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
 	assert(cmdapObj->PacketSize != 0 && cmdapObj->MaxPcaketCount != 0);
@@ -655,6 +656,8 @@ int CmdapJtagConfig(Adapter self, uint8_t count, uint8_t *irData){
 	if(*(cmdapObj->respBuffer + 1) != CMDAP_OK){
 		return ADPT_FAILED;
 	}
+	// 记录当前TAP个数
+	cmdapObj->tapCount = count;
 	return ADPT_SUCCESS;
 }
 
@@ -670,7 +673,7 @@ struct dap_pack_info {
  * XXX：由于DAP指令可能会出错，出错之后要立即停止执行后续指令，所以就
  * 不使用批量功能 ,此函数内默认cmsis_dapObj->MaxPcaketCount = 1
  */
-int CmdapTransfer(Adapter self, uint8_t index, int sequenceCnt, uint8_t *data, uint8_t *response, int *okSeqCnt){
+static int CmdapTransfer(Adapter self, uint8_t index, int sequenceCnt, uint8_t *data, uint8_t *response, int *okSeqCnt){
 	assert(self != NULL && okSeqCnt != NULL);
 	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
 	assert(cmdapObj->PacketSize != 0);
@@ -785,7 +788,7 @@ MAKE_PACKT:
  * 对单个寄存器进行多次读写，常配合地址自增使用
  * 参数列表和意义与DAP_Transfer相同
  */
-int CmdapTransferBlock(Adapter self, uint8_t index, int sequenceCnt, uint8_t *data, uint8_t *response, int *okSeqCnt){
+static int CmdapTransferBlock(Adapter self, uint8_t index, int sequenceCnt, uint8_t *data, uint8_t *response, int *okSeqCnt){
 	assert(self != NULL && okSeqCnt != NULL);
 	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
 
@@ -1602,4 +1605,18 @@ void DestroyCmsisDap(Adapter *self){
 	}
 	free(cmdapObj);
 	*self = NULL;
+}
+
+/**
+ * 设置DAP模式下,TAP在扫描链中的索引位置
+ */
+int CmdapSetTapIndex(Adapter self, unsigned int index){
+	assert(self != NULL);
+	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+	if(index >= cmdapObj->tapCount){
+		log_error("The index of the TAP is greater than the value of tapCount.");
+		return ADPT_ERR_BAD_PARAMETER;
+	}
+	cmdapObj->tapIndex = index;
+	return ADPT_SUCCESS;
 }

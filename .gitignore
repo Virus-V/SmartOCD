@@ -57,3 +57,4 @@ smartocd
 smartocd_history.txt
 smartocd.log
 leak_check.log
+test/adapter_test

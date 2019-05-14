@@ -28,6 +28,7 @@ enum {
 	ADPT_ERR_NO_DEVICE,	// 找不到设备
 	ADPT_ERR_UNSUPPORT,	// 不支持的操作
 	ADPT_ERR_INTERNAL_ERROR,	// 内部错误,不是由于Adapter功能部分造成的失败
+	ADPT_ERR_BAD_PARAMETER,	// 无效的参数
 };
 
 /* 仿真器对象 */
