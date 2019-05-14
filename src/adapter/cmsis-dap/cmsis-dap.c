@@ -46,6 +46,9 @@ static int dapRead(struct cmsis_dap *cmdapObj, int *transferred){
 		log_error("Read from CMSIS-USB failed.");
 		return ADPT_ERR_TRANSPORT_ERROR;
 	}
+//	log_debug("----------------------Read---------------------");
+//	misc_PrintBulk(cmdapObj->respBuffer, *transferred, 16);
+//	log_debug("----------------------Read---------------------");
 	log_trace("Read %d byte(s) from CMSIS-DAP.", *transferred);
 	return ADPT_SUCCESS;
 }
@@ -63,9 +66,9 @@ static int dapWrite(struct cmsis_dap *cmdapObj, uint8_t *data, int len, int *tra
 		log_error("Write to CMSIS-USB failed.");
 		return ADPT_ERR_TRANSPORT_ERROR;
 	}
-	//log_debug("-------------------------------------------");
-	//misc_PrintBulk(data, len, 16);
-	//log_debug("-------------------------------------------");
+//	log_debug("----------------------Write---------------------");
+//	misc_PrintBulk(data, *transferred, 16);
+//	log_debug("----------------------Write---------------------");
 	log_trace("Write %d byte(s) to CMSIS-DAP.", *transferred);
 	return ADPT_SUCCESS;
 }
@@ -147,6 +150,39 @@ int DisconnectCmsisDap(Adapter self){
 		log_warn("Disconnect execution failed.");
 		return ADPT_FAILED;
 	}
+	return ADPT_SUCCESS;
+}
+
+/**
+ * JTAG协议转SWD
+ * 转换后自动增加一个lineReset操作
+ */
+static int swjJtag2Swd(struct cmsis_dap *cmdapObj){
+	assert(cmdapObj != NULL);
+	//SWJ发送 0xE79E，老版本的ARM发送0xB76D强制切换
+	// 12 76 FF FF FF FF FF FF 7B 9E FF FF FF FF FF FF 0F
+	uint8_t switchSque[] = {CMDAP_ID_DAP_SWJ_Sequence, 136, // 144
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // 56 bit
+			0x9e, 0xe7,	// 16 bit
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // 56 bit
+			0x00,	// 8 bit
+	};	// DAP_SWJ_Sequence Command
+	DAP_EXCHANGE_DATA(cmdapObj, switchSque, sizeof(switchSque));
+	return ADPT_SUCCESS;
+}
+
+/**
+ * SWD协议转JTAG
+ */
+static int swjSwd2Jtag(struct cmsis_dap *cmdapObj){
+	assert(cmdapObj != NULL);
+	//SWJ发送 0xE79E，老版本的ARM发送0xB76D强制切换
+	uint8_t switchSque[] = {CMDAP_ID_DAP_SWJ_Sequence, 84,
+			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // 56 bit
+			0x3c, 0xe7,	// 16 bit
+			0xff, 0x00,	// 8 bit
+	};	// DAP_SWJ_Sequence Command
+	DAP_EXCHANGE_DATA(cmdapObj, switchSque, sizeof(switchSque));
 	return ADPT_SUCCESS;
 }
 
@@ -247,45 +283,14 @@ static int dapInit(struct cmsis_dap *cmdapObj){
 	case CMDAP_PORT_SWD:
 		log_info("Auto select SWD transfer mode.");
 		cmdapObj->currTransMode = ADPT_MODE_SWD;
+		swjJtag2Swd(cmdapObj);
 		break;
 	case CMDAP_PORT_JTAG:
 		log_info("Auto select JTAG transfer mode.");
 		cmdapObj->currTransMode = ADPT_MODE_JTAG;
+		swjSwd2Jtag(cmdapObj);
 		break;
 	}
-	return ADPT_SUCCESS;
-}
-
-/**
- * JTAG协议转SWD
- * 转换后自动增加一个lineReset操作
- */
-static int swjJtag2Swd(struct cmsis_dap *cmdapObj){
-	assert(cmdapObj != NULL);
-	//SWJ发送 0xE79E，老版本的ARM发送0xB76D强制切换
-	// 12 76 FF FF FF FF FF FF 7B 9E FF FF FF FF FF FF 0F
-	uint8_t switchSque[] = {CMDAP_ID_DAP_SWJ_Sequence, 136, // 144
-			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // 56 bit
-			0x9e, 0xe7,	// 16 bit
-			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // 56 bit
-			0x00,	// 8 bit
-	};	// DAP_SWJ_Sequence Command
-	DAP_EXCHANGE_DATA(cmdapObj, switchSque, sizeof(switchSque));
-	return ADPT_SUCCESS;
-}
-
-/**
- * SWD协议转JTAG
- */
-static int swjSwd2Jtag(struct cmsis_dap *cmdapObj){
-	assert(cmdapObj != NULL);
-	//SWJ发送 0xE79E，老版本的ARM发送0xB76D强制切换
-	uint8_t switchSque[] = {CMDAP_ID_DAP_SWJ_Sequence, 84,
-			0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // 56 bit
-			0x3c, 0xe7,	// 16 bit
-			0xff, 0x00,	// 8 bit
-	};	// DAP_SWJ_Sequence Command
-	DAP_EXCHANGE_DATA(cmdapObj, switchSque, sizeof(switchSque));
 	return ADPT_SUCCESS;
 }
 
@@ -744,6 +749,7 @@ MAKE_PACKT:
 	packetInfo[sendPackCnt].dataLen = readCount;	// 本次包的响应包包含多少个数据
 	packetInfo[sendPackCnt].seqCnt = thisPackSeqCnt;
 	sendPackCnt++;
+
 	/**
 	 * 如果没发完，而且没有达到最大包数量，则再构建一个包发送过去
 	 */
@@ -1287,7 +1293,7 @@ REEXEC:;
 		switch(cmd->type){
 		case DAP_INS_RW_REG_SINGLE:	// 单次读写寄存器
 			writeBuffLen += 1;
-			if(cmd->instr.singleReg.request & 0x2 == 0x2){	// 读操作
+			if((cmd->instr.singleReg.request & 0x2) == 0x2){	// 读操作
 				readBuffLen += 4;
 			}else{
 				writeBuffLen += 4;
@@ -1296,7 +1302,7 @@ REEXEC:;
 
 		case DAP_INS_RW_REG_MULTI:	// 多次读写寄存器
 			writeBuffLen += 1 + sizeof(int);	// int:blockCnt, byte:seq
-			if(cmd->instr.multiReg.request & 0x2 == 0x2){	// 读操作
+			if((cmd->instr.multiReg.request & 0x2) == 0x2){	// 读操作
 				readBuffLen += cmd->instr.multiReg.count << 2;
 			}else{
 				writeBuffLen += cmd->instr.multiReg.count << 2;
@@ -1331,16 +1337,16 @@ REEXEC:;
 //			do{
 //				log_debug("-----------------------------");
 //				log_debug("%s %s Reg %x.",
-//					cmd->instr.RWRegSingle.RnW ? "Read" : "Write",
-//					cmd->instr.RWRegSingle.APnDP ? "AP" : "DP",
-//					cmd->instr.RWRegSingle.reg & 0xC);
-//				if(cmd->instr.RWRegSingle.RnW == FALSE){
-//					log_debug("0x%08X", cmd->instr.RWRegSingle.data.write);
+//					cmd->instr.singleReg.request & 0x2 ? "Read" : "Write",
+//					cmd->instr.singleReg.request & 0x1 ? "AP" : "DP",
+//					cmd->instr.singleReg.request & 0xC);
+//				if((cmd->instr.singleReg.request & 0x2) == 0){
+//					log_debug("0x%08X", cmd->instr.singleReg.data.write);
 //				}
 //			}while(0);
 
 			// 如果是写操作
-			if(cmd->instr.singleReg.request & 0x2 == 0){
+			if((cmd->instr.singleReg.request & 0x2) == 0){
 				// XXX 小端字节序
 				memcpy(writeBuff + writeCnt, CAST(uint8_t *, &cmd->instr.singleReg.data.write), 4);
 				writeCnt += 4;
@@ -1354,7 +1360,7 @@ REEXEC:;
 			writeCnt += sizeof(int);
 			*(writeBuff + writeCnt++) = cmd->instr.multiReg.request;
 			// 如果是写操作
-			if(cmd->instr.multiReg.request & 0x2 == 0){
+			if((cmd->instr.multiReg.request & 0x2) == 0){
 				// XXX 小端字节序
 				memcpy(writeBuff + writeCnt, CAST(uint8_t *, cmd->instr.multiReg.data), cmd->instr.multiReg.count << 2);
 				writeCnt += cmd->instr.multiReg.count << 2;
@@ -1371,7 +1377,7 @@ REEXEC:;
 	case DAP_INS_RW_REG_SINGLE:
 		// 执行指令 DAP_Transfer
 		if(CmdapTransfer(self, cmdapObj->tapIndex, seqCnt, writeBuff, readBuff, &okSeqCnt) != ADPT_SUCCESS){
-			log_warn("DAP_Transfer:Some DAP Instruction Execute Failed. Success:%d, All:%d.", okSeqCnt, seqCnt);
+			log_error("DAP_Transfer:Some DAP Instruction Execute Failed. Success:%d, All:%d.", okSeqCnt, seqCnt);
 			result = ADPT_FAILED;
 		}
 	break;
@@ -1379,7 +1385,7 @@ REEXEC:;
 	case DAP_INS_RW_REG_MULTI:
 		// transfer block
 		if(CmdapTransferBlock(self, cmdapObj->tapIndex, seqCnt, writeBuff, readBuff, &okSeqCnt) != ADPT_SUCCESS){
-			log_warn("DAP_TransferBlock:Some DAP Instruction Execute Failed. Success:%d, All:%d.", okSeqCnt, seqCnt);
+			log_error("DAP_TransferBlock:Some DAP Instruction Execute Failed. Success:%d, All:%d.", okSeqCnt, seqCnt);
 			result = ADPT_FAILED;
 		}
 	break;
@@ -1408,7 +1414,7 @@ REEXEC:;
 	free(writeBuff);
 	free(readBuff);
 	// 判断是否继续执行
-	if(result && !list_empty(&cmdapObj->DapInsQueue)){
+	if(result == ADPT_SUCCESS && !list_empty(&cmdapObj->DapInsQueue)){
 		goto REEXEC;
 	}
 	return result;
@@ -1467,10 +1473,13 @@ static int addDapSingleWrite(Adapter self, enum dapRegType type, int reg, uint32
 }
 
 /* 增加多次读寄存器指令 */
-static int addDapMultiRead(Adapter self, enum dapRegType type, int reg, uint32_t *data){
+static int addDapMultiRead(Adapter self, enum dapRegType type, int reg, int count, uint32_t *data){
 	assert(self != NULL);
 	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
-
+	if(count <= 0){
+		log_error("Count must be greater than 0.");
+		return ADPT_ERR_BAD_PARAMETER;
+	}
 	// 新建指令
 	struct DAP_Command *command = newDapCommand(cmdapObj);
 	if(command == NULL){
@@ -1482,14 +1491,19 @@ static int addDapMultiRead(Adapter self, enum dapRegType type, int reg, uint32_t
 		command->instr.multiReg.request |= 0x1;
 	}
 	command->instr.multiReg.data = data;
+	command->instr.multiReg.count = count;
 	return ADPT_SUCCESS;
 }
 
 /* 增加多次写寄存器指令 */
-static int addDapMultiWrite(Adapter self, enum dapRegType type, int reg, uint32_t *data){
+static int addDapMultiWrite(Adapter self, enum dapRegType type, int reg, int count, uint32_t *data){
 	assert(self != NULL);
 	struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
 
+	if(count <= 0){
+		log_error("Count must be greater than 0.");
+		return ADPT_ERR_BAD_PARAMETER;
+	}
 	// 新建指令
 	struct DAP_Command *command = newDapCommand(cmdapObj);
 	if(command == NULL){
@@ -1501,6 +1515,7 @@ static int addDapMultiWrite(Adapter self, enum dapRegType type, int reg, uint32_
 		command->instr.multiReg.request |= 0x1;
 	}
 	command->instr.multiReg.data = data;
+	command->instr.multiReg.count = count;
 	return ADPT_SUCCESS;
 }
 

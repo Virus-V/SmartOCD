@@ -275,6 +275,7 @@ typedef int (*ADPT_DAP_SINGLE_WRITE)(
  * 	self:Adapter对象自身
  * 	type:寄存器类型,DP还是AP
  * 	reg:reg地址
+ * 	count:读取的次数
  * 	data:将寄存器的内容写入到该参数指定的数组
  * 返回:
  */
@@ -282,6 +283,7 @@ typedef int (*ADPT_DAP_MULTI_READ)(
 		IN Adapter self,
 		IN enum dapRegType type,
 		IN int reg,
+		IN int count,
 		OUT uint32_t *data
 );
 
@@ -292,6 +294,7 @@ typedef int (*ADPT_DAP_MULTI_READ)(
  * 	self:Adapter对象自身
  * 	type:寄存器类型,DP还是AP
  * 	reg:reg地址
+ * 	count:读取的次数
  * 	data:将该参数指定数组的数据写入到寄存器
  * 返回:
  */
@@ -299,6 +302,7 @@ typedef int (*ADPT_DAP_MULTI_WRITE)(
 		IN Adapter self,
 		IN enum dapRegType type,
 		IN int reg,
+		IN int count,
 		IN uint32_t *data
 );
 

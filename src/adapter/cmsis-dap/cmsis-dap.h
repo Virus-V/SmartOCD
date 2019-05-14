@@ -329,7 +329,7 @@ int CmdapWriteAbort(
  */
 int CmdapSetTapIndex(
 		IN Adapter self,
-		IN int index
+		IN unsigned int index
 );
 
 #endif /* SRC_ADAPTER_CMSIS_DAP_CMSIS_DAP_H_ */

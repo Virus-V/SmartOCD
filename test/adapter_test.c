@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 #include "misc/log.h"
@@ -6,7 +7,7 @@
 
 #include "adapter/cmsis-dap/cmsis-dap.h"
 
-extern int print_bulk(char *data, int length, int rowLen);
+extern int misc_PrintBulk(char *data, int length, int rowLen);
 
 uint16_t vids[] = {0xc251, 0};
 uint16_t pids[] = {0xf001, 0};
@@ -18,7 +19,7 @@ int main(){
 
 	printf("Hello world\n");
 
-	log_set_level(LOG_DEBUG);
+	log_set_level(LOG_TRACE);
 	Adapter cmdap = CreateCmsisDap();
 	if(!cmdap){
 		log_error("Failed!");
@@ -40,15 +41,17 @@ int main(){
 //		cmdap->SetStatus(cmdap, ADPT_STATUS_DISCONNECT);
 //		sleep (1);
 //	}
-	// 设置频率
-	cmdap->SetFrequent(cmdap, 1000);	// 2MHz
-	// 选择传输模式
-	cmdap->SetTransferMode(cmdap, ADPT_MODE_JTAG);
 	// 读取引脚值
 	uint8_t pinData;
 	cmdap->JtagPins(cmdap, 0, 0x0, &pinData, 3000);
 	log_info("JTAG Pins :0x%02X.", pinData);
-	//getchar();
+	// 设置频率
+	cmdap->SetFrequent(cmdap, 200000);	// 2MHz
+	// 选择传输模式
+	cmdap->SetTransferMode(cmdap, ADPT_MODE_SWD);
+	cmdap->Reset(cmdap, ADPT_RESET_SYSTEM_RESET);	// 调试系统复位
+
+#if 0
 	// 读取idcode
 	cmdap->Reset(cmdap, ADPT_RESET_DEBUG_RESET);	// 调试系统复位
 	// 当前状态机切换到DRSHIFT状态
@@ -60,78 +63,73 @@ int main(){
 	cmdap->JtagCommit(cmdap);
 	log_info("Current TAP State: %s\n", JtagStateToStr(cmdap->currState));
 	log_debug("Origin Method read IDCODE: 0x%08X, 0x%08X.", idcode[0], idcode[1]);
+	uint8_t irs[2] = {4, 5};	// 扫描链的IR链长度
+	// 配置JTAG
+	CmdapJtagConfig(cmdap, 2, irs);
+	if(CmdapSetTapIndex(cmdap, 0) != ADPT_SUCCESS){
+		log_error("CmdapSetTapIndex:failed!");
+		return 1;
+	}
+#endif
 
+	// 设置SWD协议
+	CmdapSwdConfig(cmdap, 0);
+	// 设置传输配置
+	CmdapTransferConfigure(cmdap, 5, 5, 5);
+	// 读取DPIDR
+	uint32_t idr,tmp;
+	cmdap->DapSingleRead(cmdap, ADPT_DAP_DP_REG, 0, &idr);	// 读IDR
+	cmdap->DapSingleWrite(cmdap, ADPT_DAP_DP_REG, 0, 0x1e);	// 写ABORT
 
+	cmdap->DapSingleWrite(cmdap, ADPT_DAP_DP_REG, 0x08, 0);	// 写SELECT
+	cmdap->DapSingleWrite(cmdap, ADPT_DAP_DP_REG, 0x04, 0x50000000);	// 写SELECT
+	cmdap->DapCommit(cmdap);	// 提交指令
+	log_info("DPIDR: 0x%08X.", idr);
+
+	do{
+		cmdap->DapSingleRead(cmdap, ADPT_DAP_DP_REG, 0x04, &tmp);	// 读IDR
+		cmdap->DapCommit(cmdap);	// 提交指令
+		log_trace("CTRL_STAT: 0x%08X.", tmp);
+	}while((tmp & 0xA0000000) != 0xA0000000);
+
+/**
+union {
+	uint32_t data;
+	struct {
+		uint32_t DP_BankSel : 4;
+		uint32_t AP_BankSel : 4;
+		uint32_t : 16;
+		uint32_t AP_Sel : 8;
+	} info;
+}SelectReg;	// 当前Select寄存器
+ */
+	// 读AP CSW IDR
+	cmdap->DapSingleWrite(cmdap, ADPT_DAP_DP_REG, 0x08, 0x0F000000);	// 写SELECT
+	cmdap->DapSingleRead(cmdap, ADPT_DAP_AP_REG, 0x0C, &idr);	// 读AP0的IDR
+	cmdap->DapSingleWrite(cmdap, ADPT_DAP_DP_REG, 0x08, 0x00000000);	// 写SELECT
+	cmdap->DapSingleRead(cmdap, ADPT_DAP_AP_REG, 0x00, &tmp);	// 读AP0的CSW
+	cmdap->DapCommit(cmdap);	// 提交指令
+	log_info("AP[0] IDR: 0x%08X, CSW: 0x%08X.", idr, tmp);
+	// 读取ROM
+	cmdap->DapSingleWrite(cmdap, ADPT_DAP_DP_REG, 0x08, 0x00000000);	// 写SELECT
+	cmdap->DapSingleWrite(cmdap, ADPT_DAP_AP_REG, 0x04, 0x08000000);	// TAR_LSB
+	cmdap->DapSingleRead(cmdap, ADPT_DAP_AP_REG, 0x0C, &tmp);	// 读AP0的DRW
+	cmdap->DapCommit(cmdap);	// 提交指令
+	log_info("0x08000000: 0x%08X.", tmp);
+
+	// 多次读取测试
+	uint32_t *buff = calloc(32, 4);
+	if(!buff){
+		log_error("alloc!");
+		return 1;
+	}
+	cmdap->DapMultiRead(cmdap, ADPT_DAP_DP_REG, 0, 32, buff);
+	cmdap->DapMultiWrite(cmdap, ADPT_DAP_DP_REG, 0, 32, buff);
+
+	cmdap->DapCommit(cmdap);	// 提交指令
+	misc_PrintBulk((char *)buff, 32<<2, 16);
 	cmdap->SetStatus(cmdap, ADPT_STATUS_IDLE);
 	DisconnectCmsisDap(cmdap);
 	DestroyCmsisDap(&cmdap);
-
-//	uint16_t irss[2] = {4, 5};
-//	adapter_JTAG_Set_TAP_Info(adapterObj, 2, irss);
-//
-//	uint8_t irs[2] = {4, 5};
-//	// 设置JTAG信息
-//	CMSIS_DAP_JTAG_Configure(adapterObj, 2, irs);
-//	CMSIS_DAP_TransferConfigure(adapterObj, 5, 5, 5);
-//	adapter_DAP_Index(adapterObj, 0);
-//#else
-//	// 选择SWD传输方式
-//	if(adapter_SelectTransmission(adapterObj, SWD) == FALSE){
-//		log_fatal("failed to select SWD.");
-//		return -1;
-//	}
-//	// 复位
-//	adapter_Reset(adapterObj, FALSE, FALSE, 0);
-//	// 设置频率
-//	//adapter_SetClock(adapterObj, 5000000);	// 5MHz
-//	// CMSIS-DAP专用函数
-//	CMSIS_DAP_TransferConfigure(adapterObj,  5, 5, 5);
-//	CMSIS_DAP_SWD_Configure(adapterObj, 0);
-//	// SWD模式下第一个读取的寄存器必须要是DPIDR，这样才能读取其他的寄存器
-//	// 否则其他寄存器无法读取
-//	adapter_DAP_Read_DP_Single(adapterObj, DPIDR, &dpidr, FALSE);
-//	adapter_DAP_Write_DP_Single(adapterObj, ABORT, 0x1e, FALSE);	// 清空ERROR
-//#endif
-//	// 初始化动作
-//	int ctrl_stat = 0;
-//	adapter_DAP_Write_DP_Single(adapterObj, SELECT, 0, FALSE);
-//
-//	if(adapter_DAP_Execute(adapterObj) == FALSE){
-//		log_fatal("SELECT Register Clean Failed.");
-//		return -1;
-//	}
-//
-//	adapter_DAP_Read_DP_Single(adapterObj, SELECT, &adapterObj->dap.SELECT_Reg.regData, FALSE);
-//	adapter_DAP_Execute(adapterObj);
-//	log_debug("DPIDR:0x%08X, SELECT:0x%08X.", dpidr, adapterObj->dap.SELECT_Reg.regData);
-//
-//	adapter_DAP_Write_DP_Single(adapterObj, CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ, TRUE);
-//	adapter_DAP_Execute(adapterObj);
-//	do{
-//		adapter_DAP_Read_DP_Single(adapterObj, CTRL_STAT, &ctrl_stat, TRUE);
-//		adapter_DAP_Execute(adapterObj);
-//	}while((ctrl_stat & (DP_STAT_CDBGPWRUPACK | DP_STAT_CSYSPWRUPACK)) != (DP_STAT_CDBGPWRUPACK | DP_STAT_CSYSPWRUPACK));
-//	log_debug("Power up. CTRL_STAT:0x%08X.", ctrl_stat);
-//
-//	// 读AP0的CSW寄存器
-//	uint32_t ap_csw = 0,apidr = 0, rom_data = 0;
-//	adapter_DAP_Read_AP_Single(adapterObj, CSW, &ap_csw, TRUE);
-//	adapter_DAP_Read_AP_Single(adapterObj, IDR, &apidr, TRUE);
-//	//adapter_DAP_Execute(adapterObj);
-//	log_debug("CSW:0x%08X, APIDR:0x%08X.", ap_csw, apidr);
-//	// 写入AP的TAR_LSB，读取一个字
-//	adapter_DAP_Write_AP_Single(adapterObj, TAR_LSB, 0x08000004u, TRUE);
-//	adapter_DAP_Read_AP_Single(adapterObj, DRW, &rom_data, TRUE);
-//	adapter_DAP_Execute(adapterObj);
-//	log_debug("CSW:0x%08X, APIDR:0x%08X.", ap_csw, apidr);
-//	log_debug("0x08000000: 0x%08X.");
-//	//05 00 02 02 00 1E 00 00 00	// 读DPIDR，写ABORT
-//	//05 00 02 08 00 00 00 00 06	// 清零SELECT，读CTRL/STAT
-//	//05 00 04 04 20 00 00 00 06 04 00 00 00 50 06 00 00 00 00 写CTRL/STAT 0x20，读CTRL，写CTRL/STAT：上电，读CTRL_STAT
-//	//05 00 01 06 // 读CTRL
-//	//05 00 03 06 04 00 00 00 50 06 // 读CTRLSTAT，写CTRL，读CTRL
-//
-//	adapterObj->Deinit(adapterObj);	// 断开连接
-//	adapterObj->Destroy(adapterObj);	// 销毁结构
 	return 0;
 }
