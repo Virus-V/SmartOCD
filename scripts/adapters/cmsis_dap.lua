@@ -3,7 +3,6 @@
  * Date:2018年04月20日22:13:45
  * Author: Virus.V <virusv@live.com>
 ]]
-adapter = require("Adapter");	-- 加载Adapter库
 cmsis_dap = require("CMSIS-DAP"); -- 加载CMSIS-DAP库
 AdapterObj = cmsis_dap.New(); -- 创建新的CMSIS-DAP Adapter对象
 -- CMSIS-DAP的VID和PID
