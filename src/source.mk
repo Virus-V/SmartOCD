@@ -16,6 +16,6 @@ SMARTOCD_SRC_FILES += $(wildcard $(ROOT_DIR)/src/JTAG/*.c)
 SMARTOCD_SRC_FILES += $(wildcard $(ROOT_DIR)/src/USB/*.c)
 
 include $(ROOT_DIR)/src/misc/misc.mk
-#include $(ROOT_DIR)/src/layer/layer.mk
+include $(ROOT_DIR)/src/api/api.mk
 # 把main函数所在的文件踢出来，防止与单元测试的main函数冲突
 #SMARTOCD_SRC_FILES += $(filter-out $(ROOT_DIR)/src/smart_ocd.c, $(wildcard $(ROOT_DIR)/src/*.c))

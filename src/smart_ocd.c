@@ -15,11 +15,11 @@
 #include "smart_ocd.h"
 #include "misc/log.h"
 #include "misc/linenoise.h"
-#include "layer/load3rd.h"
+#include "api/api.h"
 
-#include "lua.h"
-#include "lauxlib.h"
-#include "lualib.h"
+#include "lua/src/lua.h"
+#include "lua/src/lauxlib.h"
+#include "lua/src/lualib.h"
 
 // 致命错误恢复点
 jmp_buf fatalException;
@@ -353,7 +353,7 @@ static int init (lua_State *L) {
 		return 1;
 	}
 	// 加载SmartOCD库
-	load3rd(L);
+	LuaApiInit(L);
 	// 打印logo和版本
 	printVersion();
 	// 解析参数
