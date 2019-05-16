@@ -54,7 +54,6 @@ static int luaApi_adapter_set_frequent(lua_State *L){
 static int luaApi_adapter_transmission_mode(lua_State *L){
 	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
 	if(lua_isnone(L, 2)){	// 读取当前活动传输模式
-		printf("currTransferMode: %d\n", cmdapObj->currTransMode);
 		lua_pushinteger(L, cmdapObj->currTransMode);
 		return 1;
 	}else{	// 设置当前传输模式
