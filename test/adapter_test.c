@@ -82,7 +82,7 @@ int main(){
 	cmdap->DapSingleWrite(cmdap, ADPT_DAP_DP_REG, 0, 0x1e);	// 写ABORT
 
 	cmdap->DapSingleWrite(cmdap, ADPT_DAP_DP_REG, 0x08, 0);	// 写SELECT
-	cmdap->DapSingleWrite(cmdap, ADPT_DAP_DP_REG, 0x04, 0x50000000);	// 写SELECT
+	cmdap->DapSingleWrite(cmdap, ADPT_DAP_DP_REG, 0x04, 0x50000000);	// 写CTRL_STAT
 	cmdap->DapCommit(cmdap);	// 提交指令
 	log_info("DPIDR: 0x%08X.", idr);
 

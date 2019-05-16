@@ -51,9 +51,10 @@ static int luaApi_adapter_set_frequent(lua_State *L){
  * 返回值：无返回值或者1返回值
  * 1#：当前活动的传输模式
  */
-static int luaApi_adapter_transmission_type(lua_State *L){
+static int luaApi_adapter_transmission_mode(lua_State *L){
 	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
 	if(lua_isnone(L, 2)){	// 读取当前活动传输模式
+		printf("currTransferMode: %d\n", cmdapObj->currTransMode);
 		lua_pushinteger(L, cmdapObj->currTransMode);
 		return 1;
 	}else{	// 设置当前传输模式
@@ -457,56 +458,11 @@ static const luaL_Reg lib_cmdap_f[] = {
 	{NULL, NULL}
 };
 
-// 模块常量
-static const luaApi_regConst lib_cmdap_const[] = {
-	// 传输方式
-	{"JTAG", ADPT_MODE_JTAG},
-	{"SWD", ADPT_MODE_SWD},
-	// JTAG引脚bit mask
-	{"PIN_SWCLK_TCK", SWJ_PIN_SWCLK_TCK},
-	{"PIN_SWDIO_TMS", SWJ_PIN_SWDIO_TMS},
-	{"PIN_TDI", SWJ_PIN_TDI},
-	{"PIN_TDO", SWJ_PIN_TDO},
-	{"PIN_nTRST", SWJ_PIN_nTRST},
-	{"PIN_nRESET", SWJ_PIN_nRESET},
-	// 复位类型
-	{"RESET_SYSTEM", ADPT_RESET_SYSTEM_RESET},
-	{"RESET_DEBUG", ADPT_RESET_DEBUG_RESET},
-	// DAP寄存器类型
-	{"REG_DP", ADPT_DAP_DP_REG},
-	{"REG_AP", ADPT_DAP_AP_REG},
-	// TAP 状态
-	{"TAP_RESET", JTAG_TAP_RESET},
-	{"TAP_IDLE", JTAG_TAP_IDLE},
-	{"TAP_DR_SELECT", JTAG_TAP_DRSELECT},
-	{"TAP_DR_CAPTURE", JTAG_TAP_DRCAPTURE},
-	{"TAP_DR_SHIFT", JTAG_TAP_DRSHIFT},
-	{"TAP_DR_EXIT1", JTAG_TAP_DREXIT1},
-	{"TAP_DR_PAUSE", JTAG_TAP_DRPAUSE},
-	{"TAP_DR_EXIT2", JTAG_TAP_DREXIT2},
-	{"TAP_DR_UPDATE", JTAG_TAP_DRUPDATE},
-	{"TAP_IR_SELECT", JTAG_TAP_IRSELECT},
-	{"TAP_IR_CAPTURE", JTAG_TAP_IRCAPTURE},
-	{"TAP_IR_SHIFT", JTAG_TAP_IRSHIFT},
-	{"TAP_IR_EXIT1", JTAG_TAP_IREXIT1},
-	{"TAP_IR_PAUSE", JTAG_TAP_IRPAUSE},
-	{"TAP_IR_EXIT2", JTAG_TAP_IREXIT2},
-	{"TAP_IR_UPDATE", JTAG_TAP_IRUPDATE},
-	// 仿真器的状态
-	{"STATUS_CONNECTED", ADPT_STATUS_CONNECTED},
-	{"STATUS_DISCONNECT", ADPT_STATUS_DISCONNECT},
-	{"STATUS_RUNING", ADPT_STATUS_RUNING},
-	{"STATUS_IDLE", ADPT_STATUS_IDLE},
-	{NULL, 0}
-};
-
 // 初始化Adapter库
-int luaopen_adapter (lua_State *L) {
-	// 新建一张表，将函数注册到表中：创建c闭包（adapter_init）直接加入到表中，键为函数名字符串（init）
-	// create module table
-	lua_createtable(L, 0, sizeof(lib_cmdap_const)/sizeof(lib_cmdap_const[0]));	// 预分配索引空间，提高效率
+int luaopen_cmsis_dap (lua_State *L) {
+	lua_createtable(L, 0, 0);	// 预分配索引空间，提高效率
 	// 注册常量到模块中
-	LuaApiRegConstant(L, lib_cmdap_const);
+	//LuaApiRegConstant(L, lib_cmdap_const);
 	// 将函数注册进去
 	luaL_setfuncs(L, lib_cmdap_f, 0);
 	return 1;
@@ -517,7 +473,7 @@ static const luaL_Reg lib_cmdap_oo[] = {
 	// 基本函数
 	{"SetStatus", luaApi_adapter_set_status},
 	{"SetFrequent", luaApi_adapter_set_frequent},
-	{"SetTransferMode", luaApi_adapter_transmission_type},
+	{"TransferMode", luaApi_adapter_transmission_mode},
 	{"Reset", luaApi_adapter_reset},
 	// JTAG
 	{"JtagExchangeData", luaApi_adapter_jtag_exchange_data},
@@ -545,9 +501,7 @@ static const luaL_Reg lib_cmdap_oo[] = {
 void RegisterApi_CmsisDap(lua_State *L){
 	// 创建CMSIS-DAP类型对应的元表
 	LuaApiNewTypeMetatable(L, "adapter.CMSIS-DAP", adapter_gc, lib_cmdap_oo);
-	// _LOADED["adapter"] = luaopen_adapter(); // 不设置_G[modname] = luaopen_adapter();
-	// 在栈中存在luaopen_adapter()的返回值副本
-	luaL_requiref(L, "CMSIS-DAP", luaopen_adapter, 0);
+	luaL_requiref(L, "CMSIS-DAP", luaopen_cmsis_dap, 0);
 	lua_pop(L, 1);
 }
 

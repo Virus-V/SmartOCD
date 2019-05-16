@@ -51,7 +51,7 @@ static void printVersion() {
 
 	printf(" * SmartOCD v%s By: Virus.V <virusv@live.com>\n"
 			" * Complile time: %s\n"
-			" * Github: https://github.com/Virus-V/SmartOCD\n", VERSION, COMPILE_TIME);
+			" * Github: https://github.com/Virus-V/SmartOCD\n\n", VERSION, COMPILE_TIME);
 }
 
 // 打印帮助信息
@@ -155,7 +155,6 @@ static int docall (lua_State *L, int narg, int nres) {
 /* mark in error messages for incomplete statements */
 #define EOFMARK		"<eof>"
 #define MARKLEN		(sizeof(EOFMARK)/sizeof(char) - 1)
-
 
 /**
  * 判断用户输入语法是否完整
@@ -321,7 +320,7 @@ static void doREPL (lua_State *L) {
  * 日志输出重定向
  * fileName：重定向文件路径
  */
-static int setLogfile(char *fileName){
+static int setLogfile(const char *fileName){
 	logFd = fopen(fileName, "wb+");
 	if(logFd == NULL){
 		log_error("Unable to create log file.");
@@ -345,6 +344,7 @@ static int init (lua_State *L) {
 	char **argv = lua_touserdata(L,-1);
 	int opt, logLevel = LOG_INFO;
 	int exitFlag = 0;	// 执行脚本后结束运行
+
 	// 打开标准库
 	luaL_openlibs(L);
 	// 设置全局变量，SmartOCD版本信息
@@ -352,10 +352,12 @@ static int init (lua_State *L) {
 		lua_pushboolean(L, 0);
 		return 1;
 	}
-	// 加载SmartOCD库
+	// 注册SmartOCD API接口
 	LuaApiInit(L);
 	// 打印logo和版本
 	printVersion();
+	// LOG默认静默模式
+	log_set_quiet(1);
 	// 解析参数
 	while((opt = getopt_long(argc, argv, "f:d:ehl:", long_option, NULL)) != -1) {
 		switch(opt) {
@@ -365,10 +367,9 @@ static int init (lua_State *L) {
 			break;
 		case 'd':	// 日志输出等级 -1 不输出任何日志， 转换失败则会返回0
 			logLevel = atoi(optarg);
-			if(logLevel < 0) {
-				log_set_quiet(1);	// 静默模式
-			}else{
-				log_set_level(logLevel);
+			if(logLevel > 0) {
+				log_set_quiet(0);	// 关闭静默模式
+				log_set_level(logLevel - 1);
 			}
 			break;
 		case 'e':	// 执行脚本后不进入交互模式，直接退出
@@ -380,6 +381,7 @@ static int init (lua_State *L) {
 			return 1;
 			break;
 		case 'l':	// logfile 日志重定向到文件
+			// XXX 这个日志文件无法及时关闭
 			if(setLogfile(optarg)){
 				lua_pushboolean(L, 0);
 				return 1;

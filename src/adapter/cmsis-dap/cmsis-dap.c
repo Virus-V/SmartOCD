@@ -279,15 +279,18 @@ static int dapInit(struct cmsis_dap *cmdapObj){
 	case 0:
 		log_warn("Cant auto select transfer mode! please use Adapter.SetTransferMode() service to select mode manually.");
 		cmdapObj->currTransMode = ADPT_MODE_MAX;
+		cmdapObj->adaperAPI.currTransMode = ADPT_MODE_MAX;
 		break;
 	case CMDAP_PORT_SWD:
 		log_info("Auto select SWD transfer mode.");
 		cmdapObj->currTransMode = ADPT_MODE_SWD;
+		cmdapObj->adaperAPI.currTransMode = ADPT_MODE_SWD;
 		swjJtag2Swd(cmdapObj);
 		break;
 	case CMDAP_PORT_JTAG:
 		log_info("Auto select JTAG transfer mode.");
 		cmdapObj->currTransMode = ADPT_MODE_JTAG;
+		cmdapObj->adaperAPI.currTransMode = ADPT_MODE_JTAG;
 		swjSwd2Jtag(cmdapObj);
 		break;
 	}

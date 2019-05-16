@@ -3,8 +3,9 @@
  * Date:2018年04月20日22:13:45
  * Author: Virus.V <virusv@live.com>
 ]]
+adapter = require("Adapter")
 cmsis_dap = require("CMSIS-DAP"); -- 加载CMSIS-DAP库
-AdapterObj = cmsis_dap.New(); -- 创建新的CMSIS-DAP Adapter对象
+cmObj = cmsis_dap.Create(); -- 创建新的CMSIS-DAP Adapter对象
 -- CMSIS-DAP的VID和PID
 local vid_pids = {
 	-- Keil Software
@@ -15,32 +16,58 @@ local vid_pids = {
 	{0x0d28, 0x0204}	-- MBED CMSIS-DAP
 }
 -- 连接CMSIS-DAP仿真器
-cmsis_dap.Connect(AdapterObj, vid_pids, nil)
--- 初始化Adapter对象
-AdapterObj:Init()
+cmObj:Connect(vid_pids, nil)
 -- 配置CMSIS-DAP Transfer参数
-cmsis_dap.TransferConfigure(AdapterObj, 5, 5, 5)
+cmObj:TransferConfig(5, 5, 5)
 -- SWD参数
-cmsis_dap.swdConfigure(AdapterObj, 0)
--- 点亮连接状态指示灯
-AdapterObj:SetStatus(adapter.STATUS_CONNECTED)
-AdapterObj:SetClock(500000)	-- 500KHz
--- 选择传输模式
-if AdapterObj:HaveTransType(adapter.SWD) then
-	AdapterObj:TransType(adapter.SWD)
+cmObj:SwdConfig(0)
+-- 设置传输频率
+cmObj:SetFrequent(5000000)	-- 500KHz
+print("CMSIS-DAP: Current frequent is 5MHz")
+-- 选择SWD传输模式
+local transMode = cmObj:TransferMode()
+if transMode == adapter.SWD then
+	print("CMSIS-DAP: Current transfer mode is SWD")
+elseif transMode == adapter.JTAG then
+	print("CMSIS-DAP: Current transfer mode is JTAG")
 else
-	AdapterObj:TransType(adapter.JTAG)
+	print("CMSIS-DAP: Can't auto select a transfer mode! Default SWD!")
+	cmObj:TransferMode(adapter.SWD)
 end
-AdapterObj:SetStatus(adapter.STATUS_RUNING)
 
 -- 读取JTAG Pins
-local pins_data = AdapterObj:jtagPins(0, 0, 0)
-print("JTAG Pins: TCK:" .. ((pins_data & adapter.PIN_SWCLK_TCK) >> adapter.PIN_SWCLK_TCK)
-	.. " TMS:" .. ((pins_data & (1 << adapter.PIN_SWDIO_TMS)) >> adapter.PIN_SWDIO_TMS)
-	.. " TDI:" .. ((pins_data & (1 << adapter.PIN_TDI)) >> adapter.PIN_TDI)
-	.. " TDO:" .. ((pins_data & (1 << adapter.PIN_TDO)) >> adapter.PIN_TDO)
-	.. " nTRST:" .. ((pins_data & (1 << adapter.PIN_nTRST)) >> adapter.PIN_nTRST)
-	.. " nRESET:" .. ((pins_data & (1 << adapter.PIN_nRESET)) >> adapter.PIN_nRESET))
+local pins_data = cmObj:JtagPins(0, 0, 0)
+print("JTAG Pins: ")
+if pins_data & adapter.PIN_SWCLK_TCK > 0 then
+	print(" TCK = 1")
+else 
+	print(" TCK = 0")
+end
+if pins_data & adapter.PIN_SWDIO_TMS > 0 then
+	print(" TMS = 1")
+else 
+	print(" TMS = 0")
+end
+if pins_data & adapter.PIN_TDI > 0 then
+	print(" TDI = 1")
+else 
+	print(" TDI = 0")
+end
+if pins_data & adapter.PIN_TDO > 0 then
+	print(" TDO = 1")
+else 
+	print(" TDO = 0")
+end
+if pins_data & adapter.PIN_nTRST > 0 then
+	print(" nTRST = 1")
+else 
+	print(" nTRST = 0")
+end
+if pins_data & adapter.PIN_nRESET > 0 then
+	print(" nRESET = 1")
+else 
+	print(" nRESET = 0")
+end
 
 -- -- JTAG 原生方式读取IDCODE
 -- AdapterObj:jtagStatusChange(adapter.TAP_RESET)	-- TAP到RESET状态，默认连接IDCODE扫描链
