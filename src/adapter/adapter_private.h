@@ -13,7 +13,7 @@
 #include "smart_ocd.h"
 #include "misc/list.h"
 #include "JTAG/JTAG.h"
-#include "arch/ARM/ADI/ADIv5.h"
+#include "arch/ADI/ADIv5.h"
 
 #include "adapter/include/adapter.h"
 
