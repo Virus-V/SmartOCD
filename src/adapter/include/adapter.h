@@ -13,9 +13,6 @@
 #include "smart_ocd.h"
 #include "misc/list.h"
 #include "JTAG/JTAG.h"
-#include "arch/ADI/ADIv5.h"
-
-#include "arch/ADI/DAP.h"
 
 /**
  * Adapter 接口状态码

@@ -381,7 +381,7 @@ static int init (lua_State *L) {
 			return 1;
 			break;
 		case 'l':	// logfile 日志重定向到文件
-			// XXX 这个日志文件无法及时关闭
+			// FIXME 这个日志文件无法及时关闭
 			if(setLogfile(optarg)){
 				lua_pushboolean(L, 0);
 				return 1;

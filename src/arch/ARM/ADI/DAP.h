@@ -125,13 +125,6 @@ enum addrIncParam {
 #define DP_SELECT_DPBANK		0x0000000F
 #define DP_SELECT_MASK			0xFF0000FF
 
-enum ap_type{
-	AP_TYPE_JTAG = 0,	// JTAG AP
-	AP_TYPE_AMBA_AHB = 0x1,	// AMBA AHB bus
-	AP_TYPE_AMBA_APB = 0x2,	// AMBA APB2 or APB3 bus
-	AP_TYPE_AMBA_AXI = 0x4	// AMBA AXI3 or AXI4 bus, with optional ACT-Lite support
-};
-
 // DP IDR Register 解析
 typedef union {
 	uint32_t regData;
