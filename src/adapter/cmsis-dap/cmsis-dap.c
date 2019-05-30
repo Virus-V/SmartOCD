@@ -13,7 +13,6 @@
 #include "adapter/cmsis-dap/cmsis-dap.h"
 
 #include "misc/log.h"
-#include "misc/misc.h"
 
 /**
  * 由多少个比特位构造出多少个字节，包括控制字

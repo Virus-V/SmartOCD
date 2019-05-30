@@ -9,10 +9,8 @@
 #ifndef SRC_ADAPTER_ADAPTER_PRIVATE_H_
 #define SRC_ADAPTER_ADAPTER_PRIVATE_H_
 
-#include <stdarg.h>
 #include "smart_ocd.h"
 #include "misc/list.h"
-#include "JTAG/JTAG.h"
 
 #include "adapter/include/adapter.h"
 
