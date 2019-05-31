@@ -69,8 +69,8 @@
 enum {
 	ADI_SUCCESS = 0,
 	ADI_FAILED,
-	ADI_INTERNAL_ERROR,	// 不是由ADI的逻辑造成的错误
-
+	ADI_ERR_INTERNAL_ERROR,	// 不是由ADI的逻辑造成的错误
+	ADI_ERR_BAD_PARAMETER,	// 无效的参数
 };
 
 // 类型预定义
@@ -82,7 +82,7 @@ typedef struct dap *DAP;
  * 	adapter:Adapter对象
  */
 DAP ADIv5_CreateDap(
-		IN Adapter adapter,	// Adapter对象
+		IN Adapter adapter	// Adapter对象
 );
 
 /**
@@ -92,12 +92,20 @@ void ADIv5_DestoryDap(
 		IN DAP* dap
 );
 
+/**
+ * Access Port 类型
+ */
+enum AccessPortType {
+	AccessPort_Memory,	// Memory Access Port
+	AccessPort_JTAG,
+	AccessPort_MAX	// 非法值
+};
+
 // AP的类型
-enum apType{
-	AP_TYPE_JTAG = 0,	// JTAG AP
-	AP_TYPE_AMBA_AHB = 0x1,	// AMBA AHB bus
-	AP_TYPE_AMBA_APB = 0x2,	// AMBA APB2 or APB3 bus
-	AP_TYPE_AMBA_AXI = 0x4	// AMBA AXI3 or AXI4 bus, with optional ACT-Lite support
+enum busType{
+	BUS_AMBA_AHB = 0x1,	// AMBA AHB bus
+	BUS_AMBA_APB = 0x2,	// AMBA APB2 or APB3 bus
+	BUS_AMBA_AXI = 0x4	// AMBA AXI3 or AXI4 bus, with optional ACT-Lite support
 };
 
 // AP类型预定义
@@ -107,12 +115,14 @@ typedef struct accessPort *AccessPort;
  * 寻找指定类型的AP
  * 参数:
  * 	self:dap自身对象
- * 	type:ap的type,请看 enum apType 定义
+ * 	type:ap的type,请看 enum AccessPortType 定义
+ * 	bus:bus类型,请看 enum busType 定义
  * 	ap:找到的AP对象
  */
 typedef int (*ADIv5_FIND_ACCESS_PORT)(
 		IN DAP self,
-		IN enum apType type,
+		IN enum AccessPortType type,
+		OPTIONAL enum busType bus,
 		OUT AccessPort* ap
 );
 
@@ -150,24 +160,15 @@ typedef int (*ADIv5_MEM_AP_WRITE_32)(
 );
 
 /**
- * Access Port 类型
- */
-enum AccessPortType {
-	AccessPort_Memory,	// Memory Access Port
-	AccessPort_JTAG,
-	AccessPort_MAX	// 非法值
-};
-
-/**
  * Access Port接口定义
  */
 struct accessPort{
-	enum AccessPortType type;	// AccessPort类型
+	enum AccessPortType type;	// AccessPort类型,只读! 不可以修改!
 	union {
 		// MEM-AP
 		struct {
+			// TODO 读取ROM Table的基址
 			ADIv5_MEM_AP_READ_32 Read32;
-
 			ADIv5_MEM_AP_WRITE_32 Write32;
 		}Memory;
 		// JTAG-AP

@@ -12,6 +12,12 @@
 #include "USB/include/USB.h"
 #include "adapter/adapter_private.h"
 
+// DAP Transfer Request
+#define DAP_TRANSFER_APnDP		(1U<<0)
+#define DAP_TRANSFER_RnW		(1U<<1)
+#define DAP_TRANSFER_A2			(1U<<2)
+#define DAP_TRANSFER_A3			(1U<<3)
+
 // CMSIS-DAP Command IDs
 // V1.0
 #define CMDAP_ID_DAP_Info                     0x00U

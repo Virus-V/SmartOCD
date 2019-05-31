@@ -5,13 +5,11 @@
  *      Author: virusv
  */
 
-#ifndef SRC_ARCH_CORESIGHT_DAP_H_
-#define SRC_ARCH_CORESIGHT_DAP_H_
+#ifndef SRC_ARCH_ARM_ADI_DAP_H_
+#define SRC_ARCH_ARM_ADI_DAP_H_
 
 #include "smart_ocd.h"
 #include "misc/list.h"
-#include "debugger/adapter.h"
-#include "lib/TAP.h"
 
 /*
  * Copyright (c) 2013-2016 ARM Limited. All rights reserved.
@@ -39,13 +37,6 @@
  * Title:        DAP.h Definitions
  *
  *---------------------------------------------------------------------------*/
-// DAP SWJ Pins
-#define DAP_SWJ_SWCLK_TCK		0       // SWCLK/TCK
-#define DAP_SWJ_SWDIO_TMS		1       // SWDIO/TMS
-#define DAP_SWJ_TDI				2       // TDI
-#define DAP_SWJ_TDO				3       // TDO
-#define DAP_SWJ_nTRST			5       // nTRST
-#define DAP_SWJ_nRESET			7       // nRESET
 
 // DAP Transfer Request
 #define DAP_TRANSFER_APnDP		(1U<<0)
@@ -92,25 +83,31 @@
 // AP Control and Status Word definitions
 #define AP_CSW_SIZEMSK			0x00000007  // Access Size: Selection Mask
 #define AP_CSW_SIZE8			0x00000000  // Access Size: 8-bit
-#define SIZE_8					0x0
 #define AP_CSW_SIZE16			0x00000001  // Access Size: 16-bit
-#define SIZE_16					0x1
 #define AP_CSW_SIZE32			0x00000002  // Access Size: 32-bit
-#define SIZE_32					0x2
 #define AP_CSW_SIZE64			0x00000003	// Access Size: 64-bit
-#define SIZE_64					0x3
 #define AP_CSW_SIZE128			0x00000004	// Access Size: 128-bit
-#define SIZE_128				0x4
 #define AP_CSW_SIZE256			0x00000005	// Access Size: 256-bit
-#define SIZE_256				0x5
+// MEM-AP传输数据大小参数
+enum dataSizeParam{
+	DAP_DATA_SIZE_8 = 0,
+	DAP_DATA_SIZE_16,
+	DAP_DATA_SIZE_32,
+	DAP_DATA_SIZE_64,
+	DAP_DATA_SIZE_128,
+	DAP_DATA_SIZE_256,
+};
 
 #define AP_CSW_ADDRINCMSK		0x00000030  // Auto Address Increment Mask
 #define AP_CSW_NADDRINC			0x00000000  // No Address Increment
-#define ADDRINC_OFF				0x0
 #define AP_CSW_SADDRINC			0x00000010  // Single Address Increment
-#define ADDRINC_SINGLE			0x1
 #define AP_CSW_PADDRINC			0x00000020  // Packed Address Increment
-#define ADDRINC_PACKED			0x2
+// MEM-AP 地址自增模式参数
+enum addrIncParam {
+	DAP_ADDRINC_OFF = 0,
+	DAP_ADDRINC_SINGLE,
+	DAP_ADDRINC_PACKED,
+};
 
 #define AP_CSW_DBGSTAT			0x00000040  // Debug Status
 #define AP_CSW_TINPROG			0x00000080  // Transfer in progress
@@ -126,14 +123,7 @@
 #define DP_SELECT_APSEL			0xFF000000
 #define DP_SELECT_APBANK		0x000000F0
 #define DP_SELECT_DPBANK		0x0000000F
-#define DP_SELECT_INVALID		0x00FFFF00 /* Reserved bits one */
-
-enum ap_type{
-	AP_TYPE_JTAG = 0,	// JTAG AP
-	AP_TYPE_AMBA_AHB,	// AMBA AHB bus
-	AP_TYPE_AMBA_APB,	// AMBA APB2 or APB3 bus
-	AP_TYPE_AMBA_AXI	// AMBA AXI3 or AXI4 bus, with optional ACT-Lite support
-};
+#define DP_SELECT_MASK			0xFF0000FF
 
 // DP IDR Register 解析
 typedef union {
@@ -222,55 +212,17 @@ typedef union {
 	} regInfo;
 }DP_CTRL_STATUS_Parse;
 
-
-
-// DAP对象
-typedef struct DAPObject DAPObject;
-struct DAPObject{
-	TAPObject tapObj;	// 继承于TAP
-	// uint8_t DP_Version;	// DP版本号
-	struct ap AP[256];	// AP列表
-	uint16_t TAP_index;	// TAP在JTAG中的索引
-	DP_CTRL_STATUS_Parse CTRL_STAT_Reg;	// 当前CTRL/STAT寄存器
-	uint32_t ir;	// 当前ir寄存器
-	union {
-		uint32_t data;
-		struct {
-			uint32_t DP_BankSel : 4;
-			uint32_t AP_BankSel : 4;
-			uint32_t : 16;
-			uint32_t AP_Sel : 8;
-		} info;
-	}SelectReg;	// 当前Select寄存器
-	int retry;	// 接收到WAIT时重试次数
-	// 错误处理的回调函数列表
-	// WDATAERR, STICKYERR, STICKYCMP, STICKYORUN
-	// void (*stickyErrHandle)(DAPObject *dapObj);
-	// DAP指令队列
-	struct list_head instrQueue, retryQueue;	// DAP指令队列，元素类型：struct DAP_Instr
-};
-
-// DAP指令队列
-struct DAP_Instr{
-	struct list_head list_entry;	// 链表节点
-	union {
-		struct {
-			uint32_t APnDP:1;	// 0 = Debug Port (DP), 1 = Access Port (AP).
-			uint32_t RnW:1;		// 0 = Write Register, 1 = Read Register.
-			uint32_t A:2;		// A[3:2] Register Address.
-			uint32_t :5;		// Padding
-			uint32_t ack:3;		// 当前指令的应答
-			uint32_t end:1;	// 下一个需要读取RDBUFF
-		} info;
-		uint8_t data;
-	}seq;
-	// 指令的数据
-	union {
-		uint32_t in;
-		uint32_t *out;
-	} data;
-	int buffIdx;	// 指令数据缓冲地址
-};
+// SELECT寄存器解析
+typedef union {
+	uint32_t regData;
+	struct {
+		uint32_t DP_BankSel : 4;
+		uint32_t AP_BankSel : 4;
+		uint32_t Invaild : 1;	// 表示是否需要强制更新SELECT寄存器
+		uint32_t : 15;
+		uint32_t AP_Sel : 8;
+	} regInfo;
+}DP_SELECT_Parse;
 
 // packed transfer
 union PackedTransferData{
@@ -280,57 +232,37 @@ union PackedTransferData{
 };
 
 // 获得当前AP
-#define DAP_CURR_AP(pd) ((pd)->SelectReg.info.AP_Sel)
+#define DAP_CURR_AP(pa) (pa)->dap.SELECT_Reg.regInfo.AP_Sel
 
-// 构造和析构函数
-BOOL __CONSTRUCT(DAP)(DAPObject *dapObj, AdapterObject *adapterObj);
-void __DESTORY(DAP)(DAPObject *dapObj);
-// 设置DAP的TAP索引位置
-#define DAP_Set_TAP_Index(p,idx) ((p)->TAP_index = (idx))
-// 设置DAP的WAIT重试次数
-#define DAP_SetRetry(p,cnt) ((p)->retry = (cnt))
-// 设置错误标志
-//#define DAP_SetErrorHandle(p,fun) ((p)->stickyErrHandle = (fun))
+typedef struct AdapterObject AdapterObject;
+/**
+ * DAP初始化
+ * Find AP
+ * Write TAR
+ * Read TAR
+ * Read CID PID
+ * 读写内存
+ * 读写内存块
+ * 打印ROM Table
+ */
+BOOL DAP_Init(AdapterObject *adapterObj);
+BOOL DAP_AP_Select(AdapterObject *adapterObj, uint8_t apIdx);
+BOOL DAP_Find_AP(AdapterObject *adapterObj, enum ap_type apType, uint8_t *apIdx);
+BOOL DAP_Read_TAR(AdapterObject *adapterObj, uint64_t *address_out);
+BOOL DAP_Write_TAR(AdapterObject *adapterObj, uint64_t address_in);
 
-BOOL DAP_DP_ReadReg(DAPObject *dapObj, uint8_t reg, uint32_t *data_out);
-BOOL DAP_DP_WriteReg(DAPObject *dapObj, uint8_t reg, uint32_t data);
-BOOL DAP_AP_ReadReg(DAPObject *dapObj, uint8_t reg, uint32_t *data_out);
-BOOL DAP_AP_WriteReg(DAPObject *dapObj, uint8_t reg, uint32_t data);
-BOOL DAP_AP_Select(DAPObject *dapObj, uint8_t apIdx);
-// 写入Abort寄存器
-BOOL DAP_WriteAbort(DAPObject *dapObj, uint32_t abort);
-// 检查状态错误
-BOOL DAP_CheckError(DAPObject *dapObj);
-// 清除粘性标志
-BOOL DAP_ClearStickyFlag(DAPObject *dapObj, uint32_t flags);
-// 寻找指定类型的AP
-BOOL DAP_Find_AP(DAPObject *dapObj, enum ap_type apType, uint8_t *apIdx_Out);
-// 读写TAR寄存器
-BOOL DAP_Write_TAR(DAPObject *dapObj, uint64_t addr);
-BOOL DAP_Read_TAR(DAPObject *dapObj, uint64_t *addr_out);
-// 内存读取操作
-BOOL DAP_ReadMem8(DAPObject *dapObj, uint64_t addr, uint8_t *data_out);
-BOOL DAP_ReadMem16(DAPObject *dapObj, uint64_t addr, uint16_t *data_out);
-BOOL DAP_ReadMem32(DAPObject *dapObj, uint64_t addr, uint32_t *data_out);
-/*
- * TODO 完善下面这些函数
+BOOL DAP_ReadMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t *data_out);
+BOOL DAP_ReadMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t *data_out);
+BOOL DAP_ReadMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t *data_out);
+BOOL DAP_ReadMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t *data_out);
+BOOL DAP_WriteMem8(AdapterObject *adapterObj, uint64_t addr, uint8_t data_in);
+BOOL DAP_WriteMem16(AdapterObject *adapterObj, uint64_t addr, uint16_t data_in);
+BOOL DAP_WriteMem32(AdapterObject *adapterObj, uint64_t addr, uint32_t data_in);
+BOOL DAP_WriteMem64(AdapterObject *adapterObj, uint64_t addr, uint64_t data_in);
 
-// 内存写入操作
-BOOL DAP_WriteMem8(DAPObject *dapObj, uint64_t addr, uint8_t data);
-BOOL DAP_WriteMem16(DAPObject *dapObj, uint64_t addr, uint16_t data);
-*/
-BOOL DAP_WriteMem32(DAPObject *dapObj, uint64_t addr, uint32_t data);
-
-BOOL DAP_Read_CID_PID(DAPObject *dapObj, uint32_t componentBase, uint32_t *cid_out, uint64_t *pid_out);
-
-// 队列操作，只在SWD模式下可用
-BOOL DAP_Queue_xP_Read(DAPObject *dapObj, int APnDP, uint8_t A, uint32_t *data_out);
-BOOL DAP_Queue_xP_Write(DAPObject *dapObj, int APnDP, uint8_t A, uint32_t data);
-BOOL DAP_Queue_Execute(DAPObject *dapObj);
-
-#define DAP_Queue_AP_Read(dapObj, reg, data_out) DAP_Queue_xP_Read((dapObj), 1, (reg), (data_out))
-#define DAP_Queue_AP_Write(dapObj, reg, data) DAP_Queue_xP_Write((dapObj), 1, (reg), (data))
-#define DAP_Queue_DP_Read(dapObj, reg, data_out) DAP_Queue_xP_Read((dapObj), 0, (reg), (data_out))
-#define DAP_Queue_DP_Write(dapObj, reg, data) DAP_Queue_xP_Write((dapObj), 0, (reg), (data))
-
-#endif /* SRC_ARCH_CORESIGHT_DAP_H_ */
+BOOL DAP_ReadMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode, int transSize, int transCnt, uint32_t *data_out);
+BOOL DAP_WriteMemBlock(AdapterObject *adapterObj, uint64_t addr, int addrIncMode, int transSize, int transCnt, uint32_t *data_in);
+BOOL DAP_Read_CID_PID(AdapterObject *adapterObj, uint32_t componentBase, uint32_t *cid_out, uint64_t *pid_out);
+BOOL DAP_ReadCSW(AdapterObject *adapterObj, uint32_t *cswData);
+BOOL DAP_WriteCSW(AdapterObject *adapterObj, uint32_t cswData);
+#endif /* SRC_ARCH_ARM_ADI_DAP_H_ */

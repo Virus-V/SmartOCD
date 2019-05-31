@@ -3,7 +3,7 @@ ifeq ($(ROOT_DIR),)
 $(error Do not use this file directly to build)
 endif
 
-#include $(ROOT_DIR)/src/arch/arch.mk
+include $(ROOT_DIR)/src/arch/arch.mk
 #include $(ROOT_DIR)/src/debugger/debugger.mk
 
 # Adapter

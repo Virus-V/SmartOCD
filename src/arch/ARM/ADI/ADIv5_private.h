@@ -20,12 +20,6 @@
 #define IS_AP_REG(reg) ((reg) == AP_REG_CSW || (reg) == AP_REG_TAR_LSB || (reg) == AP_REG_TAR_MSB || (reg) == AP_REG_DRW || (reg) == AP_REG_BD0 || (reg) == AP_REG_BD1 || \
 		(reg) == AP_REG_BD2 || (reg) == AP_REG_BD3 || (reg) == AP_REG_CFG || (reg) == AP_REG_ROM_MSB || (reg) == AP_REG_ROM_LSB || (reg) == AP_REG_IDR)
 
-// DAP Transfer Request
-#define DAP_TRANSFER_APnDP		(1U<<0)
-#define DAP_TRANSFER_RnW		(1U<<1)
-#define DAP_TRANSFER_A2			(1U<<2)
-#define DAP_TRANSFER_A3			(1U<<3)
-
 // Abort Register definitions
 #define DP_ABORT_DAPABORT       0x00000001  // DAP Abort
 #define DP_ABORT_STKCMPCLR      0x00000002  // Clear STICKYCMP Flag (SW Only)
@@ -101,6 +95,10 @@ enum addrIncParam {
 #define AP_CSW_MSTRDBG			0x20000000  // Master Type: Debug
 #define AP_CSW_RESERVED			0x01000000  // Reserved Value
 
+#define AP_CFG_LARGE_DATA		0x4
+#define AP_CFG_LARGE_ADDRESS	0x2
+#define AP_CFG_BIG_ENDIAN		0x1
+
 #define JEP106_CODE_ARM			0x23B	// ARM JEP106 CODE
 
 #define DP_SELECT_APSEL			0xFF000000
@@ -166,8 +164,7 @@ typedef union {
 	struct {
 		uint32_t DP_BankSel : 4;
 		uint32_t AP_BankSel : 4;
-		uint32_t Invaild : 1;	// 表示是否需要强制更新SELECT寄存器
-		uint32_t : 15;
+		uint32_t : 16;
 		uint32_t AP_Sel : 8;
 	} regInfo;
 } ADIv5_DpSelectRegister;
@@ -230,7 +227,7 @@ union PackedTransferData{
 struct ADIv5_Dap{
 	struct list_head apList;	// AP链表
 	Adapter adapter;	// Adapter对象的接口
-	struct dap dap;
+	struct dap dapApi;
 	ADIv5_DpSelectRegister select;	// SELECT寄存器
 	ADIv5_DpCtrlStatRegister ctrlStat;	// CTRL/STAT寄存器
 	ADIv5_DpIdrRegister idr;	// DPIDR寄存器
@@ -239,14 +236,22 @@ struct ADIv5_Dap{
 // AP定义
 struct ADIv5_AccessPort{
 	ADIv5_ApIdrRegister idr;	// APIDR寄存器
+	unsigned int index;	// AP的索引
 	struct list_head list_entry;
-	union accessPort ApApi;
+	struct accessPort apApi;
+	struct ADIv5_Dap *dap;
 	union {
 		// MEM-AP
 		struct {
 			ADIv5_ApCswRegister csw;
-			uint32_t cfg;
-			uint64_t tar;	// memory地址
+			uint64_t rom;	// ROM Table基址
+			struct {
+				uint8_t largeAddress:1;	// 该AP是否支持64位地址访问，如果支持，则TAR和ROM寄存器是64位
+				uint8_t largeData:1;	// 是否支持大于32位数据传输
+				uint8_t bigEndian:1;	// 是否是大端字节序，ADI5.2废弃该功能，所以该位必须为0
+				uint8_t packedTransfers:1;	// 是否支持packed传输
+				uint8_t lessWordTransfers:1;	// 是否支持小于1个字的传输
+			} config;
 		} memory;
 		//JTAG-AP
 		struct {

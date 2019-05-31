@@ -9,7 +9,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "arch/ARM/ADI/DAP.h"
+#include "arch/ARM/ADI/include/ADIv5.h"
 #include "adapter/cmsis-dap/cmsis-dap.h"
 
 #include "misc/log.h"
