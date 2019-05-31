@@ -717,7 +717,7 @@ MAKE_PACKT:
 	for(; seqIdx < sequenceCnt; seqIdx ++){
 		data[idx] &= 0xf;	// 只保留[3:0]位
 		// 判断是否是读寄存器
-		if((data[idx] & DAP_TRANSFER_RnW) == DAP_TRANSFER_RnW){
+		if((data[idx] & CMDAP_TRANSFER_RnW) == CMDAP_TRANSFER_RnW){
 			// 判断是否超出最大包长度
 			if((3 + readCount + 4) > cmdapObj->PacketSize || (3 + writeCount + 1) > cmdapObj->PacketSize){
 				break;
@@ -820,7 +820,7 @@ static int CmdapTransferBlock(Adapter self, uint8_t index, int sequenceCnt, uint
 	for(*okSeqCnt = 0; *okSeqCnt < sequenceCnt; (*okSeqCnt)++){
 		restCnt = *CAST(int *, data + readCnt); readCnt += sizeof(int);
 		uint8_t seq = *CAST(uint8_t *, data + readCnt++);
-		if(seq & DAP_TRANSFER_RnW){	// 读操作
+		if(seq & CMDAP_TRANSFER_RnW){	// 读操作
 			while(restCnt > 0){
 				if(restCnt > readPacketMaxCnt){
 					*CAST(uint16_t *, buff + 2) = readPacketMaxCnt;

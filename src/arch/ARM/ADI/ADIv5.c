@@ -174,6 +174,7 @@ static int apWrite32(AccessPort self, uint64_t addr, uint32_t data){
 
 /**
  * fillApConfig 填充AP的配置信息:CSW,CFG
+ * 此函数默认AP_BankSel=0xF
  */
 static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap){
 	assert(dapObj != NULL);

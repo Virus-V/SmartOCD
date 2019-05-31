@@ -13,10 +13,10 @@
 #include "adapter/adapter_private.h"
 
 // DAP Transfer Request
-#define DAP_TRANSFER_APnDP		(1U<<0)
-#define DAP_TRANSFER_RnW		(1U<<1)
-#define DAP_TRANSFER_A2			(1U<<2)
-#define DAP_TRANSFER_A3			(1U<<3)
+#define CMDAP_TRANSFER_APnDP		(1U<<0)
+#define CMDAP_TRANSFER_RnW			(1U<<1)
+#define CMDAP_TRANSFER_A2			(1U<<2)
+#define CMDAP_TRANSFER_A3			(1U<<3)
 
 // CMSIS-DAP Command IDs
 // V1.0
