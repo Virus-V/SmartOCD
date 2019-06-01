@@ -238,6 +238,67 @@ typedef int (*ADIv5_MEM_AP_WRITE_64)(
 		IN uint64_t data
 );
 
+/**
+ * 地址自增模式
+ * ADDRINC_OFF：在每次传输之后TAR中的地址不自增
+ * ADDRINC_SINGLE：每次传输成功后，TAR的地址增加传输数据的大小
+ * ADDRINC_PACKED：当设置此参数时，启动packed传送模式；每次传输成功后，TAR增加传输的数据大小。
+ */
+enum addrIncreaseMode{
+	ADDRINC_OFF = 0,
+	ADDRINC_SINGLE,
+	ADDRINC_PACKED,
+};
+
+/**
+ * 每次总线请求的数据长度
+ */
+enum dataSize{
+	DATA_SIZE_8 = 0,
+	DATA_SIZE_16,
+	DATA_SIZE_32,
+	DATA_SIZE_64,
+	DATA_SIZE_128,
+	DATA_SIZE_256,
+};
+
+/**
+ * Block读,用于发起多次请求
+ * 参数:
+ * 	self:AccessPort对象
+ * 	addr:访问的起始地址
+ * 	mode:地址自增模式
+ * 	size:单次总线请求的数据长度
+ * 	count:传输的总次数
+ * 	data:数据存放地址
+ */
+typedef int (*ADIv5_MEM_AP_BLOCK_READ)(
+		IN AccessPort self,
+		IN uint64_t addr,
+		IN enum addrIncreaseMode mode,
+		IN enum dataSize size,
+		IN unsigned int count,
+		OUT uint8_t *data
+);
+
+/**
+ * Block写,用于发起多次请求
+ * 参数:
+ * 	self:AccessPort对象
+ * 	addr:访问的起始地址
+ * 	mode:地址自增模式
+ * 	size:单次总线请求的数据长度
+ * 	count:传输的总次数
+ * 	data:数据存放地址
+ */
+typedef int (*ADIv5_MEM_AP_BLOCK_WRITE)(
+		IN AccessPort self,
+		IN uint64_t addr,
+		IN enum addrIncreaseMode mode,
+		IN enum dataSize size,
+		IN unsigned int count,
+		IN uint8_t *data
+);
 
 /**
  * Access Port接口定义
@@ -253,11 +314,13 @@ struct accessPort{
 			ADIv5_MEM_AP_READ_16 Read16;
 			ADIv5_MEM_AP_READ_32 Read32;
 			ADIv5_MEM_AP_READ_64 Read64;
+			ADIv5_MEM_AP_BLOCK_READ BlockRead;
 
 			ADIv5_MEM_AP_WRITE_8 Write8;
 			ADIv5_MEM_AP_WRITE_16 Write16;
 			ADIv5_MEM_AP_WRITE_32 Write32;
 			ADIv5_MEM_AP_WRITE_64 Write64;
+			ADIv5_MEM_AP_BLOCK_WRITE BlockWrite;
 		}Memory;
 		// JTAG-AP
 		struct {

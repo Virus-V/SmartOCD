@@ -65,26 +65,11 @@
 #define AP_CSW_SIZE128			0x00000004	// Access Size: 128-bit
 #define AP_CSW_SIZE256			0x00000005	// Access Size: 256-bit
 
-// MEM-AP传输数据大小参数
-enum dataSizeParam{
-	DAP_DATA_SIZE_8 = 0,
-	DAP_DATA_SIZE_16,
-	DAP_DATA_SIZE_32,
-	DAP_DATA_SIZE_64,
-	DAP_DATA_SIZE_128,
-	DAP_DATA_SIZE_256,
-};
-
-#define AP_CSW_ADDRINCMSK		0x00000030  // Auto Address Increment Mask
+#define AP_CSW_ADDRINC_POS		0x4			// Addr Inc 偏移位置
+#define AP_CSW_ADDRINC_MSK		0x3			// Addr Inc 位掩码
 #define AP_CSW_NADDRINC			0x00000000  // No Address Increment
-#define AP_CSW_SADDRINC			0x00000010  // Single Address Increment
-#define AP_CSW_PADDRINC			0x00000020  // Packed Address Increment
-// MEM-AP 地址自增模式参数
-enum addrIncParam {
-	DAP_ADDRINC_OFF = 0,
-	DAP_ADDRINC_SINGLE,
-	DAP_ADDRINC_PACKED,
-};
+#define AP_CSW_SADDRINC			0x00000001  // Single Address Increment
+#define AP_CSW_PADDRINC			0x00000002  // Packed Address Increment
 
 #define AP_CSW_DBGSTAT			0x00000040  // Debug Status
 #define AP_CSW_TINPROG			0x00000080  // Transfer in progress
