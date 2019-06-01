@@ -53,10 +53,6 @@ extern jmp_buf fatalException;
 // 接口常量值初始化(只可以在结构体中的常量使用): type:const常量类型,obj:const常量对象,val:const常量值.
 #define INTERFACE_CONST_INIT(type,obj,val) (*((type *)&(obj)) = (val))
 
-// 对象的构造函数和析构函数的定义和调用  XXX 弃用
-#define __CONSTRUCT(class) __construct_##class##Object
-#define __DESTORY(class) __destory_##class##Object
-
 // 用户输入lua命令历史记录文件
 #define COMMAND_HISTORY "smartocd_history.txt"
 #endif /* SRC_SMART_OCD_H_ */

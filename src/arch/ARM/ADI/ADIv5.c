@@ -690,6 +690,8 @@ static int findAP(DAP self, enum AccessPortType type, enum busType bus, AccessPo
 		}
 		// 填充AccessPort对象数据
 		if(fillApConfig(dapObj, ap_t) == ADI_SUCCESS){
+			// 初始化接口的ROM Table常量
+			INTERFACE_CONST_INIT(uint64_t, ap_t->apApi.Interface.Memory.RomTableBase, ap_t->type.memory.rom);
 			// 插入AccessPort链表
 			list_add_tail(&ap_t->list_entry, &dapObj->apList);
 			*apOut = &ap_t->apApi;
