@@ -71,6 +71,7 @@ enum {
 	ADI_FAILED,
 	ADI_ERR_INTERNAL_ERROR,	// 不是由ADI的逻辑造成的错误
 	ADI_ERR_BAD_PARAMETER,	// 无效的参数
+	ADI_ERR_UNSUPPORT,	// 不支持的操作
 };
 
 // 类型预定义
@@ -134,6 +135,32 @@ struct dap {
 };
 
 /**
+ * MEM-AP 读8位数据
+ * 参数:
+ * 	self:AP对象
+ * 	addr:要读的地址
+ * 	data:写入数据
+ */
+typedef int (*ADIv5_MEM_AP_READ_8)(
+		IN AccessPort self,
+		IN uint64_t addr,
+		OUT uint8_t *data
+);
+
+/**
+ * MEM-AP 读16位数据
+ * 参数:
+ * 	self:AP对象
+ * 	addr:要读的地址
+ * 	data:写入数据
+ */
+typedef int (*ADIv5_MEM_AP_READ_16)(
+		IN AccessPort self,
+		IN uint64_t addr,
+		OUT uint16_t *data
+);
+
+/**
  * MEM-AP 读32位数据
  * 参数:
  * 	self:AP对象
@@ -144,6 +171,45 @@ typedef int (*ADIv5_MEM_AP_READ_32)(
 		IN AccessPort self,
 		IN uint64_t addr,
 		OUT uint32_t *data
+);
+
+/**
+ * MEM-AP 读64位数据
+ * 参数:
+ * 	self:AP对象
+ * 	addr:要读的地址
+ * 	data:写入数据
+ */
+typedef int (*ADIv5_MEM_AP_READ_64)(
+		IN AccessPort self,
+		IN uint64_t addr,
+		OUT uint64_t *data
+);
+
+/**
+ * MEM-AP 写8位数据
+ * 参数:
+ * 	self:AP对象
+ * 	addr:要写的地址
+ * 	data:要写入的数据
+ */
+typedef int (*ADIv5_MEM_AP_WRITE_8)(
+		IN AccessPort self,
+		IN uint64_t addr,
+		IN uint8_t data
+);
+
+/**
+ * MEM-AP 写16位数据
+ * 参数:
+ * 	self:AP对象
+ * 	addr:要写的地址
+ * 	data:要写入的数据
+ */
+typedef int (*ADIv5_MEM_AP_WRITE_16)(
+		IN AccessPort self,
+		IN uint64_t addr,
+		IN uint16_t data
 );
 
 /**
@@ -160,16 +226,38 @@ typedef int (*ADIv5_MEM_AP_WRITE_32)(
 );
 
 /**
+ * MEM-AP 写64位数据
+ * 参数:
+ * 	self:AP对象
+ * 	addr:要写的地址
+ * 	data:要写入的数据
+ */
+typedef int (*ADIv5_MEM_AP_WRITE_64)(
+		IN AccessPort self,
+		IN uint64_t addr,
+		IN uint64_t data
+);
+
+
+/**
  * Access Port接口定义
  */
 struct accessPort{
-	enum AccessPortType type;	// AccessPort类型,只读! 不可以修改!
+	const enum AccessPortType type;	// AccessPort类型,只读! 不可以修改!
 	union {
 		// MEM-AP
 		struct {
+			const uint64_t RomTableBase;	// ROM Table的基址,只读!不可修改
 			// TODO 读取ROM Table的基址
+			ADIv5_MEM_AP_READ_8 Read8;
+			ADIv5_MEM_AP_READ_16 Read16;
 			ADIv5_MEM_AP_READ_32 Read32;
+			ADIv5_MEM_AP_READ_64 Read64;
+
+			ADIv5_MEM_AP_WRITE_8 Write8;
+			ADIv5_MEM_AP_WRITE_16 Write16;
 			ADIv5_MEM_AP_WRITE_32 Write32;
+			ADIv5_MEM_AP_WRITE_64 Write64;
 		}Memory;
 		// JTAG-AP
 		struct {

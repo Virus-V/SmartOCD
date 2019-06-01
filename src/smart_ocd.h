@@ -50,6 +50,8 @@ extern jmp_buf fatalException;
 
 #define CAST(type,val) ((type)(val))
 #define BYTE_IDX(data,idx) (((data) >> (idx * 8)) & 0xff)
+// 接口常量值初始化(只可以在结构体中的常量使用): type:const常量类型,obj:const常量对象,val:const常量值.
+#define INTERFACE_CONST_INIT(type,obj,val) (*((type *)&(obj)) = (val))
 
 // 对象的构造函数和析构函数的定义和调用  XXX 弃用
 #define __CONSTRUCT(class) __construct_##class##Object

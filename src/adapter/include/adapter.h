@@ -332,8 +332,8 @@ typedef int (*ADPT_DAP_CLEAN_PENDING)(
  */
 struct adapter {
 	/* 属性 */
-	enum JTAG_TAP_State currState;		// JTAG 当前状态
-	enum transfertMode currTransMode;	// 当前传输协议
+	const enum JTAG_TAP_State currState;		// JTAG 当前状态
+	const enum transfertMode currTransMode;	// 当前传输协议
 
 	/* 服务 */
 	ADPT_SET_STATUS SetStatus;				// 仿真器状态指示

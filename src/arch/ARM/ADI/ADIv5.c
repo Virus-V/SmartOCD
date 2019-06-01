@@ -64,6 +64,125 @@ static int dapInit(struct ADIv5_Dap *dap){
 }
 
 /**
+ * apRead8 读8位数据
+ */
+static int apRead8(AccessPort self, uint64_t addr, uint8_t *data){
+	assert(self != NULL);
+	assert(data != NULL);
+	ADIv5_DpSelectRegister selectTmp;
+	ADIv5_ApCswRegister cswTmp;
+	struct ADIv5_AccessPort *ap = container_of(self, struct ADIv5_AccessPort, apApi);
+	// 检查AP类型
+	if(self->type != AccessPort_Memory){
+		log_error("Not a memory access port!");
+		return ADI_ERR_BAD_PARAMETER;
+	}
+	// 初始化本地临时变量
+	selectTmp.regData = ap->dap->select.regData;
+	cswTmp.regData = ap->type.memory.csw.regData;
+	// 选中当前ap
+	selectTmp.regInfo.AP_Sel = ap->index;
+	// 选中当前ap CSW 寄存器 bank
+	selectTmp.regInfo.AP_BankSel = 0x0;
+	// 设置CSW：Size=Word，AddrInc=off
+	cswTmp.regInfo.AddrInc = DAP_ADDRINC_OFF;	// AddrInc Off
+	if(!ap->type.memory.config.lessWordTransfers){
+		log_warn("Couldn't support Less Word Transfers.");
+		return ADI_ERR_UNSUPPORT;
+	}
+	cswTmp.regInfo.Size = AP_CSW_SIZE8;	// Byte
+	// 是否需要更新SELECT寄存器?
+	if(ap->dap->select.regData != selectTmp.regData){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+	}
+	// 是否需要更新CSW寄存器？
+	if(ap->type.memory.csw.regData != cswTmp.regData){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
+	}
+	// 写入TAR
+	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+	if(ap->type.memory.config.largeAddress){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+	}
+	uint32_t data_tmp = 0;
+	// 读DRW寄存器
+	ap->dap->adapter->DapSingleRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, &data_tmp);
+	// 执行指令队列
+	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		log_error("Execute DAP command failed!");
+		return ADI_ERR_INTERNAL_ERROR;
+	}
+	// 根据byte lane获得数据
+	*data = (data_tmp >> ((addr & 3) << 3)) & 0xff;
+	// 指令执行成功，同步数据到DAP影子寄存器
+	ap->dap->select.regData = selectTmp.regData;
+	ap->type.memory.csw.regData = cswTmp.regData;
+	return ADI_SUCCESS;
+}
+
+/**
+ * apRead16 读16位数据
+ */
+static int apRead16(AccessPort self, uint64_t addr, uint16_t *data){
+	assert(self != NULL);
+	assert(data != NULL);
+	ADIv5_DpSelectRegister selectTmp;
+	ADIv5_ApCswRegister cswTmp;
+	struct ADIv5_AccessPort *ap = container_of(self, struct ADIv5_AccessPort, apApi);
+	// 检查AP类型
+	if(self->type != AccessPort_Memory){
+		log_error("Not a memory access port!");
+		return ADI_ERR_BAD_PARAMETER;
+	}
+	// 检查对齐
+	if(addr & 0x1){
+		log_warn("Memory address is not half word aligned!");
+		return ADI_ERR_BAD_PARAMETER;
+	}
+	// 初始化本地临时变量
+	selectTmp.regData = ap->dap->select.regData;
+	cswTmp.regData = ap->type.memory.csw.regData;
+	// 选中当前ap
+	selectTmp.regInfo.AP_Sel = ap->index;
+	// 选中当前ap CSW 寄存器 bank
+	selectTmp.regInfo.AP_BankSel = 0x0;
+	// 设置CSW：Size=Word，AddrInc=off
+	cswTmp.regInfo.AddrInc = DAP_ADDRINC_OFF;	// AddrInc Off
+	if(!ap->type.memory.config.lessWordTransfers){
+		log_warn("Couldn't support Less Word Transfers.");
+		return ADI_ERR_UNSUPPORT;
+	}
+	cswTmp.regInfo.Size = AP_CSW_SIZE16;	// Half Word
+	// 是否需要更新SELECT寄存器?
+	if(ap->dap->select.regData != selectTmp.regData){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+	}
+	// 是否需要更新CSW寄存器？
+	if(ap->type.memory.csw.regData != cswTmp.regData){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
+	}
+	// 写入TAR
+	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+	if(ap->type.memory.config.largeAddress){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+	}
+	uint32_t data_tmp = 0;
+	// 读DRW寄存器
+	ap->dap->adapter->DapSingleRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, &data_tmp);
+	// 执行指令队列
+	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		log_error("Execute DAP command failed!");
+		return ADI_ERR_INTERNAL_ERROR;
+	}
+	// 根据byte lane获得数据
+	*data = (data_tmp >> ((addr & 3) << 3)) & 0xffff;
+	// 指令执行成功，同步数据到DAP影子寄存器
+	ap->dap->select.regData = selectTmp.regData;
+	ap->type.memory.csw.regData = cswTmp.regData;
+	return ADI_SUCCESS;
+}
+
+/**
  * apRead32 读32位数据
  */
 static int apRead32(AccessPort self, uint64_t addr, uint32_t *data){
@@ -119,6 +238,182 @@ static int apRead32(AccessPort self, uint64_t addr, uint32_t *data){
 }
 
 /**
+ * apRead64 读64位数据
+ */
+static int apRead64(AccessPort self, uint64_t addr, uint64_t *data){
+	assert(self != NULL);
+	assert(data != NULL);
+	ADIv5_DpSelectRegister selectTmp;
+	ADIv5_ApCswRegister cswTmp;
+	struct ADIv5_AccessPort *ap = container_of(self, struct ADIv5_AccessPort, apApi);
+	// 检查AP类型
+	if(self->type != AccessPort_Memory){
+		log_error("Not a memory access port!");
+		return ADI_ERR_BAD_PARAMETER;
+	}
+	// 检查对齐
+	if(addr & 0x7){
+		log_warn("Memory address is not double word aligned!");
+		return ADI_ERR_BAD_PARAMETER;
+	}
+	// 初始化本地临时变量
+	selectTmp.regData = ap->dap->select.regData;
+	cswTmp.regData = ap->type.memory.csw.regData;
+	// 选中当前ap
+	selectTmp.regInfo.AP_Sel = ap->index;
+	// 选中当前ap寄存器 bank
+	selectTmp.regInfo.AP_BankSel = 0x0;
+	// 设置CSW：Size=Word，AddrInc=off
+	cswTmp.regInfo.AddrInc = DAP_ADDRINC_OFF;	// AddrInc Off
+	if(!ap->type.memory.config.largeData){
+		log_warn("Couldn't support Large Word Transfers.");
+		return ADI_ERR_UNSUPPORT;
+	}
+	cswTmp.regInfo.Size = AP_CSW_SIZE64;	// Double Word
+	// 是否需要更新SELECT寄存器?
+	if(ap->dap->select.regData != selectTmp.regData){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+	}
+	// 是否需要更新CSW寄存器？
+	if(ap->type.memory.csw.regData != cswTmp.regData){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
+	}
+	// 写入TAR
+	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+	if(ap->type.memory.config.largeAddress){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+	}
+	// 读DRW寄存器
+	uint32_t data_tmp[2];	// 定义缓冲区
+	// 读取数据，第一次读取的是低位，接下来读取高位，必须两次读取后才能完成本次AP Memory access
+	ap->dap->adapter->DapSingleRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data_tmp);
+	ap->dap->adapter->DapSingleRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data_tmp + 1);
+	// 执行指令队列
+	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		log_error("Execute DAP command failed!");
+		return ADI_ERR_INTERNAL_ERROR;
+	}
+	*data = ((uint64_t)data_tmp[1] << 32) | data_tmp[0];
+	// 指令执行成功，同步数据到DAP影子寄存器
+	ap->dap->select.regData = selectTmp.regData;
+	ap->type.memory.csw.regData = cswTmp.regData;
+	return ADI_SUCCESS;
+}
+
+/**
+ * apWrite8 写8位数据
+ */
+static int apWrite8(AccessPort self, uint64_t addr, uint8_t data){
+	assert(self != NULL);
+	ADIv5_DpSelectRegister selectTmp;
+	ADIv5_ApCswRegister cswTmp;
+	struct ADIv5_AccessPort *ap = container_of(self, struct ADIv5_AccessPort, apApi);
+	// 检查AP类型
+	if(self->type != AccessPort_Memory){
+		log_error("Not a memory access port!");
+		return ADI_ERR_BAD_PARAMETER;
+	}
+	// 初始化本地临时变量
+	selectTmp.regData = ap->dap->select.regData;
+	cswTmp.regData = ap->type.memory.csw.regData;
+	// 选中当前ap
+	selectTmp.regInfo.AP_Sel = ap->index;
+	// 选中当前ap寄存器 bank
+	selectTmp.regInfo.AP_BankSel = 0x0;
+	// 设置CSW：Size=Word，AddrInc=off
+	cswTmp.regInfo.AddrInc = DAP_ADDRINC_OFF;	// AddrInc Off
+	if(!ap->type.memory.config.lessWordTransfers){
+		log_warn("Couldn't support Less Word Transfers.");
+		return ADI_ERR_UNSUPPORT;
+	}
+	cswTmp.regInfo.Size = AP_CSW_SIZE8;	// Byte
+	// 是否需要更新SELECT寄存器?
+	if(ap->dap->select.regData != selectTmp.regData){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+	}
+	// 是否需要更新CSW寄存器？
+	if(ap->type.memory.csw.regData != cswTmp.regData){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
+	}
+	// 写入TAR
+	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+	if(ap->type.memory.config.largeAddress){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+	}
+	// 写DRW寄存器
+	uint32_t data_tmp = data << ((addr & 3) << 3);	// 放到Byte Lane确定的位置
+	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data_tmp);
+	// 执行指令队列
+	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		log_error("Execute DAP command failed!");
+		return ADI_ERR_INTERNAL_ERROR;
+	}
+	// 指令执行成功，同步数据到DAP影子寄存器
+	ap->dap->select.regData = selectTmp.regData;
+	ap->type.memory.csw.regData = cswTmp.regData;
+	return ADI_SUCCESS;
+}
+
+/**
+ * apWrite16 写16位数据
+ */
+static int apWrite16(AccessPort self, uint64_t addr, uint16_t data){
+	assert(self != NULL);
+	ADIv5_DpSelectRegister selectTmp;
+	ADIv5_ApCswRegister cswTmp;
+	struct ADIv5_AccessPort *ap = container_of(self, struct ADIv5_AccessPort, apApi);
+	// 检查AP类型
+	if(self->type != AccessPort_Memory){
+		log_error("Not a memory access port!");
+		return ADI_ERR_BAD_PARAMETER;
+	}
+	// 检查对齐
+	if(addr & 0x1){
+		log_warn("Memory address is not half word aligned!");
+		return ADI_ERR_BAD_PARAMETER;
+	}
+	// 初始化本地临时变量
+	selectTmp.regData = ap->dap->select.regData;
+	cswTmp.regData = ap->type.memory.csw.regData;
+	// 选中当前ap
+	selectTmp.regInfo.AP_Sel = ap->index;
+	// 选中当前ap寄存器 bank
+	selectTmp.regInfo.AP_BankSel = 0x0;
+	// 设置CSW：Size=Word，AddrInc=off
+	cswTmp.regInfo.AddrInc = DAP_ADDRINC_OFF;	// AddrInc Off
+	if(!ap->type.memory.config.lessWordTransfers){
+		log_warn("Couldn't support Less Word Transfers.");
+		return ADI_ERR_UNSUPPORT;
+	}
+	cswTmp.regInfo.Size = AP_CSW_SIZE16;	// Half Word
+	// 是否需要更新SELECT寄存器?
+	if(ap->dap->select.regData != selectTmp.regData){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+	}
+	// 是否需要更新CSW寄存器？
+	if(ap->type.memory.csw.regData != cswTmp.regData){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
+	}
+	// 写入TAR
+	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+	if(ap->type.memory.config.largeAddress){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+	}
+	// 写DRW寄存器
+	uint32_t data_tmp = data << ((addr & 3) << 3);	// 放到Byte Lane确定的位置
+	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data_tmp);
+	// 执行指令队列
+	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		log_error("Execute DAP command failed!");
+		return ADI_ERR_INTERNAL_ERROR;
+	}
+	// 指令执行成功，同步数据到DAP影子寄存器
+	ap->dap->select.regData = selectTmp.regData;
+	ap->type.memory.csw.regData = cswTmp.regData;
+	return ADI_SUCCESS;
+}
+
+/**
  * apWrite32 写32位数据
  */
 static int apWrite32(AccessPort self, uint64_t addr, uint32_t data){
@@ -161,6 +456,65 @@ static int apWrite32(AccessPort self, uint64_t addr, uint32_t data){
 	}
 	// 写DRW寄存器
 	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data);
+	// 执行指令队列
+	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		log_error("Execute DAP command failed!");
+		return ADI_ERR_INTERNAL_ERROR;
+	}
+	// 指令执行成功，同步数据到DAP影子寄存器
+	ap->dap->select.regData = selectTmp.regData;
+	ap->type.memory.csw.regData = cswTmp.regData;
+	return ADI_SUCCESS;
+}
+
+/**
+ * apWrite64 写64位数据
+ */
+static int apWrite64(AccessPort self, uint64_t addr, uint64_t data){
+	assert(self != NULL);
+	ADIv5_DpSelectRegister selectTmp;
+	ADIv5_ApCswRegister cswTmp;
+	struct ADIv5_AccessPort *ap = container_of(self, struct ADIv5_AccessPort, apApi);
+	// 检查AP类型
+	if(self->type != AccessPort_Memory){
+		log_error("Not a memory access port!");
+		return ADI_ERR_BAD_PARAMETER;
+	}
+	// 检查对齐
+	if(addr & 0x7){
+		log_warn("Memory address is not double word aligned!");
+		return ADI_ERR_BAD_PARAMETER;
+	}
+	// 初始化本地临时变量
+	selectTmp.regData = ap->dap->select.regData;
+	cswTmp.regData = ap->type.memory.csw.regData;
+	// 选中当前ap
+	selectTmp.regInfo.AP_Sel = ap->index;
+	// 选中当前ap寄存器 bank
+	selectTmp.regInfo.AP_BankSel = 0x0;
+	// 设置CSW：Size=Word，AddrInc=off
+	cswTmp.regInfo.AddrInc = DAP_ADDRINC_OFF;	// AddrInc Off
+	if(!ap->type.memory.config.largeData){
+		log_warn("Couldn't support Large Word Transfers.");
+		return ADI_ERR_UNSUPPORT;
+	}
+	cswTmp.regInfo.Size = AP_CSW_SIZE64;	// Double Word
+	// 是否需要更新SELECT寄存器?
+	if(ap->dap->select.regData != selectTmp.regData){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+	}
+	// 是否需要更新CSW寄存器？
+	if(ap->type.memory.csw.regData != cswTmp.regData){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
+	}
+	// 写入TAR
+	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+	if(ap->type.memory.config.largeAddress){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+	}
+	// 写DRW寄存器，先写低位，再写高位，最后一个高位写完后才初始化Memory access
+	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data & 0xFFFFFFFFu);
+	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, (data >> 32) & 0xFFFFFFFFu);
 	// 执行指令队列
 	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
 		log_error("Execute DAP command failed!");
@@ -247,7 +601,7 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap){
 		return ADI_SUCCESS;
 	}else {
 		// TODO 增加JTAG相关的初始化
-		return ADI_FAILED;
+		return ADI_ERR_UNSUPPORT;
 	}
 }
 
@@ -288,12 +642,19 @@ static int findAP(DAP self, enum AccessPortType type, enum busType bus, AccessPo
 		return ADI_ERR_INTERNAL_ERROR;
 	}
 	// 设置接口类型
-	ap_t->apApi.type = type;
+	INTERFACE_CONST_INIT(enum AccessPortType, ap_t->apApi.type, type);
 	ap_t->dap = dapObj;
 	switch(type){
 	case AccessPort_Memory:
+		ap_t->apApi.Interface.Memory.Read8 = apRead8;
+		ap_t->apApi.Interface.Memory.Read16 = apRead16;
 		ap_t->apApi.Interface.Memory.Read32 = apRead32;
+		ap_t->apApi.Interface.Memory.Read64 = apRead64;
+
+		ap_t->apApi.Interface.Memory.Write8 = apWrite8;
+		ap_t->apApi.Interface.Memory.Write16 = apWrite16;
 		ap_t->apApi.Interface.Memory.Write32 = apWrite32;
+		ap_t->apApi.Interface.Memory.Write64 = apWrite64;
 		break;
 	case AccessPort_JTAG:
 		// TODO 设置接口

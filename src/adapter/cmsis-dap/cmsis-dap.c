@@ -279,18 +279,18 @@ static int dapInit(struct cmsis_dap *cmdapObj){
 	case 0:
 		log_warn("Cant auto select transfer mode! please use Adapter.SetTransferMode() service to select mode manually.");
 		cmdapObj->currTransMode = ADPT_MODE_MAX;
-		cmdapObj->adaperAPI.currTransMode = ADPT_MODE_MAX;
+		INTERFACE_CONST_INIT(enum transfertMode, cmdapObj->adaperAPI.currTransMode, ADPT_MODE_MAX);
 		break;
 	case CMDAP_PORT_SWD:
 		log_info("Auto select SWD transfer mode.");
 		cmdapObj->currTransMode = ADPT_MODE_SWD;
-		cmdapObj->adaperAPI.currTransMode = ADPT_MODE_SWD;
+		INTERFACE_CONST_INIT(enum transfertMode, cmdapObj->adaperAPI.currTransMode, ADPT_MODE_SWD);
 		swjJtag2Swd(cmdapObj);
 		break;
 	case CMDAP_PORT_JTAG:
 		log_info("Auto select JTAG transfer mode.");
 		cmdapObj->currTransMode = ADPT_MODE_JTAG;
-		cmdapObj->adaperAPI.currTransMode = ADPT_MODE_JTAG;
+		INTERFACE_CONST_INIT(enum transfertMode, cmdapObj->adaperAPI.currTransMode, ADPT_MODE_JTAG);
 		swjSwd2Jtag(cmdapObj);
 		break;
 	}
@@ -353,7 +353,7 @@ static int dapSetTransMode(Adapter self, enum transfertMode mode){
 			log_info("Switch to SWD mode.");
 			// 更新当前模式
 			cmdapObj->currTransMode = ADPT_MODE_SWD;
-			cmdapObj->adaperAPI.currTransMode = ADPT_MODE_SWD;
+			INTERFACE_CONST_INIT(enum transfertMode, cmdapObj->adaperAPI.currTransMode, ADPT_MODE_SWD);
 			return ADPT_SUCCESS;
 		}
 	case ADPT_MODE_JTAG:
@@ -374,10 +374,10 @@ static int dapSetTransMode(Adapter self, enum transfertMode mode){
 			log_info("Switch to JTAG mode.");
 			// 更新当前模式
 			cmdapObj->currTransMode = ADPT_MODE_JTAG;
-			cmdapObj->adaperAPI.currTransMode = ADPT_MODE_JTAG;
+			INTERFACE_CONST_INIT(enum transfertMode, cmdapObj->adaperAPI.currTransMode, ADPT_MODE_JTAG);
 			// 更新当前TAP状态机
 			cmdapObj->currState = JTAG_TAP_RESET;
-			cmdapObj->adaperAPI.currState = JTAG_TAP_RESET;
+			INTERFACE_CONST_INIT(enum JTAG_TAP_State, cmdapObj->adaperAPI.currState, JTAG_TAP_RESET);
 			return ADPT_SUCCESS;
 		}
 	default :
@@ -916,7 +916,7 @@ static int dapReset(Adapter self, enum targetResetType type){
 		}
 		// 更新TAP状态机
 		cmdapObj->currState = JTAG_TAP_RESET;
-		cmdapObj->adaperAPI.currState = JTAG_TAP_RESET;
+		INTERFACE_CONST_INIT(enum JTAG_TAP_State, cmdapObj->adaperAPI.currState, JTAG_TAP_RESET);
 		return ADPT_SUCCESS;
 	case ADPT_RESET_DEBUG_RESET:
 		if(cmdapObj->currTransMode == ADPT_MODE_JTAG){	// TMS上面5周期的高电平
@@ -932,7 +932,7 @@ static int dapReset(Adapter self, enum targetResetType type){
 		}
 		// 更新TAP状态机
 		cmdapObj->currState = JTAG_TAP_RESET;
-		cmdapObj->adaperAPI.currState = JTAG_TAP_RESET;
+		INTERFACE_CONST_INIT(enum JTAG_TAP_State, cmdapObj->adaperAPI.currState, JTAG_TAP_RESET);
 		return ADPT_SUCCESS;
 	}
 	return ADPT_ERR_UNSUPPORT;
@@ -1183,7 +1183,7 @@ static int executeJtagCmd(Adapter self){
 	}
 	// 更新当前TAP状态机
 	cmdapObj->currState = tempState;
-	cmdapObj->adaperAPI.currState = tempState;
+	INTERFACE_CONST_INIT(enum JTAG_TAP_State, cmdapObj->adaperAPI.currState, tempState);
 
 	// 释放资源
 	free(writeBuff);
