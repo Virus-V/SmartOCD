@@ -15,6 +15,8 @@
 #include "arch/ARM/ADI/include/ADIv5.h"
 #include "adapter/cmsis-dap/cmsis-dap.h"
 
+// 调试用
+int misc_PrintBulk(char *data, int length, int rowLen);
 
 uint16_t vids[] = {0xc251, 0};
 uint16_t pids[] = {0xf001, 0};
@@ -150,25 +152,26 @@ int main(){
 	log_info("AHB AP ROM Table Base: 0x%08X.", apAHB->Interface.Memory.RomTableBase);
 	uint32_t data_temp;
 	uint64_t addr;
-	for(addr=0x08000000u; addr < 0x080000FFu; addr+=4){
-		apAHB->Interface.Memory.Read32(apAHB, addr, &data_temp);
-		log_info("0x%08X: 0x%08X.", addr, data_temp);
-	}
-	uint8_t data8_temp;
-	for(addr=0x08000000u; addr < 0x080000FFu; addr+=1){
-		apAHB->Interface.Memory.Read8(apAHB, addr, &data8_temp);
-		log_info("0x%08X: 0x%08X.", addr, data8_temp);
-	}
-	uint16_t data16_temp;
-	for(addr=0x08000000u; addr < 0x080000FFu; addr+=2){
-		apAHB->Interface.Memory.Read16(apAHB, addr, &data16_temp);
-		log_info("0x%08X: 0x%08X.", addr, data16_temp);
-	}
+//	for(addr=0x08000000u; addr < 0x080000FFu; addr+=4){
+//		apAHB->Interface.Memory.Read32(apAHB, addr, &data_temp);
+//		log_info("0x%08X: 0x%08X.", addr, data_temp);
+//	}
+//	uint8_t data8_temp;
+//	for(addr=0x08000000u; addr < 0x080000FFu; addr+=1){
+//		apAHB->Interface.Memory.Read8(apAHB, addr, &data8_temp);
+//		log_info("0x%08X: 0x%08X.", addr, data8_temp);
+//	}
+//	uint16_t data16_temp;
+//	for(addr=0x08000000u; addr < 0x080000FFu; addr+=2){
+//		apAHB->Interface.Memory.Read16(apAHB, addr, &data16_temp);
+//		log_info("0x%08X: 0x%08X.", addr, data16_temp);
+//	}
+	// 写入测试
+	apAHB->Interface.Memory.Write32(apAHB, 0x20000000u, 0xdeadbeefu);
+	apAHB->Interface.Memory.Read32(apAHB, 0x20000000u, &data_temp);
+	log_info("Write test: 0x%08X.", data_temp);
 
-	ADIv5_DestoryDap(&dapObj);
-	DisconnectCmsisDap(cmdap);
-	DestroyCmsisDap(&cmdap);
-	return 0;
+
 //	// 寻找AP
 //	uint8_t apIdx =0;
 //	if(DAP_Find_AP(adapterObj, AP_TYPE_AMBA_AHB, &apIdx) == FALSE){
@@ -316,63 +319,64 @@ int main(){
 //	}else{
 //		log_info("0x20000000 => 0x%08X.", data_tmp);
 //	}
-//	// block读取测试
-//	do{
-//		uint64_t baseAddr = 0x20000204u;
-//		uint32_t *block_tmp;
-//		block_tmp = calloc(2560, sizeof(uint32_t));	// 2560 * sizeof(uint32_t) = 10k//192K = sizeof(SRAM)
-//		assert(block_tmp != NULL);
-//
-//		log_info("Block Read Test.");
-////		DAP_Write_TAR(adapterObj, 0x08000000u);
-////		adapter_DAP_Read_AP_Block(adapterObj, DRW, block_tmp, 16, TRUE);
-////		adapter_DAP_Execute(adapterObj);
-//		// 192kb
-////		log_info("Read size 8, result:%d.",
-////				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_8, 2056, block_tmp));
-////		misc_PrintBulk(CAST(uint8_t *, block_tmp), 2056*sizeof(uint32_t), 32);
-//
-//		// 初始化空间
+	// block读取测试
+	do{
+		uint64_t baseAddr = 0x20000000u;
+		uint32_t *block_tmp;
+		block_tmp = calloc(2560, sizeof(uint32_t));	// 2560 * sizeof(uint32_t) = 10k//192K = sizeof(SRAM)
+		assert(block_tmp != NULL);
+
+		log_info("Block Read Test.");
+//		DAP_Write_TAR(adapterObj, 0x08000000u);
+//		adapter_DAP_Read_AP_Block(adapterObj, DRW, block_tmp, 16, TRUE);
+//		adapter_DAP_Execute(adapterObj);
+		// 192kb
+//		log_info("Read size 8, result:%d.",
+//				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_8, 2056, block_tmp));
+//		misc_PrintBulk(CAST(uint8_t *, block_tmp), 2056*sizeof(uint32_t), 32);
+
+		// 初始化空间
+		for(int i=0;i<2560;i++){
+			//block_tmp[i] = i << ((i&1)<<4);
+			//block_tmp[i] = ((i+1) << 16) + i;
+			block_tmp[i] = 0xdeadbeefu;
+		}
+		misc_PrintBulk(CAST(uint8_t *, block_tmp), 2560*sizeof(uint32_t), 32);
+		//memset(block_tmp, 0x0, sizeof(block_tmp));
+		log_info("Write size 32, result:%d.",
+		apAHB->Interface.Memory.BlockWrite(apAHB, baseAddr, ADDRINC_PACKED, DATA_SIZE_16, 2560, (uint8_t*)block_tmp));
+		//misc_PrintBulk(CAST(uint8_t *, block_tmp), 49152*sizeof(uint32_t), 32);
+		memset(block_tmp, 0x0, 2560*sizeof(uint32_t));
+		log_info("Read size 32, result:%d.",
+				apAHB->Interface.Memory.BlockRead(apAHB, 0x08000000u, ADDRINC_PACKED, DATA_SIZE_16, 2560, (uint8_t*)block_tmp));
+		misc_PrintBulk(CAST(uint8_t *, block_tmp), 2560*sizeof(uint32_t), 32);
 //		for(int i=0;i<2560;i++){
-//			//block_tmp[i] = i << ((i&1)<<4);
-//			block_tmp[i] = ((i+1) << 16) + i;
+//			log_debug("%d,%x:%x.",i,i, block_tmp[i] & (0xFFFF << ((i&1)<<4)));
 //		}
-//		misc_PrintBulk(CAST(uint8_t *, block_tmp), 2560*sizeof(uint32_t), 32);
-//		//memset(block_tmp, 0x0, sizeof(block_tmp));
-//		log_info("Write size 32, result:%d.",
-//				DAP_WriteMemBlock(adapterObj, baseAddr, DAP_ADDRINC_PACKED, DAP_DATA_SIZE_16, 2560, block_tmp));
-//		//misc_PrintBulk(CAST(uint8_t *, block_tmp), 49152*sizeof(uint32_t), 32);
-//		memset(block_tmp, 0x0, 2560*sizeof(uint32_t));
+//		memset(block_tmp, 0x0, sizeof(block_tmp));
 //		log_info("Read size 32, result:%d.",
-//				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_PACKED, DAP_DATA_SIZE_16, 2560, block_tmp));
-//		misc_PrintBulk(CAST(uint8_t *, block_tmp), 2560*sizeof(uint32_t), 32);
-//		//for(int i=0;i<2560;i++){
-//		//	log_debug("%d,%x:%x.",i,i, block_tmp[i] & (0xFFFF << ((i&1)<<4)));
-//		//}
-////		memset(block_tmp, 0x0, sizeof(block_tmp));
-////		log_info("Read size 32, result:%d.",
-////				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_32, 2056, block_tmp));
-////		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
-////
-////		log_info("AddrInc packed\n Read size 8, result:%d.",
-////				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_PACKED, DAP_DATA_SIZE_8, 2056, block_tmp));
-////		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
-////
-////		memset(block_tmp, 0x0, sizeof(block_tmp));
-////		log_info("Read size 16, result:%d.",
-////				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_PACKED, DAP_DATA_SIZE_16, 2056, block_tmp));
-////		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
-////
-////		memset(block_tmp, 0x0, sizeof(block_tmp));
-////		log_info("Read size 32, result:%d.",
-////				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_PACKED, DAP_DATA_SIZE_32, 2056, block_tmp));
-////		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
-//		// block 写入测试
-//		//block_tmp
-//		//memset(block_tmp, 0x0, sizeof(block_tmp));
-//		//DAP_ReadMemBlock(adapterObj, 0x08000000u, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_32, 16, block_tmp);
-//		//misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
-//	}while(0);
+//				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_32, 2056, block_tmp));
+//		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
+//
+//		log_info("AddrInc packed\n Read size 8, result:%d.",
+//				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_PACKED, DAP_DATA_SIZE_8, 2056, block_tmp));
+//		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
+//
+//		memset(block_tmp, 0x0, sizeof(block_tmp));
+//		log_info("Read size 16, result:%d.",
+//				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_PACKED, DAP_DATA_SIZE_16, 2056, block_tmp));
+//		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
+//
+//		memset(block_tmp, 0x0, sizeof(block_tmp));
+//		log_info("Read size 32, result:%d.",
+//				DAP_ReadMemBlock(adapterObj, baseAddr, DAP_ADDRINC_PACKED, DAP_DATA_SIZE_32, 2056, block_tmp));
+//		misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
+		// block 写入测试
+		//block_tmp
+		//memset(block_tmp, 0x0, sizeof(block_tmp));
+		//DAP_ReadMemBlock(adapterObj, 0x08000000u, DAP_ADDRINC_SINGLE, DAP_DATA_SIZE_32, 16, block_tmp);
+		//misc_PrintBulk(CAST(uint8_t *, block_tmp), sizeof(block_tmp), 16);
+	}while(0);
 //
 //	// block写入
 //
@@ -395,5 +399,8 @@ int main(){
 		Revision:0x1, Manufacturer:0x23b, Variant:0x1.
 		---------------------------
 	 */
-
+	ADIv5_DestoryDap(&dapObj);
+	DisconnectCmsisDap(cmdap);
+	DestroyCmsisDap(&cmdap);
+	return 0;
 }

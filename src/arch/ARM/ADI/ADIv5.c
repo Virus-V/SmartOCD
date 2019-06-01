@@ -614,9 +614,9 @@ static int apBlockRead(AccessPort self, uint64_t addr, enum addrIncreaseMode mod
 		while(addrCurr < addrEnd){
 			addrNextBoundary = ((addrCurr >> 10) + 1) << 10;	// 找到下一个1kb边界
 			// 写入TAR
-			ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+			ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addrCurr & 0xFFFFFFFFu);
 			if(ap->type.memory.config.largeAddress){
-				ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+				ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addrCurr >> 32) & 0xFFFFFFFFu);
 			}
 			//log_debug("SINGLE:CurrAddr:0x%08X;next boundary:0x%08X.", addrCurr, addrNextBoundary);
 			// 如果下一个边界大于结束地址
@@ -637,9 +637,9 @@ static int apBlockRead(AccessPort self, uint64_t addr, enum addrIncreaseMode mod
 		while(addrCurr < addrEnd){
 			addrNextBoundary = ((addrCurr >> 10) + 1) << 10;	// 找到下一个1kb边界
 			// 写入TAR
-			ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+			ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addrCurr & 0xFFFFFFFFu);
 			if(ap->type.memory.config.largeAddress){
-				ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+				ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addrCurr >> 32) & 0xFFFFFFFFu);
 			}
 			//log_debug("PACKED:CurrAddr:0x%08X;next boundary:0x%08X.", addrCurr, addrNextBoundary);
 			// 如果下一个边界大于结束地址
@@ -762,11 +762,11 @@ static int apBlockWrite(AccessPort self, uint64_t addr, enum addrIncreaseMode mo
 		while(addrCurr < addrEnd){
 			addrNextBoundary = ((addrCurr >> 10) + 1) << 10;	// 找到下一个1kb边界
 			// 写入TAR
-			ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+			ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addrCurr & 0xFFFFFFFFu);
 			if(ap->type.memory.config.largeAddress){
-				ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+				ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addrCurr >> 32) & 0xFFFFFFFFu);
 			}
-			//log_debug("SINGLE:CurrAddr:0x%08X;next boundary:0x%08X.", addrCurr, addrNextBoundary);
+			log_debug("SINGLE:CurrAddr:0x%08X;next boundary:0x%08X.", addrCurr, addrNextBoundary);
 			// 如果下一个边界大于结束地址
 			if(addrNextBoundary > addrEnd){
 				thisTimeTransCnt = (addrEnd - addrCurr) >> cswTmp.regInfo.Size;
@@ -785,9 +785,9 @@ static int apBlockWrite(AccessPort self, uint64_t addr, enum addrIncreaseMode mo
 		while(addrCurr < addrEnd){
 			addrNextBoundary = ((addrCurr >> 10) + 1) << 10;	// 找到下一个1kb边界
 			// 写入TAR
-			ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+			ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addrCurr & 0xFFFFFFFFu);
 			if(ap->type.memory.config.largeAddress){
-				ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+				ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addrCurr >> 32) & 0xFFFFFFFFu);
 			}
 			//log_debug("PACKED:CurrAddr:0x%08X;next boundary:0x%08X.", addrCurr, addrNextBoundary);
 			// 如果下一个边界大于结束地址
