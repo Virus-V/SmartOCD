@@ -113,6 +113,8 @@ static int luaApi_adapter_jtag_status_change(lua_State *L){
  * 2#:字符串对象
  * 3#:二进制位个数
  * Note：该函数会刷新JTAG指令队列,因为要同步获得数据
+ * 返回：
+ * 1#：捕获到的TDO数据
  */
 static int luaApi_adapter_jtag_exchange_data(lua_State *L){
 	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
@@ -236,7 +238,7 @@ static int luaApi_adapter_dap_single_write(lua_State *L){
 		cmdapObj->DapCleanPending(cmdapObj);
 		return luaL_error(L, "Execute the instruction queue failed!");
 	}
-	return 1;
+	return 0;
 }
 
 /**
@@ -253,16 +255,24 @@ static int luaApi_adapter_dap_multi_read(lua_State *L){
 	int type = (int)luaL_checkinteger(L, 2);
 	int reg = (int)luaL_checkinteger(L, 3);
 	int count = (int)luaL_checkinteger(L, 4);
-	uint32_t *buff = (uint32_t *)lua_newuserdata(L, count * sizeof(uint32_t));
+	//FIXME 改成Malloc
+	// 开辟缓冲内存空间
+	uint32_t *buff = malloc(count * sizeof(uint32_t));
+	if(buff == NULL){
+		return luaL_error(L, "Multi-read buff alloc Failed!");
+	}
 	if(cmdapObj->DapMultiRead(cmdapObj, type, reg, count, buff) != ADPT_SUCCESS){
 		return luaL_error(L, "Insert to instruction queue failed!");
 	}
 	// 执行队列
 	if(cmdapObj->DapCommit(cmdapObj) != ADPT_SUCCESS){
+		free(buff);
 		// 清理指令队列
 		cmdapObj->DapCleanPending(cmdapObj);
 		return luaL_error(L, "Execute the instruction queue failed!");
 	}
+	lua_pushlstring(L, buff, count * sizeof(uint32_t));
+	free(buff);
 	return 1;
 }
 
@@ -291,7 +301,7 @@ static int luaApi_adapter_dap_multi_write(lua_State *L){
 		cmdapObj->DapCleanPending(cmdapObj);
 		return luaL_error(L, "Execute the instruction queue failed!");
 	}
-	return 1;
+	return 0;
 }
 
 /**
@@ -490,7 +500,7 @@ static const luaL_Reg lib_cmdap_oo[] = {
 
 	// CMSIS-DAP 特定接口
 	{"Connect", luaApi_cmsis_dap_connect},	// 连接CMSIS-DAP
-	{"Disconnect", NULL},	// 断开连接DAP
+	//{"Disconnect", NULL},	// TODO 断开连接DAP
 	{"TransferConfig", luaApi_cmsis_dap_transfer_configure},
 	{"JtagConfig", luaApi_cmsis_dap_jtag_configure},
 	{"SwdConfig", luaApi_cmsis_dap_swd_configure},

@@ -73,9 +73,9 @@ Lua 的语法类似 PASCAL 和 Modula 但更加简洁，所有的语法产生式
 
 ### 初始化
 ```lua
-adapter = require("Adapter")	-- 加载Adapter库
-cmsis_dap = require("CMSIS-DAP") -- 加载CMSIS-DAP库
-AdapterObj = cmsis_dap.New() -- 创建新的CMSIS-DAP Adapter对象
+adapter = require("Adapter")
+cmsis_dap = require("CMSIS-DAP"); -- 加载CMSIS-DAP库
+cmObj = cmsis_dap.Create(); -- 创建新的CMSIS-DAP Adapter对象
 -- CMSIS-DAP的VID和PID
 local vid_pids = {
 	-- Keil Software
@@ -86,90 +86,95 @@ local vid_pids = {
 	{0x0d28, 0x0204}	-- MBED CMSIS-DAP
 }
 -- 连接CMSIS-DAP仿真器
-cmsis_dap.Connect(AdapterObj, vid_pids, nil)
--- 初始化Adapter对象
-AdapterObj:Init()
+cmObj:Connect(vid_pids, nil)
 -- 配置CMSIS-DAP Transfer参数
-cmsis_dap.TransferConfigure(AdapterObj, 5, 5, 5)
+cmObj:TransferConfig(5, 5, 5)
 -- SWD参数
-cmsis_dap.swdConfigure(AdapterObj, 0)
--- 点亮连接状态指示灯
-AdapterObj:SetStatus(adapter.STATUS_CONNECTED)
-AdapterObj:SetClock(500000)	-- 500KHz
--- 选择传输模式
-if AdapterObj:HaveTransType(adapter.SWD) then	-- 优先选择SWD协议
-	AdapterObj:TransType(adapter.SWD)
+cmObj:SwdConfig(0)
+-- 设置传输频率
+cmObj:SetFrequent(5000000)	-- 500KHz
+print("CMSIS-DAP: Current frequent is 5MHz")
+-- 选择SWD传输模式
+local transMode = cmObj:TransferMode()
+if transMode == adapter.SWD then
+	print("CMSIS-DAP: Current transfer mode is SWD")
+elseif transMode == adapter.JTAG then
+	print("CMSIS-DAP: Current transfer mode is JTAG")
 else
-	AdapterObj:TransType(adapter.JTAG)
+	print("CMSIS-DAP: Can't auto select a transfer mode! Default SWD!")
+	cmObj:TransferMode(adapter.SWD)
 end
-AdapterObj:SetStatus(adapter.STATUS_RUNING)	-- 点亮仿真器的RUN状态灯
 
 -- 读取JTAG Pins
-local pins_data = AdapterObj:jtagPins(0, 0, 0)
-print("JTAG Pins: TCK:" .. ((pins_data & adapter.PIN_SWCLK_TCK) >> adapter.PIN_SWCLK_TCK)
-	.. " TMS:" .. ((pins_data & (1 << adapter.PIN_SWDIO_TMS)) >> adapter.PIN_SWDIO_TMS)
-	.. " TDI:" .. ((pins_data & (1 << adapter.PIN_TDI)) >> adapter.PIN_TDI)
-	.. " TDO:" .. ((pins_data & (1 << adapter.PIN_TDO)) >> adapter.PIN_TDO)
-	.. " nTRST:" .. ((pins_data & (1 << adapter.PIN_nTRST)) >> adapter.PIN_nTRST)
-	.. " nRESET:" .. ((pins_data & (1 << adapter.PIN_nRESET)) >> adapter.PIN_nRESET))
+local pins_data = cmObj:JtagPins(0, 0, 0)
+print("JTAG Pins: ")
+if pins_data & adapter.PIN_SWCLK_TCK > 0 then
+	print(" TCK = 1")
+else 
+	print(" TCK = 0")
+end
+if pins_data & adapter.PIN_SWDIO_TMS > 0 then
+	print(" TMS = 1")
+else 
+	print(" TMS = 0")
+end
+if pins_data & adapter.PIN_TDI > 0 then
+	print(" TDI = 1")
+else 
+	print(" TDI = 0")
+end
+if pins_data & adapter.PIN_TDO > 0 then
+	print(" TDO = 1")
+else 
+	print(" TDO = 0")
+end
+if pins_data & adapter.PIN_nTRST > 0 then
+	print(" nTRST = 1")
+else 
+	print(" nTRST = 0")
+end
+if pins_data & adapter.PIN_nRESET > 0 then
+	print(" nRESET = 1")
+else 
+	print(" nRESET = 0")
+end
+
+-- 系统复位
+cmObj:Reset(adapter.RESET_SYSTEM)
 ```
 
-### 简单示例——打印STM32F407的ROM前64个字：
+### 简单示例——打印STM32F407的ROM的第1个Word：
 ```lua
-dap = require("DAP")
-dofile("scripts/adapters/cmsis_dap.lua")    -- 获得CMSIS-DAP的AdapterObj对象
-if AdapterObj:TransType() == adapter.JTAG then
-	-- JTAG 原生方式读取IDCODE
-	AdapterObj:jtagStatusChange(adapter.TAP_RESET)	-- TAP到RESET状态，默认连接IDCODE扫描链
-	AdapterObj:jtagStatusChange(adapter.TAP_DR_SHIFT)	-- TAP到DR-Shift状态，读取idcode
-	local raw_idcodes = AdapterObj:jtagExchangeIO(string.pack("I4I4I4I4", 0, 0, 0, 0), 128)
-	-- string.unpack 额外返回一个参数是next position，下面这个返回五个参数
-	local idcodes = {string.unpack("I4I4I4I4", raw_idcodes)}
-	for key=1, #idcodes-1 do
-		print(string.format("TAP #%d : 0x%08X", key-1, idcodes[key]))
-	end
-	-- DAP测试
-	cmsis_dap.jtagConfigure(AdapterObj, {4, 5})    -- 当前是JTAG模式，设置仿真器中JTAG扫描链TAP个数和IR长度信息
-	dap.SetIndex(AdapterObj, 0)    -- 设置DAP在JTAG扫描链中的索引，SWD模式下忽略
-end
-
-dap.SetRetry(AdapterObj, 5)    -- 设置WAIT重试次数
-dap.SetIdleCycle(AdapterObj, 5)    -- 设置两次传输之间的空闲周期
-dap.Init(AdapterObj)   -- 初始化DAP
-dap.FindAP(AdapterObj, dap.AP_TYPE_AMBA_AHB)   -- 选择AMBA APB AP
---[[
-    读取当前AP参数
-    PT:Packed Transfer
-    LD:Large Data 支持64位，128位，256位数据传输
-    LA:Large Address
-    BE:Big-Endian
-    BT:Byte Transfer 支持字节、半字、字宽度传输
-]]
-do 
-	local PackedTrans, LargeData, LargeAddr, BigEndian, ByteTrans = dap.GetAPCapacity(AdapterObj, "PT","LD","LA","BE","BT")
-	if PackedTrans then print("Support Packed Transfer.") end
-	if LargeData then print("Support Large Data Extention.") end
-	if LargeAddr then print("Support Large Address.") end
-	if BigEndian then print("Big Endian Access.") end
-	if ByteTrans then print("Support Less Word Transfer.") end
-end 
-
-local rom_table_base = dap.GetROMTable(AdapterObj)
-print(string.format("ROM Table Base: 0x%08X", rom_table_base))
--- 打印ROM开头的64个32位字
-for ROMAddr=0x08000000,0x08000040,4 do
-	-- Word Read
-	print(string.format("[0x%08X]:0x%08X.", ROMAddr, dap.Memory32(AdapterObj, ROMAddr)))
-	-- Half Word Read
-	print(string.format("[0x%08X]:0x%04X.", ROMAddr, dap.Memory16(AdapterObj, ROMAddr)))
-	print(string.format("[0x%08X]:0x%04X.", ROMAddr+2, dap.Memory16(AdapterObj, ROMAddr+2)))
-	-- Byte Read
-	print(string.format("[0x%08X]:0x%02X.", ROMAddr, dap.Memory8(AdapterObj, ROMAddr)))
-	print(string.format("[0x%08X]:0x%02X.", ROMAddr+1, dap.Memory8(AdapterObj, ROMAddr+1)))
-	print(string.format("[0x%08X]:0x%02X.", ROMAddr+2, dap.Memory8(AdapterObj, ROMAddr+2)))
-	print(string.format("[0x%08X]:0x%02X.", ROMAddr+3, dap.Memory8(AdapterObj, ROMAddr+3)))
-end
-print(string.format("CTRL/STAT:0x%08X", dap.Reg(AdapterObj, dap.DP_REG_CTRL_STAT)))
+dofile("scripts/adapters/cmsis_dap.lua")    -- 获得CMSIS-DAP对象
+-- 系统复位
+cmObj:Reset(adapter.RESET_SYSTEM)
+-- 切换到SWD模式
+cmObj:TransferMode(adapter.SWD)
+print("Change transfer mode to SWD")
+-- 读取DP IDR
+local dpidr = cmObj:DapSingleRead(adapter.REG_DP, 0)
+print(string.format("DPIDR: 0x%X", dpidr))
+-- 写ABORT寄存器
+cmObj:DapSingleWrite(adapter.REG_DP, 0, 0x1e)
+-- 写SELECT寄存器
+cmObj:DapSingleWrite(adapter.REG_DP, 0x08, 0x0)
+-- 写CTRL_STAT,系统域和调试域上电
+cmObj:DapSingleWrite(adapter.REG_DP, 0x04, 0x50000000)
+repeat
+    -- 等待上电完成
+    local ctrl_stat = cmObj:DapSingleRead(adapter.REG_DP, 0x04)
+until (ctrl_stat & 0xA0000000) == 0xA0000000
+print("System & Debug power up.")
+-- 读 AHB AP 的CSW和IDR寄存器
+cmObj:DapSingleWrite(adapter.REG_DP, 0x08, 0x0F000000)  -- 写SELECT
+local apidr = cmObj:DapSingleRead(adapter.REG_AP, 0x0C) -- 读APIDR
+cmObj:DapSingleWrite(adapter.REG_DP, 0x08, 0x00000000)  -- 写SELECT
+local apcsw = cmObj:DapSingleRead(adapter.REG_AP, 0x00) -- 读APCSW
+print(string.format("AP[0].IDR: 0x%X, AP[0].CSW: 0x%X.", apidr, apcsw))
+-- 读ROM的第一个uint32
+cmObj:DapSingleWrite(adapter.REG_AP, 0x04, 0x08000000)  -- 写TAR_LSB, 0x0800000为ROM的起始地址
+local data = cmObj:DapSingleRead(adapter.REG_AP, 0x0C) -- 读DRW
+print(string.format("0x08000000 => 0x%X.", data))
 print("Hello World")
 AdapterObj:SetStatus(adapter.STATUS_IDLE)	-- 熄灭RUN状态灯
 ```
@@ -202,124 +207,6 @@ Support Packed Transfer.
 Support Less Word Transfer.
 ROM Table Base: 0xE00FF003
 [0x08000000]:0x2001FFFF.
-[0x08000000]:0xFFFF.
-[0x08000002]:0x2001.
-[0x08000000]:0xFF.
-[0x08000001]:0xFF.
-[0x08000002]:0x01.
-[0x08000003]:0x20.
-[0x08000004]:0x08001965.
-[0x08000004]:0x1965.
-[0x08000006]:0x0800.
-[0x08000004]:0x65.
-[0x08000005]:0x19.
-[0x08000006]:0x00.
-[0x08000007]:0x08.
-[0x08000008]:0x08001505.
-[0x08000008]:0x1505.
-[0x0800000A]:0x0800.
-[0x08000008]:0x05.
-[0x08000009]:0x15.
-[0x0800000A]:0x00.
-[0x0800000B]:0x08.
-[0x0800000C]:0x08001511.
-[0x0800000C]:0x1511.
-[0x0800000E]:0x0800.
-[0x0800000C]:0x11.
-[0x0800000D]:0x15.
-[0x0800000E]:0x00.
-[0x0800000F]:0x08.
-[0x08000010]:0x08001519.
-[0x08000010]:0x1519.
-[0x08000012]:0x0800.
-[0x08000010]:0x19.
-[0x08000011]:0x15.
-[0x08000012]:0x00.
-[0x08000013]:0x08.
-[0x08000014]:0x08001521.
-[0x08000014]:0x1521.
-[0x08000016]:0x0800.
-[0x08000014]:0x21.
-[0x08000015]:0x15.
-[0x08000016]:0x00.
-[0x08000017]:0x08.
-[0x08000018]:0x08001529.
-[0x08000018]:0x1529.
-[0x0800001A]:0x0800.
-[0x08000018]:0x29.
-[0x08000019]:0x15.
-[0x0800001A]:0x00.
-[0x0800001B]:0x08.
-[0x0800001C]:0x00000000.
-[0x0800001C]:0x0000.
-[0x0800001E]:0x0000.
-[0x0800001C]:0x00.
-[0x0800001D]:0x00.
-[0x0800001E]:0x00.
-[0x0800001F]:0x00.
-[0x08000020]:0x00000000.
-[0x08000020]:0x0000.
-[0x08000022]:0x0000.
-[0x08000020]:0x00.
-[0x08000021]:0x00.
-[0x08000022]:0x00.
-[0x08000023]:0x00.
-[0x08000024]:0x00000000.
-[0x08000024]:0x0000.
-[0x08000026]:0x0000.
-[0x08000024]:0x00.
-[0x08000025]:0x00.
-[0x08000026]:0x00.
-[0x08000027]:0x00.
-[0x08000028]:0x00000000.
-[0x08000028]:0x0000.
-[0x0800002A]:0x0000.
-[0x08000028]:0x00.
-[0x08000029]:0x00.
-[0x0800002A]:0x00.
-[0x0800002B]:0x00.
-[0x0800002C]:0x080019A9.
-[0x0800002C]:0x19A9.
-[0x0800002E]:0x0800.
-[0x0800002C]:0xA9.
-[0x0800002D]:0x19.
-[0x0800002E]:0x00.
-[0x0800002F]:0x08.
-[0x08000030]:0x08001531.
-[0x08000030]:0x1531.
-[0x08000032]:0x0800.
-[0x08000030]:0x31.
-[0x08000031]:0x15.
-[0x08000032]:0x00.
-[0x08000033]:0x08.
-[0x08000034]:0x00000000.
-[0x08000034]:0x0000.
-[0x08000036]:0x0000.
-[0x08000034]:0x00.
-[0x08000035]:0x00.
-[0x08000036]:0x00.
-[0x08000037]:0x00.
-[0x08000038]:0x080019A9.
-[0x08000038]:0x19A9.
-[0x0800003A]:0x0800.
-[0x08000038]:0xA9.
-[0x08000039]:0x19.
-[0x0800003A]:0x00.
-[0x0800003B]:0x08.
-[0x0800003C]:0x080019A9.
-[0x0800003C]:0x19A9.
-[0x0800003E]:0x0800.
-[0x0800003C]:0xA9.
-[0x0800003D]:0x19.
-[0x0800003E]:0x00.
-[0x0800003F]:0x08.
-[0x08000040]:0x080019A9.
-[0x08000040]:0x19A9.
-[0x08000042]:0x0800.
-[0x08000040]:0xA9.
-[0x08000041]:0x19.
-[0x08000042]:0x00.
-[0x08000043]:0x08.
 Hello World
 CTRL/STAT:0xF0000040
 Hello World
@@ -329,8 +216,7 @@ Hello World
 SmartOCD的API以Package的方式封装到Lua中。
 ### Adapter
 #### 介绍
-Adapter是根据仿真器的基本功能和操作抽象出来的。通过Adapter对象，可以实现控制JTAG、DAP等基本操作。
-每打开一个仿真器都会返回一个Adapter对象实例。例如 `AdapterObj = cmsis_dap.New()` 就是创建一个CMSIS-DAP的Adapter实例。
+Adapter包中提供仿真器相关常量定义。在SmartOCD中，所有仿真器都要用到该包。
 
 在介绍常量和方法之前，假设Lua代码中已经引入Adapter包并赋值给全局变量adapter：
 ```lua
@@ -343,13 +229,21 @@ adapter = require("Adapter")	-- 加载Adapter Package
 - JTAG
 - SWD
 
-JTAG引脚的二进制位索引：
+JTAG引脚定义：
 - PIN_SWCLK_TCK
 - PIN_SWDIO_TMS
 - PIN_TDI
 - PIN_TDO
 - PIN_nTRST
 - PIN_nRESET
+
+复位类型：
+- RESET_SYSTEM
+- RESET_DEBUG
+
+DAP寄存器类型：
+- REG_DP
+- REG_AP
 
 TAP状态：
 - TAP_RESET
@@ -376,30 +270,124 @@ TAP状态：
 - STATUS_IDLE
 
 #### 方法
-- Init(*self*)  
-  作用：初始化Adapter对象对应的仿真器  
-  参数：  
+无
+
+----
+
+### CMSIS-DAP
+#### 介绍
+此Package提供CMSIS-DAP仿真器接口。
+#### 常量
+无
+#### 方法
+- Create()  
+  作用：创建新的CMSIS-DAP的Adapter对象  
+  参数：无  
+  返回值：
+  1. cmdapObj Adapter对象
+
+  示例：
+  ```lua
+  -- 加载CMSIS-DAP库
+  cmsis_dap = require("CMSIS-DAP")
+  -- 创建新的CMSIS-DAP Adapter对象
+  cmdapObj = cmsis_dap.Create()
+  ```
+  ----
+- Connect(*self, vid_pids, serialNumber*)  
+  作用：连接CMSIS-DAP仿真器设备  
+  参数：
   1. Adapter对象
-  
+  2. Array：CMSIS-DAP设备的USB VID和PID参数
+  3. String：CMSIS-DAP设备的序列号，此参数可选。
+
   返回值：无  
   示例：
   ```lua
-  -- 初始化Adapter对象
-  AdapterObj:Init()
+  -- CMSIS-DAP的VID和PID
+  local vid_pids = {
+	-- Keil Software
+  	{0xc251, 0xf001},	-- LPC-Link-II CMSIS_DAP
+  	{0xc251, 0xf002}, 	-- OPEN-SDA CMSIS_DAP (Freedom Board)
+  	{0xc251, 0x2722}, 	-- Keil ULINK2 CMSIS-DAP
+  	-- MBED Software
+  	{0x0d28, 0x0204}	-- MBED CMSIS-DAP
+  }
+  -- 连接CMSIS-DAP仿真器
+  cmdapObj:Connect(vid_pids, nil)
+  -- cmdapObj.Connect(cmdapObj, vid_pids, nil)
   ```
   ----
-- Deinit(*self*)
-  作用：执行Adapter对象对应的仿真器的反初始化动作  
-  参数：  
+- TransferConfig(*self, idleCycles, waitRetry, matchRetry*)  
+  作用：配置CMSIS-DAP传输参数  
+  参数：
   1. Adapter对象
-  
+  2. Number：两次传输之间等待的间隔周期
+  3. Number：当接传输收到WAIT应答时，重试次数
+  4. Number：当在传输比较模式下，数据不匹配重试的次数
+
   返回值：无  
   示例：
   ```lua
-  -- 初始化Adapter对象
-  AdapterObj:Deinit()
+  -- 配置CMSIS-DAP Transfer参数
+  cmdapObj:TransferConfig(5, 5, 5)
   ```
   ----
+- JtagConfig(*self, tapInfo*)  
+  作用：CMSIS-DAP内部维护一个TAP信息列表，此函数用来配置该列表。  
+  参数：
+  1. Adapter对象
+  2. Array：TAP信息数组
+
+  返回值：无  
+  示例：
+  ```lua
+  -- 设置仿真器中JTAG扫描链信息：TAP个数和IR长度
+  cmdapObj:JtagConfig({4, 5})
+  ```
+  ----
+- SwdConfig(*self, swdCfg*)  
+  作用：配置SWD传输参数。  
+  参数：
+  1. Adapter对象
+  2. Number：SWD传输参数  
+      - Bit 1 .. 0: Turnaround clock period of the SWD device (should be identical with the WCR [Write Control Register] value of the target): 0 = 1 clock cycle (default), 1 = 2 clock cycles, 2 = 3 clock cycles, 3 = 4 clock cycles.
+      - Bit 2: DataPhase: 0 = Do not generate Data Phase on WAIT/FAULT (default), 1 = Always generate Data Phase (also on WAIT/FAULT; Required for Sticky Overrun behavior).
+
+  返回值：无  
+  示例：
+  ```lua
+  -- SWD参数
+  cmdapObj:SwdConfig(0)
+  ```
+  ----
+- WriteAbort(*self, abort*)  
+  作用：写DP ABORT寄存器。  
+  参数：
+  1. Adapter对象
+  2. Number：要写入ABORT寄存器的值
+
+  返回值：无  
+  示例：
+  ```lua
+  -- 清除STICKER flags
+  cmdapObj:WriteAbort(0x1e)
+  ```
+  ----
+- SetTapIndex(*self, index*)  
+  作用：选择JTAG扫描链中当前活动的TAP对象。  
+  参数：
+  1. Adapter对象
+  2. Number：该TAP对象在JTAG扫描链中的索引
+
+  返回值：无  
+  示例：
+  ```lua
+  -- 选中第一个TAP
+  cmdapObj:SetTapIndex(0)
+  ```
+  ----
+
 - SetStatus(*self, status*)  
   作用：设置仿真器的状态指示灯（如果有的话）  
   参数：  
@@ -411,16 +399,16 @@ TAP状态：
   示例：
   ```lua
   -- 点亮连接状态指示灯
-  AdapterObj:SetStatus(adapter.STATUS_CONNECTED)
+  cmdapObj:SetStatus(adapter.STATUS_CONNECTED)
   -- 点亮运行状态指示灯
-  AdapterObj:SetStatus(adapter.STATUS_RUNING)
+  cmdapObj:SetStatus(adapter.STATUS_RUNING)
   -- 熄灭运行状态指示灯
-  AdapterObj:SetStatus(adapter.STATUS_IDLE)
+  cmdapObj:SetStatus(adapter.STATUS_IDLE)
   -- 熄灭连接状态指示灯
-  AdapterObj:SetStatus(adapter.STATUS_DISCONNECT)
+  cmdapObj:SetStatus(adapter.STATUS_DISCONNECT)
   ```
   ----
-- SetClock(*self, clock*)  
+- SetFrequent(*self, clock*)  
   作用：设置仿真器JTAG/SWD同步时钟频率  
   参数：  
   1. Adapter对象
@@ -430,14 +418,14 @@ TAP状态：
   示例：
   ```lua
   -- 设置仿真器通信时钟速率
-  AdapterObj:SetClock(500000)	-- 500KHz
+  cmdapObj:SetFrequent(500000)	-- 500KHz
   ```
   ----
-- TransType(*self [, setType]*)  
+- TransferMode(*self [, setType]*)  
   作用：设置或读取仿真器当前传输模式（必须仿真器支持此模式）  
   参数：  
   1. Adapter对象
-  2. Enumeration：传输模式（可选）  
+  2. Enumeration：传输模式（可选参数）  
    参考Adapter常量 **传输模式** 部分
   
   返回值：无 或者  
@@ -446,92 +434,62 @@ TAP状态：
   示例：
   ```lua
   -- 设置当前仿真器为SWD传输模式
-  AdapterObj:TransType(adapter.SWD)
+  cmdapObj:TransferMode(adapter.SWD)
   -- 设置当前仿真器为JTAG模式
-  AdapterObj:TransType(adapter.JTAG)
+  cmdapObj:TransferMode(adapter.JTAG)
   -- 读取当前仿真器传输模式
-  local currTransType = AdapterObj:TransType()
+  local currTransType = cmdapObj:TransferMode()
   ```
   ----
-- HaveTransType(*self, type*)  
-  作用：检查仿真器是否支持某一传输模式  
-  参数：  
-  1. Adapter对象
-  2. Enumeration：传输模式  
-   参考Adapter常量 **传输模式** 部分
-  
-  返回值：  
-  1. Boolean：true=支持；false=不支持  
-
-  示例：
-  ```lua
-  -- 优先选择SWD传输模式
-  if AdapterObj:HaveTransType(adapter.SWD) then
-      AdapterObj:TransType(adapter.SWD)
-  else
-      AdapterObj:TransType(adapter.JTAG)
-  end
-  ```
-  ----
-- Reset(*self [, hard [, srst [, pinWait]]]*)  
+- Reset(*self, type*)  
   作用：对目标芯片进行复位操作  
   参数：  
   1. Adapter对象
-  2. Boolean：hard 是否进行硬复位  
-   所谓硬复位，是指让nTRST引脚输出有效信号。该参数只在JTAG传输模式下有效。
-  3. Boolean：srst 系统复位  
-   系统复位表示是否同时让nRESET引脚输出有效信号。该参数只在JTAG传输模式下和 hard 参数为 true 时有效。
-  4. Number：死区时间，单位µs
-   当nTRST和nRESET引脚为开漏模式时，等待引脚电平有效的时间。SWD传输模式不使用此参数。
+  2. Enumeration：复位类型  
+   参考Adapter常量**复位类型**部分  
+   调试复位只复位调试部分逻辑，JTAG模式下使TAP进入RESET状态，SWD模式下发送Line Reset信号  
+   系统复位包括调试复位，会对整个系统进行复位
   
   返回值：无  
   示例：
   ```lua
-  -- 软复位：JTAG的TMS引脚连续5个时钟的高电平；SWD进行line reset
-  AdapterObj:Reset()
-  AdapterObj:Reset(false)
-  -- 硬复位：JTAG的nTRST输出有效；SWD进行line reset
-  AdapterObj:Reset(true)
-  -- 硬复位同时系统复位：JTAG的nTRST和nRESET输出有效；SWD进行line reset
-  AdapterObj:Reset(true, true)
-  -- 硬复位、系统复位同时带有死区时间控制
-  AdapterObj:Reset(true, true, 300)
+  -- 系统复位
+  cmdapObj:Reset(adapter.RESET_SYSTEM)
   ```
   ----
-- jtagStatusChange(*self, newStatus*)  
+- JtagToState(*self, newStatus*)  
   作用：在JTAG模式下，切换TAP状态机的状态  
   参数：  
   1. Adapter对象
-  2. Enumeration：newStatus 要切换到的TAP状态  
+  2. Enumeration：要切换到的TAP状态  
    参考Adapter常量 **TAP状态** 部分
   
   返回值：无  
   示例：
   ```lua
   -- TAP到RESET状态
-  AdapterObj:jtagStatusChange(adapter.TAP_RESET)
+  cmdapObj:jtagStatusChange(adapter.TAP_RESET)
   -- TAP到DR-Shift状态
-  AdapterObj:jtagStatusChange(adapter.TAP_DR_SHIFT)
-  -- 执行动作
-  AdapterObj:jtagExecuteCmd()
+  cmdapObj:jtagStatusChange(adapter.TAP_DR_SHIFT)
   ```
   ----
-- jtagExchangeIO(*self, data, bitCnt*)  
-  作用：交换TDI和TDO之间的数据。将data参数的数据发送到TDI，然后捕获TDO的数据作为函数返回值。注意，此方法会默认调用jtagExecuteCmd()方法！  
+- JtagExchangeData(*self, data, bitCnt*)  
+  作用：交换TDI和TDO之间的数据。将data参数的数据发送到TDI，然后捕获TDO的数据作为函数返回值。  
   参数：  
   1. Adapter对象
-  2. String：data 要发送的数据
-  3. Number：bitCnt 要发送多少个二进制位，不得大于data参数的数据实际长度
+  2. String：要发送的数据
+  3. Number：要发送多少个二进制位，不得大于data参数的数据实际长度
   
   返回值：  
-  1. String：捕获的TDO数据
+  1. String：捕获的TDO数据  
+
   示例：
   ```lua
   -- TAP到RESET状态，默认连接IDCODE扫描链
-  AdapterObj:jtagStatusChange(adapter.TAP_RESET)
+  cmdapObj:JtagToState(adapter.TAP_RESET)
   -- TAP到DR-Shift状态，读取idcode
-  AdapterObj:jtagStatusChange(adapter.TAP_DR_SHIFT)
-  local raw_idcodes = AdapterObj:jtagExchangeIO(string.pack("I4I4", 0, 0), 64)
+  cmdapObj:JtagToState(adapter.TAP_DR_SHIFT)
+  local raw_idcodes = cmdapObj:JtagExchangeData(string.pack("I4I4", 0, 0), 64)
   -- string.unpack 额外返回一个参数是next position
   local idcodes = {string.unpack("I4I4", raw_idcodes)}
   for key=1, #idcodes-1 do
@@ -539,104 +497,141 @@ TAP状态：
   end
   ```
   ----
-- jtagIdleWait(*self, cycles*)  
-  作用：进入TAP的Run-Test/Idle状态等待cycle个周期。此函数常用来等待耗时操作的完成。  
+- JtagIdle(*self, cycles*)  
+  作用：进入TAP的Run-Test/Idle状态等待cycle个周期。此函数常用来等待JTAG耗时操作的完成。  
   参数：  
   1. Adapter对象
-  2. Number：cycle 等待的周期数
+  2. Number：等待的周期数
   
   返回值：无  
   示例：
   ```lua
   -- TAP进入Run-Test/Idle等待50个TCLK时钟周期
-  AdapterObj:jtagIdleWait(50)
+  cmdapObj:JtagIdle(50)
   ```
   ----
-- jtagExecuteCmd(*self*)  
-  作用：执行前面的JTAG操作。  
-  参数：  
-  1. Adapter对象
-  
-  返回值：无  
-  示例：
-  ```lua
-  -- TAP到RESET状态
-  AdapterObj:jtagStatusChange(adapter.TAP_RESET)
-  -- TAP到DR-Shift状态
-  AdapterObj:jtagStatusChange(adapter.TAP_DR_SHIFT)
-  -- TAP进入Run-Test/Idle等待50个TCLK时钟周期
-  AdapterObj:jtagIdleWait(50)
-  -- 执行前面三个JTAG动作
-  AdapterObj:jtagExecuteCmd()
-  ```
-  ----
-- jtagCleanCmd(*self*)  
-  作用：清除尚未执行JTAG操作  
-  参数：  
-  1. Adapter对象
-  
-  返回值：无  
-  示例：
-  ```lua
-  -- TAP到RESET状态
-  AdapterObj:jtagStatusChange(adapter.TAP_RESET)
-  -- TAP到DR-Shift状态
-  AdapterObj:jtagStatusChange(adapter.TAP_DR_SHIFT)
-  -- TAP进入Run-Test/Idle等待50个TCLK时钟周期
-  AdapterObj:jtagIdleWait(50)
-  -- 取消前面三个JTAG动作
-  AdapterObj:jtagCleanCmd()
-  -- 这一步没有任何JTAG操作被执行，函数将直接返回
-  AdapterObj:jtagExecuteCmd()
-  ```
-  ----
-- jtagPins(*self, pinData, pinMask, pinWait*)
+- JtagPins(*self, pinMask, pinData, pinWait*)
   作用：设置JTAG引脚电平并返回设置之后的引脚电平状态  
   参数：  
   1. Adapter对象
-  2. Number：pinData 引脚数据，LSB有效
-  3. Number：pinMask 引脚掩码，LSB有效
-  4. Number：pinWait 死区时间，单位µs
+  2. Number：引脚掩码，LSB有效
+  3. Number：引脚数据，LSB有效
+  4. Number：死区时间，单位µs
   
   返回值：  
-  1. Number：pinData JTAG全部引脚最新的状态，也就时执行设置JTAG引脚动作之后的JTAG引脚状态，LSB有效
+  1. Number：JTAG全部引脚最新的状态，也就时执行设置JTAG引脚动作之后的JTAG引脚状态，LSB有效  
+
   示例：
   ```lua
   -- 读取JTAG Pins
-  local pins_data = AdapterObj:jtagPins(0, 0, 0)
-  print("JTAG Pins: TCK:" .. ((pins_data & adapter.PIN_SWCLK_TCK) >> adapter.PIN_SWCLK_TCK)
-	.. " TMS:" .. ((pins_data & (1 << adapter.PIN_SWDIO_TMS)) >> adapter.PIN_SWDIO_TMS)
-	.. " TDI:" .. ((pins_data & (1 << adapter.PIN_TDI)) >> adapter.PIN_TDI)
-	.. " TDO:" .. ((pins_data & (1 << adapter.PIN_TDO)) >> adapter.PIN_TDO)
-	.. " nTRST:" .. ((pins_data & (1 << adapter.PIN_nTRST)) >> adapter.PIN_nTRST)
-	.. " nRESET:" .. ((pins_data & (1 << adapter.PIN_nRESET)) >> adapter.PIN_nRESET))
+  local pins_data = cmdapObj:JtagPins(0, 0, 0)
+  print("JTAG Pins: ")
+  if pins_data & adapter.PIN_SWCLK_TCK > 0 then
+    print(" TCK = 1")
+  else 
+    print(" TCK = 0")
+  end
+  if pins_data & adapter.PIN_SWDIO_TMS > 0 then
+    print(" TMS = 1")
+  else 
+    print(" TMS = 0")
+  end
+  if pins_data & adapter.PIN_TDI > 0 then
+    print(" TDI = 1")
+  else 
+    print(" TDI = 0")
+  end
+  if pins_data & adapter.PIN_TDO > 0 then
+    print(" TDO = 1")
+  else 
+    print(" TDO = 0")
+  end
+  if pins_data & adapter.PIN_nTRST > 0 then
+    print(" nTRST = 1")
+  else 
+    print(" nTRST = 0")
+  end
+  if pins_data & adapter.PIN_nRESET > 0 then
+    print(" nRESET = 1")
+  else 
+    print(" nRESET = 0")
+  end
   -- 设置JTAG的TMS TDI引脚电平，并返回所有引脚最新的状态
-  local pins_data = AdapterObj:jtagPins((1 << adapter.PIN_SWDIO_TMS) | (0 << adapter.PIN_TDI), adapter.PIN_SWDIO_TMS | adapter.PIN_TDI, 0)
+  local pins_data = cmdapObj:JtagPins(adapter.PIN_SWDIO_TMS | adapter.PIN_TDI, adapter.PIN_SWDIO_TMS, 300)
   print(string.format("JTAG Pins: 0x%X.", pins_data))
   ```
   ----
-- jtagSetTAPInfo(*self, tapInfo*)  
-  作用：JTAG较高级用法。使用该函数声明JTAG扫描链上有多少个TAP，而且指定每个TAP的IR长度，
-  为 `jtagWriteTAPIR` 和 `jtagExchangeTAPDR` 两函数提供参考信息。
+- DapSingleRead(*self, regType, reg*)  
+  作用：读DAP寄存器  
   参数：  
   1. Adapter对象
-  2. Array：tapInfo TAP信息数组
+  2. Enumeration：寄存器类型，AP还是DP  
+   参考Adapter常量 **DAP寄存器类型** 部分
+  3. Number：寄存器地址，参考ADI手册
   
-  返回值：无  
+  返回值：  
+  1. Number：寄存器的值  
+
   示例：
   ```lua
-  -- 加载DAP Package
-  dap = require("DAP")
-  -- 设置JTAG扫描链中有两个TAP，IR长度分别是4,5
-  AdapterObj:jtagSetTAPInfo{4,5}
-  -- 写入JTAG扫描链中位于0号索引的TAP的IR寄存器，IR长度为4
-  AdapterObj:jtagWriteTAPIR(0, dap.JTAG_IDCODE)
-  -- 交换JTAG扫描链中位于0号索引的TAP的DR寄存器，DR长度为32，IDCODE寄存器
-  local arm_idcode = AdapterObj:jtagExchangeTAPDR(0, "\000\000\000\000", 32)
-  -- 打印IDCODE
-  print(string.format("%x", string.unpack("I4", arm_idcode)))
+  -- 读取DP IDR
+  local dpidr = cmObj:DapSingleRead(adapter.REG_DP, 0)
+  print(string.format("DPIDR: 0x%X", dpidr))
   ```
   ----
+- DapSingleWrite(*self, regType, reg, data*)  
+  作用：读DAP寄存器  
+  参数：  
+  1. Adapter对象
+  2. Enumeration：寄存器类型，AP还是DP  
+   参考Adapter常量 **DAP寄存器类型** 部分
+  3. Number：寄存器地址，参考ADI手册
+  4. Number：写入寄存器的值
+  
+  返回值：无
+  
+  示例：
+  ```lua
+  -- 写SELECT寄存器
+  cmObj:DapSingleWrite(adapter.REG_DP, 0x08, 0x0)
+  ```
+  ----
+- DapMultiRead(*self, regType, reg*)  
+  作用：多次读DAP寄存器  
+  参数：  
+  1. Adapter对象
+  2. Enumeration：寄存器类型，AP还是DP  
+   参考Adapter常量 **DAP寄存器类型** 部分
+  3. Number：寄存器地址，参考ADI手册
+  
+  返回值：  
+  1. String：寄存器的值  
+  
+  示例：
+  ```lua
+  -- 暂无
+  ```
+  ----
+- DapMultiWrite(*self, regType, reg*)  
+  作用：读DAP寄存器  
+  参数：  
+  1. Adapter对象
+  2. Enumeration：寄存器类型，AP还是DP  
+   参考Adapter常量 **DAP寄存器类型** 部分
+  3. Number：寄存器地址，参考ADI手册
+  
+  返回值：  
+  1. Number：寄存器的值  
+  
+  示例：
+  ```lua
+  -- 暂无
+  ```
+  ----
+
+
+
+
 - jtagWriteTAPIR(*self, tapIdx, irData*)  
   作用：将 _irData_ 写入JTAG扫描链中位于 _tapIdx_ 的TAP的IR寄存器  
   参数：  
@@ -964,91 +959,6 @@ ARM JTAG扫描链：
   ```
 ----
 
-### CMSIS-DAP
-#### 介绍
-此Package用于CMSIS-DAP仿真器。
-#### 常量
-无
-#### 方法
-- New()  
-  作用：创建新的CMSIS-DAP的Adapter对象  
-  参数：无  
-  返回值：
-  1. adapterObj Adapter对象
-
-  示例：
-  ```lua
-  -- 加载CMSIS-DAP库
-  cmsis_dap = require("CMSIS-DAP")
-  -- 创建新的CMSIS-DAP Adapter对象
-  AdapterObj = cmsis_dap.New()
-  ```
-  ----
-- Connect(*adapterObj, vid_pids*)  
-  作用：连接CMSIS-DAP仿真器设备  
-  参数：
-  1. adapterObj Adapter对象
-  2. Array：vid_pids CMSIS-DAP设备的USB VID和PID参数
-
-  返回值：无  
-  示例：
-  ```lua
-  -- CMSIS-DAP的VID和PID
-  local vid_pids = {
-	-- Keil Software
-  	{0xc251, 0xf001},	-- LPC-Link-II CMSIS_DAP
-  	{0xc251, 0xf002}, 	-- OPEN-SDA CMSIS_DAP (Freedom Board)
-  	{0xc251, 0x2722}, 	-- Keil ULINK2 CMSIS-DAP
-  	-- MBED Software
-  	{0x0d28, 0x0204}	-- MBED CMSIS-DAP
-  }
-  -- 连接CMSIS-DAP仿真器
-  cmsis_dap.Connect(AdapterObj, vid_pids, nil)
-  ```
-  ----
-- jtagConfigure(*adapterObj, tapInfo*)  
-  作用：CMSIS-DAP内部维护一个TAP信息列表，此函数用来配置该列表。参考Adapter包的`jtagSetTAPInfo`方法。  
-  参数：
-  1. adapterObj Adapter对象
-  2. Array：tapInfo TAP信息数组
-
-  返回值：无  
-  示例：
-  ```lua
-  -- 设置仿真器中JTAG扫描链信息：TAP个数和IR长度
-  cmsis_dap.jtagConfigure(AdapterObj, {4, 5})
-  ```
-  ----
-- TransferConfigure(*adapterObj, idleCycles, waitRetry, matchRetry*)  
-  作用：配置CMSIS-DAP传输参数  
-  参数：
-  1. adapterObj Adapter对象
-  2. Number：idleCycles 两次传输之间等待的间隔周期
-  3. Number：waitRetry 当接传输收到WAIT应答时，重试次数
-  4. Number：matchRetry 当在传输比较模式下，数据不匹配重试的次数
-
-  返回值：无  
-  示例：
-  ```lua
-  -- 配置CMSIS-DAP Transfer参数
-  cmsis_dap.TransferConfigure(AdapterObj, 5, 5, 5)
-  ```
-  ----
-- swdConfigure(*adapterObj, swdCfg*)  
-  作用：配置SWD传输参数。  
-  参数：
-  1. adapterObj Adapter对象
-  2. Number：swdCfg SWD传输参数  
-      - Bit 1 .. 0: Turnaround clock period of the SWD device (should be identical with the WCR [Write Control Register] value of the target): 0 = 1 clock cycle (default), 1 = 2 clock cycles, 2 = 3 clock cycles, 3 = 4 clock cycles.
-      - Bit 2: DataPhase: 0 = Do not generate Data Phase on WAIT/FAULT (default), 1 = Always generate Data Phase (also on WAIT/FAULT; Required for Sticky Overrun behavior).
-
-  返回值：无  
-  示例：
-  ```lua
-  -- SWD参数
-  cmsis_dap.swdConfigure(AdapterObj, 0)
-  ```
-----
 ## 开发人员手册
 ### 开发计划
 ### 开发指引
