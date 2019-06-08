@@ -255,7 +255,6 @@ static int luaApi_adapter_dap_multi_read(lua_State *L){
 	int type = (int)luaL_checkinteger(L, 2);
 	int reg = (int)luaL_checkinteger(L, 3);
 	int count = (int)luaL_checkinteger(L, 4);
-	//FIXME 改成Malloc
 	// 开辟缓冲内存空间
 	uint32_t *buff = malloc(count * sizeof(uint32_t));
 	if(buff == NULL){
@@ -292,7 +291,7 @@ static int luaApi_adapter_dap_multi_write(lua_State *L){
 	if(transCnt == 0 || (transCnt & 0x3)){
 		return luaL_error(L, "The length of the data to be written is not a multiple of the word.");
 	}
-	if(cmdapObj->DapMultiWrite(cmdapObj, type, reg, transCnt, buff) != ADPT_SUCCESS){
+	if(cmdapObj->DapMultiWrite(cmdapObj, type, reg, transCnt >> 2, buff) != ADPT_SUCCESS){
 		return luaL_error(L, "Insert to instruction queue failed!");
 	}
 	// 执行队列
