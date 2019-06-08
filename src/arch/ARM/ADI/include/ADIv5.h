@@ -74,8 +74,10 @@ enum {
 	ADI_ERR_UNSUPPORT,	// 不支持的操作
 };
 
-// 类型预定义
+// DAP类型预定义
 typedef struct dap *DAP;
+// AP类型预定义
+typedef struct accessPort *AccessPort;
 
 /**
  * 初始化DAP
@@ -94,6 +96,21 @@ void ADIv5_DestoryDap(
 );
 
 /**
+ * 读取Component ID和Peripheral ID
+ * 参数:
+ * 	self:AccessPort对象
+ * 	componentBase：Component的基址，必须4KB对齐
+ * 	cid：读取的Component ID
+ * 	pid：读取的Peripheral ID
+ */
+int ADIv5_ReadCidPid(
+		IN AccessPort self,
+		IN uint64_t componentBase,
+		OUT uint32_t *cid,
+		OUT uint64_t *pid
+);
+
+/**
  * Access Port 类型
  */
 enum AccessPortType {
@@ -104,13 +121,10 @@ enum AccessPortType {
 
 // AP的类型
 enum busType{
-	BUS_AMBA_AHB = 0x1,	// AMBA AHB bus
-	BUS_AMBA_APB = 0x2,	// AMBA APB2 or APB3 bus
-	BUS_AMBA_AXI = 0x4	// AMBA AXI3 or AXI4 bus, with optional ACT-Lite support
+	Bus_AMBA_AHB = 0x1,	// AMBA AHB bus
+	Bus_AMBA_APB = 0x2,	// AMBA APB2 or APB3 bus
+	Bus_AMBA_AXI = 0x4	// AMBA AXI3 or AXI4 bus, with optional ACT-Lite support
 };
-
-// AP类型预定义
-typedef struct accessPort *AccessPort;
 
 /**
  * 寻找指定类型的AP
@@ -240,26 +254,26 @@ typedef int (*ADIv5_MEM_AP_WRITE_64)(
 
 /**
  * 地址自增模式
- * ADDRINC_OFF：在每次传输之后TAR中的地址不自增
- * ADDRINC_SINGLE：每次传输成功后，TAR的地址增加传输数据的大小
- * ADDRINC_PACKED：当设置此参数时，启动packed传送模式；每次传输成功后，TAR增加传输的数据大小。
+ * AddrInc_Off：在每次传输之后TAR中的地址不自增
+ * AddrInc_Single：每次传输成功后，TAR的地址增加传输数据的大小
+ * AddrInc_Packed：当设置此参数时，启动packed传送模式；每次传输成功后，TAR增加传输的数据大小。
  */
 enum addrIncreaseMode{
-	ADDRINC_OFF = 0,
-	ADDRINC_SINGLE,
-	ADDRINC_PACKED,
+	AddrInc_Off = 0,
+	AddrInc_Single,
+	AddrInc_Packed,
 };
 
 /**
  * 每次总线请求的数据长度
  */
 enum dataSize{
-	DATA_SIZE_8 = 0,
-	DATA_SIZE_16,
-	DATA_SIZE_32,
-	DATA_SIZE_64,
-	DATA_SIZE_128,
-	DATA_SIZE_256,
+	DataSize_8 = 0,
+	DataSize_16,
+	DataSize_32,
+	DataSize_64,
+	DataSize_128,
+	DataSize_256,
 };
 
 /**
@@ -301,6 +315,37 @@ typedef int (*ADIv5_MEM_AP_BLOCK_WRITE)(
 );
 
 /**
+ * 读CSW寄存器
+ * 参数:
+ * 	self:AccessPort对象
+ * 	data:数据存放地址
+ */
+typedef int (*ADIv5_MEM_AP_CSW_READ)(
+		IN AccessPort self,
+		OUT uint32_t *data
+);
+
+/**
+ * 写CSW寄存器
+ * 参数:
+ * 	self:AccessPort对象
+ * 	data:CSW寄存器的值
+ */
+typedef int (*ADIv5_MEM_AP_CSW_WRITE)(
+		IN AccessPort self,
+		IN uint32_t data
+);
+
+/**
+ * 终止本次传输
+ * 参数:
+ * 	self:AccessPort对象
+ */
+typedef int (*ADIv5_MEM_AP_ABORT)(
+		IN AccessPort self
+);
+
+/**
  * Access Port接口定义
  */
 struct accessPort{
@@ -309,7 +354,12 @@ struct accessPort{
 		// MEM-AP
 		struct {
 			const uint64_t RomTableBase;	// ROM Table的基址,只读!不可修改
-			// TODO 读取ROM Table的基址
+			// 读写CSW寄存器
+			ADIv5_MEM_AP_CSW_READ ReadCSW;
+			ADIv5_MEM_AP_CSW_WRITE WriteCSW;
+			// 写ABORT寄存器:终止本次传输
+			ADIv5_MEM_AP_ABORT Abort;
+
 			ADIv5_MEM_AP_READ_8 Read8;
 			ADIv5_MEM_AP_READ_16 Read16;
 			ADIv5_MEM_AP_READ_32 Read32;

@@ -10,6 +10,7 @@
 
 extern void RegisterApi_Adapter(lua_State *L);
 extern void RegisterApi_CmsisDap(lua_State *L);
+extern void RegisterApi_ADIv5(lua_State *L);
 
 /**
  * 初始化Lua接口
@@ -18,6 +19,7 @@ void LuaApiInit(lua_State *L){
 	RegisterApi_Adapter(L);
 	// 注册cmsis-dap仿真器库函数
 	RegisterApi_CmsisDap(L);
+	RegisterApi_ADIv5(L);
 }
 
 /**

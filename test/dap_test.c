@@ -144,7 +144,7 @@ int main(){
 	}
 	// 寻找AHB AP
 	AccessPort apAHB;
-	if(dapObj->FindAccessPort(dapObj, AccessPort_Memory, BUS_AMBA_AHB, &apAHB) != ADI_SUCCESS){
+	if(dapObj->FindAccessPort(dapObj, AccessPort_Memory, Bus_AMBA_AHB, &apAHB) != ADI_SUCCESS){
 		log_fatal("Couldn't find AHB AP!!");
 		return -1;
 	}
@@ -344,11 +344,11 @@ int main(){
 		misc_PrintBulk(CAST(uint8_t *, block_tmp), 2560*sizeof(uint32_t), 32);
 		//memset(block_tmp, 0x0, sizeof(block_tmp));
 		log_info("Write size 32, result:%d.",
-		apAHB->Interface.Memory.BlockWrite(apAHB, baseAddr, ADDRINC_PACKED, DATA_SIZE_16, 2560, (uint8_t*)block_tmp));
+		apAHB->Interface.Memory.BlockWrite(apAHB, baseAddr, AddrInc_Packed, DataSize_16, 2560, (uint8_t*)block_tmp));
 		//misc_PrintBulk(CAST(uint8_t *, block_tmp), 49152*sizeof(uint32_t), 32);
 		memset(block_tmp, 0x0, 2560*sizeof(uint32_t));
 		log_info("Read size 32, result:%d.",
-				apAHB->Interface.Memory.BlockRead(apAHB, 0x08000000u, ADDRINC_PACKED, DATA_SIZE_16, 2560, (uint8_t*)block_tmp));
+				apAHB->Interface.Memory.BlockRead(apAHB, 0x08000000u, AddrInc_Packed, DataSize_16, 2560, (uint8_t*)block_tmp));
 		misc_PrintBulk(CAST(uint8_t *, block_tmp), 2560*sizeof(uint32_t), 32);
 //		for(int i=0;i<2560;i++){
 //			log_debug("%d,%x:%x.",i,i, block_tmp[i] & (0xFFFF << ((i&1)<<4)));

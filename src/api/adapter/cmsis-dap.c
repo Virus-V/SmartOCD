@@ -13,6 +13,9 @@
 
 #include "api/api.h"
 
+// 注意!!!!所有Adapter对象的metatable都要以 "adapter." 开头!!!!
+#define CMDAP_LUA_OBJECT_TYPE "adapter.CMSIS-DAP"
+
 /**
  * 设置状态指示灯 如果有的话
  * 第一个参数：AdapterObject指针
@@ -21,7 +24,7 @@
  */
 static int luaApi_adapter_set_status(lua_State *L){
 	// 获得CMSIS-DAP接口对象
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	int type = (int)luaL_checkinteger(L, 2);	// 类型
 	if(cmdapObj->SetStatus(cmdapObj, type) != ADPT_SUCCESS){
 		return luaL_error(L, "Set CMSIS-DAP status failed!");
@@ -35,7 +38,7 @@ static int luaApi_adapter_set_status(lua_State *L){
  * 第二个参数：整数，频率 Hz
  */
 static int luaApi_adapter_set_frequent(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	int clockHz = (int)luaL_checkinteger(L, 2);
 	if(cmdapObj->SetFrequent(cmdapObj, clockHz) != ADPT_SUCCESS){
 		return luaL_error(L, "Set CMSIS-DAP clock failed!");
@@ -52,7 +55,7 @@ static int luaApi_adapter_set_frequent(lua_State *L){
  * 1#：当前活动的传输模式
  */
 static int luaApi_adapter_transmission_mode(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	if(lua_isnone(L, 2)){	// 读取当前活动传输模式
 		lua_pushinteger(L, cmdapObj->currTransMode);
 		return 1;
@@ -73,7 +76,7 @@ static int luaApi_adapter_transmission_mode(lua_State *L){
  * 无返回值，失败会报错
  */
 static int luaApi_adapter_reset(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	int type = (int)luaL_optinteger(L, 2, ADPT_RESET_SYSTEM_RESET);
 	if(cmdapObj->Reset(cmdapObj, type) != ADPT_SUCCESS){
 		return luaL_error(L, "Reset CMSIS-DAP failed!");
@@ -87,7 +90,7 @@ static int luaApi_adapter_reset(lua_State *L){
  * 2#：状态
  */
 static int luaApi_adapter_jtag_status_change(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	int status = (int)luaL_checkinteger(L, 2);
 	if(status < JTAG_TAP_RESET || status > JTAG_TAP_IRUPDATE){
 		return luaL_error(L, "JTAG state machine new state is illegal!");
@@ -112,7 +115,7 @@ static int luaApi_adapter_jtag_status_change(lua_State *L){
  * Note：该函数会刷新JTAG指令队列,因为要同步获得数据
  */
 static int luaApi_adapter_jtag_exchange_data(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	size_t str_len = 0;
 	const char *tdi_data = lua_tolstring (L, 2, &str_len);
 	unsigned int bitCnt = (unsigned int)luaL_checkinteger(L, 3);
@@ -151,7 +154,7 @@ static int luaApi_adapter_jtag_exchange_data(lua_State *L){
  * 2#:cycles要进入Idle等待的周期
  */
 static int luaApi_adapter_jtag_idle_wait(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	unsigned int cycles = (unsigned int)luaL_checkinteger(L, 2);
 	if(cmdapObj->JtagIdle(cmdapObj, cycles) != ADPT_SUCCESS){
 		return luaL_error(L, "Insert to instruction queue failed!");
@@ -175,7 +178,7 @@ static int luaApi_adapter_jtag_idle_wait(lua_State *L){
  * 1#:读取的引脚值
  */
 static int luaApi_adapter_jtag_pins(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	uint8_t pin_mask = (uint8_t)luaL_checkinteger(L, 2);
 	uint8_t pin_data = (uint8_t)luaL_checkinteger(L, 3);
 	unsigned int pin_wait = (unsigned int)luaL_checkinteger(L, 4);
@@ -195,7 +198,7 @@ static int luaApi_adapter_jtag_pins(lua_State *L){
  * 1#:寄存器的值
  */
 static int luaApi_adapter_dap_single_read(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	uint32_t data;
 	int type = (int)luaL_checkinteger(L, 2);
 	int reg = (int)luaL_checkinteger(L, 3);
@@ -220,7 +223,7 @@ static int luaApi_adapter_dap_single_read(lua_State *L){
  * 4#:data 写的值
  */
 static int luaApi_adapter_dap_single_write(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	int type = (int)luaL_checkinteger(L, 2);
 	int reg = (int)luaL_checkinteger(L, 3);
 	uint32_t data = (uint32_t)luaL_checkinteger(L, 4);
@@ -246,7 +249,7 @@ static int luaApi_adapter_dap_single_write(lua_State *L){
  * 1#:读的数据
  */
 static int luaApi_adapter_dap_multi_read(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	int type = (int)luaL_checkinteger(L, 2);
 	int reg = (int)luaL_checkinteger(L, 3);
 	int count = (int)luaL_checkinteger(L, 4);
@@ -271,7 +274,7 @@ static int luaApi_adapter_dap_multi_read(lua_State *L){
  * 4#:data 写的数据(字符串)
  */
 static int luaApi_adapter_dap_multi_write(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	int type = (int)luaL_checkinteger(L, 2);
 	int reg = (int)luaL_checkinteger(L, 3);
 	size_t transCnt;	// 注意size_t在在64位环境下是8字节，int在64位下是4字节
@@ -304,8 +307,7 @@ static int luaApi_cmsis_dap_new (lua_State *L) {
 		return luaL_error(L, "Failed to create CMSIS-DAP Object.");
 	}
 	// 获得CMSIS-DAP对象的元表
-	luaL_getmetatable(L, "adapter.CMSIS-DAP");	// 将元表压栈 +1
-	lua_setmetatable(L, -2);	// -1
+	luaL_setmetatable(L, CMDAP_LUA_OBJECT_TYPE);	// 将元表压栈 +1
 	return 1;	// 返回压到栈中的返回值个数
 }
 
@@ -322,7 +324,7 @@ static int luaApi_cmsis_dap_connect(lua_State *L){
 		serial = lua_tostring (L, 3);
 	}
 	// 获得CMSIS-DAP接口对象
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	// 获得vid和pid的表长度
 	int len_VIDs_PIDs = lua_rawlen(L, 2);
 	luaL_argcheck (L, len_VIDs_PIDs != 0, 2, "The length of the vid and pid parameter arrays is wrong.");
@@ -360,7 +362,7 @@ static int luaApi_cmsis_dap_connect(lua_State *L){
  * 2#:ir表
  */
 static int luaApi_cmsis_dap_jtag_configure(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	luaL_checktype(L, 2, LUA_TTABLE);
 	// 获得JTAG扫描链中TAP个数
 	uint8_t tapCount = (uint8_t)lua_rawlen(L, 2);
@@ -389,7 +391,7 @@ static int luaApi_cmsis_dap_jtag_configure(lua_State *L){
  * 4#:matchRetry
  */
 static int luaApi_cmsis_dap_transfer_configure(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	uint8_t idleCycle = (uint8_t)luaL_checkinteger(L, 2);
 	uint16_t waitRetry = (uint16_t)luaL_checkinteger(L, 3);
 	uint16_t matchRetry = (uint16_t)luaL_checkinteger(L, 4);
@@ -405,7 +407,7 @@ static int luaApi_cmsis_dap_transfer_configure(lua_State *L){
  * 2#:cfg 具体看文档
  */
 static int luaApi_cmsis_dap_swd_configure(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	uint8_t cfg = (uint8_t)luaL_checkinteger(L, 2);
 	if(CmdapSwdConfig(cmdapObj, cfg) != ADPT_SUCCESS){
 		return luaL_error(L, "CMSIS-DAP SWD configure failed!");
@@ -419,7 +421,7 @@ static int luaApi_cmsis_dap_swd_configure(lua_State *L){
  * 2#:abort的值
  */
 static int luaApi_cmsis_dap_write_abort(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	uint32_t abort = (uint32_t)luaL_checkinteger(L, 2);
 	if(CmdapWriteAbort(cmdapObj, abort) != ADPT_SUCCESS){
 		return luaL_error(L, "Write Abort register failed!");
@@ -433,7 +435,7 @@ static int luaApi_cmsis_dap_write_abort(lua_State *L){
  * 2#:tap索引
  */
 static int luaApi_cmsis_dap_set_tap_index(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
 	unsigned int index = (unsigned int)luaL_checkinteger(L, 2);
 	if(CmdapSetTapIndex(cmdapObj, index) != ADPT_SUCCESS){
 		return luaL_error(L, "Set TAP index failed!");
@@ -442,10 +444,11 @@ static int luaApi_cmsis_dap_set_tap_index(lua_State *L){
 }
 
 /**
- * Adapter垃圾回收函数
+ * CMSIS-DAP垃圾回收函数
  */
-static int adapter_gc(lua_State *L){
-	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, "adapter.CMSIS-DAP"));
+static int luaApi_cmsis_dap_gc(lua_State *L){
+	Adapter cmdapObj = *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
+	log_trace("[GC] CMSIS-DAP");
 	// 销毁CMSIS-DAP对象
 	DestroyCmsisDap(&cmdapObj);
 	return 0;
@@ -499,7 +502,7 @@ static const luaL_Reg lib_cmdap_oo[] = {
 // 注册接口调用
 void RegisterApi_CmsisDap(lua_State *L){
 	// 创建CMSIS-DAP类型对应的元表
-	LuaApiNewTypeMetatable(L, "adapter.CMSIS-DAP", adapter_gc, lib_cmdap_oo);
+	LuaApiNewTypeMetatable(L, CMDAP_LUA_OBJECT_TYPE, luaApi_cmsis_dap_gc, lib_cmdap_oo);
 	luaL_requiref(L, "CMSIS-DAP", luaopen_cmsis_dap, 0);
 	lua_pop(L, 1);
 }

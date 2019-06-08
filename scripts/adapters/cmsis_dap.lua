@@ -69,6 +69,9 @@ else
 	print(" nRESET = 0")
 end
 
+-- 系统复位
+cmObj:Reset(adapter.RESET_SYSTEM)
+
 -- -- JTAG 原生方式读取IDCODE
 -- AdapterObj:jtagStatusChange(adapter.TAP_RESET)	-- TAP到RESET状态，默认连接IDCODE扫描链
 -- AdapterObj:jtagStatusChange(adapter.TAP_DR_SHIFT)	-- TAP到DR-Shift状态，读取idcode

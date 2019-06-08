@@ -71,7 +71,7 @@
 #define AP_CSW_SADDRINC			0x00000001  // Single Address Increment
 #define AP_CSW_PADDRINC			0x00000002  // Packed Address Increment
 
-#define AP_CSW_DBGSTAT			0x00000040  // Debug Status
+#define AP_CSW_DEVENABLE		0x00000040  // Device Enable
 #define AP_CSW_TINPROG			0x00000080  // Transfer in progress
 #define AP_CSW_HPROT			0x02000000  // User/Privilege Control
 

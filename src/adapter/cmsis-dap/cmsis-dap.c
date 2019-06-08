@@ -29,7 +29,7 @@
 })
 
 // 调试用
-int misc_PrintBulk(char *data, int length, int rowLen);
+//int misc_PrintBulk(char *data, int length, int rowLen);
 
 static int dapInit(struct cmsis_dap *cmdapObj);
 

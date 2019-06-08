@@ -549,7 +549,7 @@ static int apBlockRead(AccessPort self, uint64_t addr, enum addrIncreaseMode mod
 	selectTmp.regInfo.AP_BankSel = 0x0;
 	// some checks
 	switch(size){
-	case DATA_SIZE_8:
+	case DataSize_8:
 		// 检查是否支持less word Transfer
 		if(ap->type.memory.config.lessWordTransfers){	// 支持lessWordTransfer
 			cswTmp.regInfo.Size = AP_CSW_SIZE8;	// Half Word
@@ -558,7 +558,7 @@ static int apBlockRead(AccessPort self, uint64_t addr, enum addrIncreaseMode mod
 			return ADI_ERR_UNSUPPORT;
 		}
 		break;
-	case DATA_SIZE_16:
+	case DataSize_16:
 		// 检查是否对齐
 		if(addr & 0x1){
 			log_warn("Memory address is not half word aligned!");
@@ -572,25 +572,25 @@ static int apBlockRead(AccessPort self, uint64_t addr, enum addrIncreaseMode mod
 			return ADI_ERR_UNSUPPORT;
 		}
 		break;
-	case DATA_SIZE_32:
+	case DataSize_32:
 		if(addr & 0x3){
 			log_warn("Memory address is not word aligned!");
 			return ADI_ERR_BAD_PARAMETER;
 		}
 		cswTmp.regInfo.Size = AP_CSW_SIZE32;	// Word
 		break;
-	case DATA_SIZE_64:
-	case DATA_SIZE_128:
-	case DATA_SIZE_256:
+	case DataSize_64:
+	case DataSize_128:
+	case DataSize_256:
 	default:
 		log_warn("Specified data size is not support.");
 		return ADI_ERR_UNSUPPORT;
 	}
 	// 地址自增模式
 	switch(mode){
-	case ADDRINC_OFF: cswTmp.regInfo.AddrInc = AP_CSW_NADDRINC; break;
-	case ADDRINC_SINGLE: cswTmp.regInfo.AddrInc = AP_CSW_SADDRINC; break;
-	case ADDRINC_PACKED: cswTmp.regInfo.AddrInc = AP_CSW_PADDRINC; break;
+	case AddrInc_Off: cswTmp.regInfo.AddrInc = AP_CSW_NADDRINC; break;
+	case AddrInc_Single: cswTmp.regInfo.AddrInc = AP_CSW_SADDRINC; break;
+	case AddrInc_Packed: cswTmp.regInfo.AddrInc = AP_CSW_PADDRINC; break;
 	default:
 		log_warn("Specified address increase mode is not support.");
 		return ADI_ERR_UNSUPPORT;
@@ -697,7 +697,7 @@ static int apBlockWrite(AccessPort self, uint64_t addr, enum addrIncreaseMode mo
 	selectTmp.regInfo.AP_BankSel = 0x0;
 	// some checks
 	switch(size){
-	case DATA_SIZE_8:
+	case DataSize_8:
 		// 检查是否支持less word Transfer
 		if(ap->type.memory.config.lessWordTransfers){	// 支持lessWordTransfer
 			cswTmp.regInfo.Size = AP_CSW_SIZE8;	// Half Word
@@ -706,7 +706,7 @@ static int apBlockWrite(AccessPort self, uint64_t addr, enum addrIncreaseMode mo
 			return ADI_ERR_UNSUPPORT;
 		}
 		break;
-	case DATA_SIZE_16:
+	case DataSize_16:
 		// 检查是否对齐
 		if(addr & 0x1){
 			log_warn("Memory address is not half word aligned!");
@@ -720,25 +720,25 @@ static int apBlockWrite(AccessPort self, uint64_t addr, enum addrIncreaseMode mo
 			return ADI_ERR_UNSUPPORT;
 		}
 		break;
-	case DATA_SIZE_32:
+	case DataSize_32:
 		if(addr & 0x3){
 			log_warn("Memory address is not word aligned!");
 			return ADI_ERR_BAD_PARAMETER;
 		}
 		cswTmp.regInfo.Size = AP_CSW_SIZE32;	// Word
 		break;
-	case DATA_SIZE_64:
-	case DATA_SIZE_128:
-	case DATA_SIZE_256:
+	case DataSize_64:
+	case DataSize_128:
+	case DataSize_256:
 	default:
 		log_warn("Specified data size is not support.");
 		return ADI_ERR_UNSUPPORT;
 	}
 	// 地址自增模式
 	switch(mode){
-	case ADDRINC_OFF: cswTmp.regInfo.AddrInc = AP_CSW_NADDRINC; break;
-	case ADDRINC_SINGLE: cswTmp.regInfo.AddrInc = AP_CSW_SADDRINC; break;
-	case ADDRINC_PACKED: cswTmp.regInfo.AddrInc = AP_CSW_PADDRINC; break;
+	case AddrInc_Off: cswTmp.regInfo.AddrInc = AP_CSW_NADDRINC; break;
+	case AddrInc_Single: cswTmp.regInfo.AddrInc = AP_CSW_SADDRINC; break;
+	case AddrInc_Packed: cswTmp.regInfo.AddrInc = AP_CSW_PADDRINC; break;
 	default:
 		log_warn("Specified address increase mode is not support.");
 		return ADI_ERR_UNSUPPORT;
@@ -823,6 +823,80 @@ static int apBlockWrite(AccessPort self, uint64_t addr, enum addrIncreaseMode mo
 }
 
 /**
+ * 读CSW
+ */
+static int apReadCSW(AccessPort self, uint32_t *data){
+	assert(self != NULL && data != NULL);
+	struct ADIv5_AccessPort *ap = container_of(self, struct ADIv5_AccessPort, apApi);
+	ADIv5_DpSelectRegister selectTmp;
+	selectTmp.regData = ap->dap->select.regData;
+	// 选中当前ap
+	selectTmp.regInfo.AP_Sel = ap->index;
+	// 选中当前ap寄存器 bank
+	selectTmp.regInfo.AP_BankSel = 0x0;
+	// 是否需要更新SELECT寄存器?
+	if(ap->dap->select.regData != selectTmp.regData){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+	}
+	// 读CSW
+	ap->dap->adapter->DapSingleRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, &ap->type.memory.csw.regData);
+	// 执行指令队列
+	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		log_error("Execute DAP command failed!");
+		return ADI_ERR_INTERNAL_ERROR;
+	}
+	// 指令执行成功，同步数据到DAP影子寄存器
+	ap->dap->select.regData = selectTmp.regData;
+	*data = ap->type.memory.csw.regData;
+	return ADI_SUCCESS;
+}
+
+/**
+ * 写CSW
+ */
+static int apWriteCSW(AccessPort self, uint32_t data){
+	assert(self != NULL);
+	struct ADIv5_AccessPort *ap = container_of(self, struct ADIv5_AccessPort, apApi);
+	ADIv5_DpSelectRegister selectTmp;
+	selectTmp.regData = ap->dap->select.regData;
+	// 选中当前ap
+	selectTmp.regInfo.AP_Sel = ap->index;
+	// 选中当前ap寄存器 bank
+	selectTmp.regInfo.AP_BankSel = 0x0;
+	// 是否需要更新SELECT寄存器?
+	if(ap->dap->select.regData != selectTmp.regData){
+		ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+	}
+	// 写CSW
+	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, data);
+	// 执行指令队列
+	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		log_error("Execute DAP command failed!");
+		return ADI_ERR_INTERNAL_ERROR;
+	}
+	// 指令执行成功，同步数据到DAP影子寄存器
+	ap->dap->select.regData = selectTmp.regData;
+	ap->type.memory.csw.regData = data;
+	return ADI_SUCCESS;
+}
+
+/**
+ * 终止本次传输
+ */
+static int apAbort(AccessPort self){
+	assert(self != NULL);
+	struct ADIv5_AccessPort *ap = container_of(self, struct ADIv5_AccessPort, apApi);
+	// 写DP Abort
+	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_ABORT, 0x1);
+	// 执行指令队列
+	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		log_error("Execute DAP command failed!");
+		return ADI_ERR_INTERNAL_ERROR;
+	}
+	return ADI_SUCCESS;
+}
+
+/**
  * fillApConfig 填充AP的配置信息:CSW,CFG
  * 此函数默认AP_BankSel=0xF
  */
@@ -862,6 +936,12 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap){
 			log_error("Read/Write AP register failed!");
 			return ADI_ERR_INTERNAL_ERROR;
 		}
+		// 判断DeviceEn位
+		if((ap->type.memory.csw.regData & AP_CSW_DEVENABLE) == 0){
+			log_warn("This AP is not enabled.");
+			return ADI_FAILED;
+		}
+
 		temp = ap->type.memory.csw.regData;	// 备份CSW寄存器的初始值
 		// 测试Packed和Less word transfer
 		ap->type.memory.csw.regInfo.AddrInc = AP_CSW_PADDRINC;
@@ -942,6 +1022,10 @@ static int findAP(DAP self, enum AccessPortType type, enum busType bus, AccessPo
 	ap_t->dap = dapObj;
 	switch(type){
 	case AccessPort_Memory:
+		ap_t->apApi.Interface.Memory.ReadCSW = apReadCSW;
+		ap_t->apApi.Interface.Memory.WriteCSW = apWriteCSW;
+		ap_t->apApi.Interface.Memory.Abort = apAbort;
+
 		ap_t->apApi.Interface.Memory.Read8 = apRead8;
 		ap_t->apApi.Interface.Memory.Read16 = apRead16;
 		ap_t->apApi.Interface.Memory.Read32 = apRead32;
@@ -1037,4 +1121,43 @@ void ADIv5_DestoryDap(DAP *self){
 	}
 	free(dapObj);
 	*self = NULL;
+}
+
+/**
+ * 读取Component ID和Peripheral ID
+ */
+int ADIv5_ReadCidPid(AccessPort self, uint64_t componentBase, uint32_t *cid, uint64_t *pid){
+	assert(self != NULL && cid != NULL && pid != NULL);
+	jmp_buf exception;
+	if((componentBase & 0xFFF) != 0) {
+		log_warn("Component base address is not 4KB aligned!");
+		return ADI_ERR_BAD_PARAMETER;
+	}
+
+	*cid = 0; *pid = 0;
+	uint32_t cid0, cid1, cid2, cid3;
+	uint32_t pid0, pid1, pid2, pid3, pid4;	// XXX pid5-7全是0，所以不用读
+	// 错误处理
+	switch(setjmp(exception)){
+	case 1: log_error("DAP_ReadMem32:Read Component ID Failed!"); return ADI_FAILED;
+	case 2: log_error("DAP_ReadMem32:Read Peripheral ID Failed!"); return ADI_FAILED;
+	case 3: log_error("DAP_Execute:Failed!"); return ADI_FAILED;
+	default: log_error("Unknow Error."); return ADI_FAILED;
+	case 0:break;
+	}
+	// 读取Component ID
+	if(apRead32(self, componentBase + 0xFF0, &cid0) != ADI_SUCCESS) longjmp(exception, 1);
+	if(apRead32(self, componentBase + 0xFF4, &cid1) != ADI_SUCCESS) longjmp(exception, 1);
+	if(apRead32(self, componentBase + 0xFF8, &cid2) != ADI_SUCCESS) longjmp(exception, 1);
+	if(apRead32(self, componentBase + 0xFFC, &cid3) != ADI_SUCCESS) longjmp(exception, 1);
+	// 读取Peripheral ID
+	if(apRead32(self, componentBase + 0xFE0, &pid0) != ADI_SUCCESS) longjmp(exception, 2);
+	if(apRead32(self, componentBase + 0xFE4, &pid1) != ADI_SUCCESS) longjmp(exception, 2);
+	if(apRead32(self, componentBase + 0xFE8, &pid2) != ADI_SUCCESS) longjmp(exception, 2);
+	if(apRead32(self, componentBase + 0xFEC, &pid3) != ADI_SUCCESS) longjmp(exception, 2);
+	if(apRead32(self, componentBase + 0xFD0, &pid4) != ADI_SUCCESS) longjmp(exception, 2);
+
+	*cid = (cid3 & 0xff) << 24 | (cid2 & 0xff) << 16 | (cid1 & 0xff) << 8 | (cid0 & 0xff);
+	*pid = (uint64_t)(pid4 & 0xff) << 32 | (pid3 & 0xff) << 24 | (pid2 & 0xff) << 16 | (pid1 & 0xff) << 8 | (pid0 & 0xff);
+	return ADI_SUCCESS;
 }

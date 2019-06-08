@@ -57,7 +57,7 @@ static void printVersion() {
 // 打印帮助信息
 static void printHelp(char *progName) {
 	printf("Usage: smartocd [options]\n\nOptions:\n"
-			"\t-d level, --debuglevel level : Debug information output level; 0-5, -1 not output.\n"
+			"\t-d level, --debuglevel level : Debug information output level; 0-6, 0 not output.\n"
 			"\t-f script, --file script : Pre-executed script, this parameter can be more than one.\n"
 			"\t-e, --exit : End of the script does not enter the interactive mode.\n"
 			"\t-l, --logfile : Log file.\n"
