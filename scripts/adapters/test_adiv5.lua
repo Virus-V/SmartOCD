@@ -32,3 +32,26 @@ print(string.format("Halfword 0x20000002: 0x%X", apAHB:Memory16(0x20000002)))
 -- 写32位
 apAHB:Memory32(0x20000004, 0x5a5aa5a5)
 print(string.format("Word 0x20000004: 0x%X", apAHB:Memory32(0x20000004)))
+-- 控制GPIOE
+RCC_BASE = 0x40000000+0x20000+0x3800
+GPIOE_BASE = 0x40000000+0x20000+0x1000
+
+-- 打开GPIOE的时钟
+RCC_AHB1ENR = apAHB:Memory32(RCC_BASE+0x30)
+print(string.format("RCC_AHB1ENR: 0x%X", RCC_AHB1ENR))
+RCC_AHB1ENR = RCC_AHB1ENR | 0x10    -- 设置GPIOEN位
+apAHB:Memory32(RCC_BASE+0x30, RCC_AHB1ENR)
+
+print(string.format("RCC_BASE: 0x%X", RCC_BASE))
+print(string.format("GPIOE_BASE: 0x%X", GPIOE_BASE))
+
+-- 初始化GPIOE
+apAHB:Memory32(GPIOE_BASE, 0x150)   -- MODE
+apAHB:Memory32(GPIOE_BASE+0x4, 0x0) -- OTYPE
+apAHB:Memory32(GPIOE_BASE+0x8, 0x0) -- OSPEED
+apAHB:Memory32(GPIOE_BASE+0xC, 0x2A0)   -- PUPDR
+
+-- PE2 = 1
+apAHB:Memory32(GPIOE_BASE+0x18, 0x4 << 16)
+apAHB:Memory32(GPIOE_BASE+0x18, 0x8 << 16)
+apAHB:Memory32(GPIOE_BASE+0x18, 0x10 << 16)
