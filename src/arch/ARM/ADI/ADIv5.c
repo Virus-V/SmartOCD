@@ -25,6 +25,8 @@ static int dapInit(struct ADIv5_Dap *dap){
 		dap->adapter->DapSingleRead(dap->adapter, ADPT_DAP_DP_REG, DP_REG_DPIDR, &dpidr);
 		dap->adapter->DapSingleWrite(dap->adapter, ADPT_DAP_DP_REG, DP_REG_ABORT, 0x1e);	// 清空STICKER ERROR 信息
 		if(dap->adapter->DapCommit(dap->adapter) != ADPT_SUCCESS){
+			// 清理指令队列
+			dap->adapter->DapCleanPending(dap->adapter);
 			log_error("Init DAP failed!");
 			return ADI_ERR_INTERNAL_ERROR;
 		}
@@ -32,6 +34,8 @@ static int dapInit(struct ADIv5_Dap *dap){
 	}else if(dap->adapter->currTransMode == ADPT_MODE_JTAG){
 		dap->adapter->JtagToState(dap->adapter, JTAG_TAP_IDLE);
 		if(dap->adapter->JtagCommit(dap->adapter) != ADPT_SUCCESS){
+			// 清理指令队列
+			dap->adapter->DapCleanPending(dap->adapter);
 			log_error("Change TAP to IDLE state failed!");
 			return ADI_ERR_INTERNAL_ERROR;
 		}
@@ -49,12 +53,16 @@ static int dapInit(struct ADIv5_Dap *dap){
 	// 写上电请求
 	dap->adapter->DapSingleWrite(dap->adapter, ADPT_DAP_DP_REG, DP_REG_CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ);
 	if(dap->adapter->DapCommit(dap->adapter) != ADPT_SUCCESS){
+		// 清理指令队列
+		dap->adapter->DapCleanPending(dap->adapter);
 		log_error("Init DAP register failed!");
 		return ADI_ERR_INTERNAL_ERROR;
 	}
 	do{
 		dap->adapter->DapSingleRead(dap->adapter, ADPT_DAP_DP_REG, DP_REG_CTRL_STAT, &ctrl_stat);
 		if(dap->adapter->DapCommit(dap->adapter) != ADPT_SUCCESS){
+			// 清理指令队列
+			dap->adapter->DapCleanPending(dap->adapter);
 			log_error("Read DP CTRL/STAT register failed!");
 			return ADI_ERR_INTERNAL_ERROR;
 		}
@@ -109,6 +117,8 @@ static int apRead8(AccessPort self, uint64_t addr, uint8_t *data){
 	ap->dap->adapter->DapSingleRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, &data_tmp);
 	// 执行指令队列
 	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		// 清理指令队列
+		ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 		log_error("Execute DAP command failed!");
 		return ADI_ERR_INTERNAL_ERROR;
 	}
@@ -171,6 +181,8 @@ static int apRead16(AccessPort self, uint64_t addr, uint16_t *data){
 	ap->dap->adapter->DapSingleRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, &data_tmp);
 	// 执行指令队列
 	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		// 清理指令队列
+		ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 		log_error("Execute DAP command failed!");
 		return ADI_ERR_INTERNAL_ERROR;
 	}
@@ -228,6 +240,8 @@ static int apRead32(AccessPort self, uint64_t addr, uint32_t *data){
 	ap->dap->adapter->DapSingleRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data);
 	// 执行指令队列
 	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		// 清理指令队列
+		ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 		log_error("Execute DAP command failed!");
 		return ADI_ERR_INTERNAL_ERROR;
 	}
@@ -290,6 +304,8 @@ static int apRead64(AccessPort self, uint64_t addr, uint64_t *data){
 	ap->dap->adapter->DapSingleRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data_tmp + 1);
 	// 执行指令队列
 	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		// 清理指令队列
+		ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 		log_error("Execute DAP command failed!");
 		return ADI_ERR_INTERNAL_ERROR;
 	}
@@ -345,6 +361,8 @@ static int apWrite8(AccessPort self, uint64_t addr, uint8_t data){
 	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data_tmp);
 	// 执行指令队列
 	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		// 清理指令队列
+		ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 		log_error("Execute DAP command failed!");
 		return ADI_ERR_INTERNAL_ERROR;
 	}
@@ -404,6 +422,8 @@ static int apWrite16(AccessPort self, uint64_t addr, uint16_t data){
 	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data_tmp);
 	// 执行指令队列
 	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		// 清理指令队列
+		ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 		log_error("Execute DAP command failed!");
 		return ADI_ERR_INTERNAL_ERROR;
 	}
@@ -458,6 +478,8 @@ static int apWrite32(AccessPort self, uint64_t addr, uint32_t data){
 	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data);
 	// 执行指令队列
 	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		// 清理指令队列
+		ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 		log_error("Execute DAP command failed!");
 		return ADI_ERR_INTERNAL_ERROR;
 	}
@@ -517,6 +539,8 @@ static int apWrite64(AccessPort self, uint64_t addr, uint64_t data){
 	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, (data >> 32) & 0xFFFFFFFFu);
 	// 执行指令队列
 	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		// 清理指令队列
+		ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 		log_error("Execute DAP command failed!");
 		return ADI_ERR_INTERNAL_ERROR;
 	}
@@ -665,6 +689,8 @@ static int apBlockRead(AccessPort self, uint64_t addr, enum addrIncreaseMode mod
 	}
 	// 执行指令队列
 	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		// 清理指令队列
+		ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 		log_error("Execute DAP command failed!");
 		return ADI_ERR_INTERNAL_ERROR;
 	}
@@ -813,6 +839,8 @@ static int apBlockWrite(AccessPort self, uint64_t addr, enum addrIncreaseMode mo
 	}
 	// 执行指令队列
 	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		// 清理指令队列
+		ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 		log_error("Execute DAP command failed!");
 		return ADI_ERR_INTERNAL_ERROR;
 	}
@@ -842,6 +870,8 @@ static int apReadCSW(AccessPort self, uint32_t *data){
 	ap->dap->adapter->DapSingleRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, &ap->type.memory.csw.regData);
 	// 执行指令队列
 	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		// 清理指令队列
+		ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 		log_error("Execute DAP command failed!");
 		return ADI_ERR_INTERNAL_ERROR;
 	}
@@ -871,6 +901,8 @@ static int apWriteCSW(AccessPort self, uint32_t data){
 	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, data);
 	// 执行指令队列
 	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		// 清理指令队列
+		ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 		log_error("Execute DAP command failed!");
 		return ADI_ERR_INTERNAL_ERROR;
 	}
@@ -890,6 +922,8 @@ static int apAbort(AccessPort self){
 	ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_ABORT, 0x1);
 	// 执行指令队列
 	if(ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS){
+		// 清理指令队列
+		ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 		log_error("Execute DAP command failed!");
 		return ADI_ERR_INTERNAL_ERROR;
 	}
@@ -910,6 +944,8 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap){
 		// 读ROM_LSB寄存器
 		dapObj->adapter->DapSingleRead(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_ROM_LSB, &temp_2);
 		if(dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS){
+			// 清理指令队列
+			ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 			log_error("Read AP register failed!");
 			return ADI_ERR_INTERNAL_ERROR;
 		}
@@ -920,6 +956,8 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap){
 		if(ap->type.memory.config.largeAddress){
 			dapObj->adapter->DapSingleRead(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_ROM_MSB, &temp);
 			if(dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS){
+				// 清理指令队列
+				ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 				log_error("Read AP register failed!");
 				return ADI_ERR_INTERNAL_ERROR;
 			}
@@ -933,6 +971,8 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap){
 		dapObj->adapter->DapSingleWrite(dapObj->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, dapObj->select.regData);
 		dapObj->adapter->DapSingleRead(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, &ap->type.memory.csw.regData);
 		if(dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS){
+			// 清理指令队列
+			ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 			log_error("Read/Write AP register failed!");
 			return ADI_ERR_INTERNAL_ERROR;
 		}
@@ -949,6 +989,8 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap){
 		dapObj->adapter->DapSingleWrite(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, ap->type.memory.csw.regData);	// 写
 		dapObj->adapter->DapSingleRead(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, &ap->type.memory.csw.regData);	// 读
 		if(dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS){
+			// 清理指令队列
+			ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 			log_error("Read/Write AP register failed!");
 			return ADI_ERR_INTERNAL_ERROR;
 		}
@@ -971,6 +1013,8 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap){
 		ap->type.memory.csw.regData = temp;	// 恢复CSW记录的数据
 		dapObj->adapter->DapSingleWrite(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, ap->type.memory.csw.regData);	// 写
 		if(dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS){
+			// 清理指令队列
+			ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 			log_error("Read/Write AP register failed!");
 			return ADI_ERR_INTERNAL_ERROR;
 		}
@@ -1056,6 +1100,8 @@ static int findAP(DAP self, enum AccessPortType type, enum busType bus, AccessPo
 		// 读 APIDR
 		dapObj->adapter->DapSingleRead(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_IDR, &ap_t->idr.regData);
 		if(dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS){
+			// 清理指令队列
+			ap->dap->adapter->DapCleanPending(ap->dap->adapter);
 			log_error("Read AP IDR register failed!");
 			free(ap_t);
 			return ADI_ERR_INTERNAL_ERROR;

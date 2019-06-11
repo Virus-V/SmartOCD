@@ -300,6 +300,26 @@ static int luaApi_adiv5_ap_write_mem_block(lua_State *L){
 }
 
 /**
+ * 读取Component ID 和 Peripheral ID
+ * 1#：Adapter对象
+ * 2#：base：Component地址 64位
+ * 返回：
+ * 1#：cid
+ * 2#：pid 64位
+ */
+static int luaApi_adiv5_ap_get_pid_cid(lua_State *L){
+	struct luaApi_accessPort *luaApObj = luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
+	uint64_t base = luaL_checkinteger(L, 2);
+	uint32_t cid; uint64_t pid;
+	if(ADIv5_ReadCidPid(luaApObj->ap, base, &cid, &pid) != ADI_SUCCESS){
+		return luaL_error(L, "Read Component ID and Peripheral ID Failed!");
+	}
+	lua_pushinteger(L, cid);
+	lua_pushinteger(L, pid);
+	return 2;
+}
+
+/**
  * ADIv5垃圾回收函数
  */
 static int luaApi_adiv5_gc(lua_State *L){
@@ -375,6 +395,7 @@ static const luaL_Reg lib_access_port_oo[] = {
 	{"RomTable", luaApi_adiv5_ap_mem_rom_table},
 	{"CSW", luaApi_adiv5_ap_mem_csw},
 	{"Abort", luaApi_adiv5_ap_mem_abort},
+	{"GetCidPid", luaApi_adiv5_ap_get_pid_cid},
 
 	{"Memory8", luaApi_adiv5_ap_mem_rw_8},
 	{"Memory16", luaApi_adiv5_ap_mem_rw_16},
