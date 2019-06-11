@@ -270,7 +270,7 @@ static int luaApi_adapter_dap_multi_read(lua_State *L){
 		cmdapObj->DapCleanPending(cmdapObj);
 		return luaL_error(L, "Execute the instruction queue failed!");
 	}
-	lua_pushlstring(L, buff, count * sizeof(uint32_t));
+	lua_pushlstring(L, (char *)buff, count * sizeof(uint32_t));
 	free(buff);
 	return 1;
 }
