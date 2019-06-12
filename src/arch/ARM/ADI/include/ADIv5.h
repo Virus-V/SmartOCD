@@ -75,9 +75,9 @@ enum {
 };
 
 // DAP类型预定义
-typedef struct dap *DAP;
+typedef const struct dap *DAP;
 // AP类型预定义
-typedef struct accessPort *AccessPort;
+typedef const struct accessPort *AccessPort;
 
 /**
  * 初始化DAP
@@ -361,13 +361,12 @@ typedef int (*ADIv5_MEM_AP_ABORT)(
  * Access Port接口定义
  */
 struct accessPort{
-	//只读! 不可以修改!
-	const enum AccessPortType type;	// AccessPort类型
-	const unsigned int index;	// 当前AP的索引
+	enum AccessPortType type;	// AccessPort类型
+	unsigned int index;	// 当前AP的索引
 	union {
 		// MEM-AP
 		struct {
-			const uint64_t RomTableBase;	// ROM Table的基址,只读!不可修改
+			uint64_t RomTableBase;	// ROM Table的基址,只读!不可修改
 			// 读写CSW寄存器
 			ADIv5_MEM_AP_CSW_READ ReadCSW;
 			ADIv5_MEM_AP_CSW_WRITE WriteCSW;

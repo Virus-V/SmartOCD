@@ -6,7 +6,7 @@
 ROOT_DIR := $(shell pwd)
 TARGET := smartocd
 # 版本号
-VERSION := 2.0.0
+VERSION := 0.2.0
 COMPILE_TIME := $(shell date +%FT%T%z)
 
 include $(ROOT_DIR)/src/source.mk

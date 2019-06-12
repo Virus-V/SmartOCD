@@ -1062,7 +1062,7 @@ static int findAP(DAP self, enum AccessPortType type, enum busType bus, AccessPo
 		return ADI_ERR_INTERNAL_ERROR;
 	}
 	// 设置接口类型
-	INTERFACE_CONST_INIT(enum AccessPortType, ap_t->apApi.type, type);
+	ap_t->apApi.type = type;
 	ap_t->dap = dapObj;
 	switch(type){
 	case AccessPort_Memory:
@@ -1120,8 +1120,8 @@ static int findAP(DAP self, enum AccessPortType type, enum busType bus, AccessPo
 		// 填充AccessPort对象数据
 		if(fillApConfig(dapObj, ap_t) == ADI_SUCCESS){
 			// 初始化接口的ROM Table常量
-			INTERFACE_CONST_INIT(uint64_t, ap_t->apApi.Interface.Memory.RomTableBase, ap_t->type.memory.rom);
-			INTERFACE_CONST_INIT(unsigned int, ap_t->apApi.index, ap_t->index);	// 初始化当期AP的索引
+			ap_t->apApi.Interface.Memory.RomTableBase = ap_t->type.memory.rom;
+			ap_t->apApi.index = ap_t->index;	// 初始化当期AP的索引
 			// 插入AccessPort链表
 			list_add_tail(&ap_t->list_entry, &dapObj->apList);
 			*apOut = (AccessPort)&ap_t->apApi;

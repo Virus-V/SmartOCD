@@ -379,12 +379,12 @@ static int USBClaimInterface(USB self, uint8_t IFClass, uint8_t IFSubclass, uint
 				usbObj->readEP = epNum;
 				// 获得传输的包大小
 				usbObj->readEPMaxPackSize = epDesc->wMaxPacketSize & 0x7ff;
-				INTERFACE_CONST_INIT(uint16_t, usbObj->usbInterface.readMaxPackSize, usbObj->readEPMaxPackSize);
+				usbObj->usbInterface.readMaxPackSize = usbObj->readEPMaxPackSize;
 				log_debug("usb end point 'in' 0x%02x, max packet size %d bytes.", epNum, usbObj->readEPMaxPackSize);
 			}else{
 				usbObj->writeEP = epNum;
 				usbObj->writeEPMaxPackSize = epDesc->wMaxPacketSize & 0x7ff;
-				INTERFACE_CONST_INIT(uint16_t, usbObj->usbInterface.writeMaxPackSize, usbObj->writeEPMaxPackSize);
+				usbObj->usbInterface.writeMaxPackSize = usbObj->writeEPMaxPackSize;
 				log_debug("usb end point 'out' 0x%02x, max packet size %d bytes.", epNum, usbObj->writeEPMaxPackSize);
 			}
 
