@@ -214,8 +214,6 @@ struct ADIv5_Dap{
 	Adapter adapter;	// Adapter对象的接口
 	struct dap dapApi;
 	ADIv5_DpSelectRegister select;	// SELECT寄存器
-	ADIv5_DpCtrlStatRegister ctrlStat;	// CTRL/STAT寄存器
-	ADIv5_DpIdrRegister idr;	// DPIDR寄存器
 };
 
 // AP定义

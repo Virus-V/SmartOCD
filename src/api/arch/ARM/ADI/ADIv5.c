@@ -88,6 +88,7 @@ static int luaApi_adiv5_create_dap(lua_State *L){
  * 	3# 总线类型(Optional)
  * 返回:
  * 	1# AP对象
+ * 	2# AP的位置索引
  */
 static int luaApi_adiv5_find_access_port(lua_State *L){
 	struct luaApi_dap* dapObj = CAST(struct luaApi_dap *, luaL_checkudata(L, 1, ADIV5_LUA_OBJECT_TYPE));
@@ -107,7 +108,23 @@ static int luaApi_adiv5_find_access_port(lua_State *L){
 	// 增加DAP的引用
 	lua_pushvalue(L, 1);
 	luaAp->reference = luaL_ref(L, LUA_REGISTRYINDEX);
-	return 1;
+	// AP的索引值
+	lua_pushinteger(L, luaAp->ap->index);
+	return 2;
+}
+
+/**
+ * 同步寄存器
+ * 参数:
+ * 	1# DAP对象
+ * 返回:无
+ */
+static int luaApi_adiv5_sync_reg(lua_State *L){
+	struct luaApi_dap* dapObj = CAST(struct luaApi_dap *, luaL_checkudata(L, 1, ADIV5_LUA_OBJECT_TYPE));
+	if(dapObj->dap->SyncRegister(dapObj->dap) != ADI_SUCCESS){
+		return luaL_error(L, "Failed to synchronize registers.");
+	}
+	return 0;
 }
 
 /**
@@ -386,6 +403,7 @@ int luaopen_adiv5 (lua_State *L) {
 static const luaL_Reg lib_adiv5_oo[] = {
 	// 基本函数
 	{"FindAccessPort", luaApi_adiv5_find_access_port},
+	{"SyncRegister", luaApi_adiv5_sync_reg},
 	{NULL, NULL}
 };
 

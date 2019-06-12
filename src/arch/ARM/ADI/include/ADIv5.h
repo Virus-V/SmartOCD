@@ -142,10 +142,22 @@ typedef int (*ADIv5_FIND_ACCESS_PORT)(
 );
 
 /**
+ * 同步寄存器的值.当调用底层接口直接操作硬件寄存器后,可能造成dap对象
+ * 里影子寄存器和物理寄存器的值不一致,调用该接口将影子寄存器的值同步到
+ * 物理寄存器中.
+ * 参数:
+ * 	self:dap自身对象
+ */
+typedef int (*ADIv5_SYNC_REGISTER)(
+		IN DAP self
+);
+
+/**
  * DAP接口
  */
 struct dap {
 	ADIv5_FIND_ACCESS_PORT FindAccessPort;
+	ADIv5_SYNC_REGISTER SyncRegister;
 };
 
 /**
@@ -349,7 +361,9 @@ typedef int (*ADIv5_MEM_AP_ABORT)(
  * Access Port接口定义
  */
 struct accessPort{
-	const enum AccessPortType type;	// AccessPort类型,只读! 不可以修改!
+	//只读! 不可以修改!
+	const enum AccessPortType type;	// AccessPort类型
+	const unsigned int index;	// 当前AP的索引
 	union {
 		// MEM-AP
 		struct {

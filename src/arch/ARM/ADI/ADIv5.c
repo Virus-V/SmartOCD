@@ -945,7 +945,7 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap){
 		dapObj->adapter->DapSingleRead(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_ROM_LSB, &temp_2);
 		if(dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS){
 			// 清理指令队列
-			ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+			dapObj->adapter->DapCleanPending(dapObj->adapter);
 			log_error("Read AP register failed!");
 			return ADI_ERR_INTERNAL_ERROR;
 		}
@@ -957,7 +957,7 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap){
 			dapObj->adapter->DapSingleRead(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_ROM_MSB, &temp);
 			if(dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS){
 				// 清理指令队列
-				ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+				dapObj->adapter->DapCleanPending(dapObj->adapter);
 				log_error("Read AP register failed!");
 				return ADI_ERR_INTERNAL_ERROR;
 			}
@@ -972,7 +972,7 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap){
 		dapObj->adapter->DapSingleRead(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, &ap->type.memory.csw.regData);
 		if(dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS){
 			// 清理指令队列
-			ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+			dapObj->adapter->DapCleanPending(dapObj->adapter);
 			log_error("Read/Write AP register failed!");
 			return ADI_ERR_INTERNAL_ERROR;
 		}
@@ -990,7 +990,7 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap){
 		dapObj->adapter->DapSingleRead(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, &ap->type.memory.csw.regData);	// 读
 		if(dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS){
 			// 清理指令队列
-			ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+			dapObj->adapter->DapCleanPending(dapObj->adapter);
 			log_error("Read/Write AP register failed!");
 			return ADI_ERR_INTERNAL_ERROR;
 		}
@@ -1014,7 +1014,7 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap){
 		dapObj->adapter->DapSingleWrite(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, ap->type.memory.csw.regData);	// 写
 		if(dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS){
 			// 清理指令队列
-			ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+			dapObj->adapter->DapCleanPending(dapObj->adapter);
 			log_error("Read/Write AP register failed!");
 			return ADI_ERR_INTERNAL_ERROR;
 		}
@@ -1101,7 +1101,7 @@ static int findAP(DAP self, enum AccessPortType type, enum busType bus, AccessPo
 		dapObj->adapter->DapSingleRead(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_IDR, &ap_t->idr.regData);
 		if(dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS){
 			// 清理指令队列
-			ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+			dapObj->adapter->DapCleanPending(dapObj->adapter);
 			log_error("Read AP IDR register failed!");
 			free(ap_t);
 			return ADI_ERR_INTERNAL_ERROR;
@@ -1121,6 +1121,7 @@ static int findAP(DAP self, enum AccessPortType type, enum busType bus, AccessPo
 		if(fillApConfig(dapObj, ap_t) == ADI_SUCCESS){
 			// 初始化接口的ROM Table常量
 			INTERFACE_CONST_INIT(uint64_t, ap_t->apApi.Interface.Memory.RomTableBase, ap_t->type.memory.rom);
+			INTERFACE_CONST_INIT(unsigned int, ap_t->apApi.index, ap_t->index);	// 初始化当期AP的索引
 			// 插入AccessPort链表
 			list_add_tail(&ap_t->list_entry, &dapObj->apList);
 			*apOut = (AccessPort)&ap_t->apApi;
@@ -1134,6 +1135,24 @@ static int findAP(DAP self, enum AccessPortType type, enum busType bus, AccessPo
 	return ADI_FAILED;
 }
 
+/**
+ * 同步寄存器
+ */
+static int syncReg(DAP self){
+	assert(self != NULL);
+	struct ADIv5_Dap *dapObj = container_of(self, struct ADIv5_Dap, dapApi);
+	// 同步SELECT寄存器
+	dapObj->adapter->DapSingleWrite(dapObj->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, dapObj->select.regData);
+	// 提交
+	if(dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS){
+		// 清理指令队列
+		dapObj->adapter->DapCleanPending(dapObj->adapter);
+		log_error("Synchronize register failed!");
+		return ADI_ERR_INTERNAL_ERROR;
+	}
+	return ADI_SUCCESS;
+}
+
 // 创建DAP对象
 DAP ADIv5_CreateDap(Adapter adapter){
 	assert(adapter != NULL);
@@ -1145,6 +1164,7 @@ DAP ADIv5_CreateDap(Adapter adapter){
 	INIT_LIST_HEAD(&dap->apList);
 	dap->adapter = adapter;
 	dap->dapApi.FindAccessPort = findAP;
+	dap->dapApi.SyncRegister = syncReg;
 	// 初始化DAP对象
 	if(dapInit(dap) != ADI_SUCCESS){
 		free(dap);
