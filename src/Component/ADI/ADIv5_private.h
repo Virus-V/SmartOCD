@@ -10,8 +10,8 @@
 
 #include "Library/misc/list.h"
 
-#include "Adapter/include/adapter.h"
-#include "Component/ADI/include/ADIv5.h"
+#include "Adapter/adapter.h"
+#include "Component/ADI/ADIv5.h"
 
 #define IS_DP_REG(reg) ((reg) == DP_REG_CTRL_STAT || (reg) == DP_REG_SELECT || (reg) == DP_REG_RDBUFF || (reg) == DP_REG_DPIDR || \
 		(reg) == DP_REG_ABORT || (reg) == DP_REG_DLCR || (reg) == DP_REG_RESEND || (reg) == DP_REG_TARGETID || (reg) == DP_REG_DLPIDR \

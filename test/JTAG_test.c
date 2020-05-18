@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "smart_ocd.h"
+#include "smartocd.h"
 #include "misc/log.h"
 #include "target/JTAG.h"
 extern int print_bulk(char *data, int length, int rowLen);

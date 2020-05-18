@@ -2,7 +2,7 @@
  * @Author: Virus.V
  * @Date: 2018-02-18 11:30:22
  * @LastEditors: Virus.V
- * @LastEditTime: 2020-05-18 18:14:09
+ * @LastEditTime: 2020-05-18 22:02:22
  * @Description: file content
  * @Email: virusv@live.com
  */
@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "Component/ADI/include/ADIv5.h"
+#include "Component/ADI/ADIv5.h"
 #include "Library/log/log.h"
 
 /**

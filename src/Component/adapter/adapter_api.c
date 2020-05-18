@@ -1,13 +1,23 @@
 /*
+ * @Author: Virus.V
+ * @Date: 2020-05-18 21:51:33
+ * @LastEditTime: 2020-05-18 21:55:21
+ * @LastEditors: Virus.V
+ * @Description:
+ * @FilePath: /SmartOCD/src/Component/adapter/adapter_api.c
+ * @Email: virusv@live.com
+ */
+/*
  * adapter.c
  *
  *  Created on: 2019-5-16
  *      Author: virusv
  */
 
-#include "Adapter/include/adapter.h"
+#include "Adapter/adapter.h"
 
-#include "Component/lua_api/api.h"
+#include "Component/component.h"
+#include "Library/lua_api/api.h"
 
 // 模块常量
 static const luaApi_regConst lib_adapter_const[] = {
@@ -72,4 +82,4 @@ static int RegisterApi_Adapter(lua_State *L, void *opaque) {
   return 0;
 }
 
-LUA_API_ENTRY static luaApi_entry api = {"Adapter", RegisterApi_Adapter, NULL};
+COMPONENT_INIT(Adapter, RegisterApi_Adapter, NULL);

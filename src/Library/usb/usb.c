@@ -17,7 +17,7 @@
 
 #include "Library/log/log.h"
 #include "private_usb.h"
-#include "smart_ocd.h"
+#include "smartocd.h"
 
 static int bulkWrite(USB self, unsigned char *data, int dataLength, int timeout,
                      int *transferred);

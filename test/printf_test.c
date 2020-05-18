@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#include "smart_ocd.h"
+#include "smartocd.h"
 #include "misc/misc.h"
 
 char* itoa(int num, char *str, int radix) {

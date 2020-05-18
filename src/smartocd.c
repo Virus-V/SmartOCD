@@ -5,7 +5,7 @@
  *      Author: virusv
  */
 
-#include "smart_ocd.h"
+#include "smartocd.h"
 
 #include <getopt.h>
 #include <signal.h>
@@ -14,7 +14,7 @@
 #include <string.h>
 #include <unistd.h>  // usleep
 
-#include "Component/lua_api/api.h"
+#include "Component/component.h"
 #include "Library/linenoise/linenoise.h"
 #include "Library/log/log.h"
 #include "Library/lua/src/lauxlib.h"
@@ -340,7 +340,7 @@ static int smartocd_init(lua_State *L) {
     return 1;
   }
   // 注册SmartOCD API接口
-  LuaApiInit(L);
+  ComponentInit(L);
   // LOG默认静默模式
   log_set_quiet(1);
   // 解析参数

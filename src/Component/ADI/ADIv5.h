@@ -8,8 +8,8 @@
 #ifndef SRC_ARCH_ARM_ADI_ADIV5_H_
 #define SRC_ARCH_ARM_ADI_ADIV5_H_
 
-#include "smart_ocd.h"
-#include "Adapter/include/adapter.h"
+#include "smartocd.h"
+#include "Adapter/adapter.h"
 
 #ifdef _IMPORTED_ARM_ADI_DEFINES_
 #error "Already imported ADI defines!!"

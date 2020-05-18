@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 #include "misc/log.h"
-#include "adapter/include/adapter.h"
+#include "adapter/adapter.h"
 
 #include "adapter/cmsis-dap/cmsis-dap.h"
 

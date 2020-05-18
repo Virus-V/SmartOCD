@@ -10,10 +10,8 @@
 # 构建Component
 CURR_DIR = $(shell pwd)
 
-DIR_SRC_FILES = $(wildcard $(CURR_DIR)/lua_api/*.c)	\
-	$(wildcard $(CURR_DIR)/lua_api/adapter/*.c)	\
-	$(wildcard $(CURR_DIR)/lua_api/ADI/*.c)	\
-	$(wildcard $(CURR_DIR)/ADI/api/*.c)	\
+DIR_SRC_FILES = $(wildcard $(CURR_DIR)/*.c)	\
+	$(wildcard $(CURR_DIR)/adapter/*.c)	\
 	$(wildcard $(CURR_DIR)/ADI/*.c)
 
 DIR_OBJ_FILES = ${patsubst %.c,%.o,$(DIR_SRC_FILES)}
@@ -26,7 +24,6 @@ $(CURR_DIR)/libComponent.a: $(DIR_OBJ_FILES)
 clean:
 	$(RM) $(DIR_OBJ_FILES)
 	$(RM) $(CURR_DIR)/libComponent.a
-
 
 .PHONY: all clean
 

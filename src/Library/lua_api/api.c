@@ -2,7 +2,7 @@
  * @Author: Virus.V
  * @Date: 2020-05-15 11:30:22
  * @LastEditors: Virus.V
- * @LastEditTime: 2020-05-18 19:51:12
+ * @LastEditTime: 2020-05-18 21:47:59
  * @Description: file content
  * @Email: virusv@live.com
  */
@@ -16,27 +16,7 @@
 #include "api.h"
 
 #include "Library/log/log.h"
-#include "smart_ocd.h"
-
-/**
- * 初始化Lua接口
- */
-void LuaApiInit(lua_State *L) {
-  int ret;
-  // luaApi_entry *start = &__start_lua_api, *stop = &__stop_lua_api;
-
-  // assert(L != NULL);
-
-  // do {
-  //   log_info("Regist Lua API: %s.", start->name);
-  //   ret = (*start->cb)(L, start->opaque);
-  //   if (ret != 0) {
-  //     log_fatal("Regist %s failed!", start->name);
-  //     FATAL_ABORT(1);
-  //   }
-  //   ++start;
-  // } while (start < stop);
-}
+#include "smartocd.h"
 
 /**
  * 往栈顶的table中注册常量

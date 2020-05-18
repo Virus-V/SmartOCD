@@ -8,7 +8,7 @@
 #ifndef SRC_USB_INCLUDE_USB_H_
 #define SRC_USB_INCLUDE_USB_H_
 
-#include "smart_ocd.h"
+#include "smartocd.h"
 
 // USB 接口状态值
 enum {

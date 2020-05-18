@@ -9,7 +9,7 @@
 
 CURR_DIR = $(shell pwd)
 # SmartOCD入口以及初始化
-DIR_OBJ_FILES = $(CURR_DIR)/smart_ocd.o
+DIR_OBJ_FILES = $(CURR_DIR)/smartocd.o
 
 MODULE_PATH = Library Component Adapter
 MODULE_LIST = $(foreach var,$(MODULE_PATH),$(CURR_DIR)/$(var)/lib$(var).a)
@@ -17,7 +17,7 @@ MODULE_LIST = $(foreach var,$(MODULE_PATH),$(CURR_DIR)/$(var)/lib$(var).a)
 .PRECIOUS : $(DIR_OBJ_FILES)
 
 all: $(DIR_OBJ_FILES) $(MODULE_LIST)
-	$(CC) $^ -o smartocd $(LDFLAGS)
+	$(CC) $(DIR_OBJ_FILES) -Wl,--whole-archive $(MODULE_LIST) -Wl,--no-whole-archive -o smartocd $(LDFLAGS)
 	@echo "Build Complete!"
 
 clean:
@@ -36,6 +36,6 @@ $(MODULE_LIST):
 	)
 	@echo "Modules build finished..."
 
-.PHONY: all clean
+.PHONY: all clean $(MODULE_LIST)
 
 include $(ROOT_DIR)/utils.mk

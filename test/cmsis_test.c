@@ -11,7 +11,7 @@
 #include <time.h>
 #include <math.h>
 
-#include "smart_ocd.h"
+#include "smartocd.h"
 #include "misc/log.h"
 #include "misc/misc.h"
 #include "debugger/cmsis-dap.h"

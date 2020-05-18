@@ -8,7 +8,7 @@
 #ifndef SRC_JTAG_JTAG_H_
 #define SRC_JTAG_JTAG_H_
 
-#include "smart_ocd.h"
+#include "smartocd.h"
 
 enum JTAG_TAP_State {
   /* 特殊状态 */

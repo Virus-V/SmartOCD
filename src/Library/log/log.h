@@ -15,7 +15,7 @@
 // Windows 下面使用 '\\' 替换 '/'
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
-#include "smart_ocd.h"
+#include "smartocd.h"
 
 #define LOG_VERSION "0.1.0"
 

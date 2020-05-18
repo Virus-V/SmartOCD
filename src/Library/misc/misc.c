@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "smart_ocd.h"
+#include "smartocd.h"
 
 /**
  * 32位按位镜像翻转

@@ -7,7 +7,7 @@
  * @Email: virusv@live.com
  */
 /*
- * smart_ocd.h
+ * smartocd.h
  *
  *  Created on: 2018-1-19
  *      Author: virusv

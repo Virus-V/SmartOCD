@@ -10,9 +10,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "Component/lua_api/api.h"
+#include "Component/component.h"
 #include "Library/log/log.h"
-#include "smart_ocd.h"
+#include "Library/lua_api/api.h"
+#include "smartocd.h"
 
 // 注意!!!!所有Adapter对象的metatable都要以 "adapter." 开头!!!!
 #define CMDAP_LUA_OBJECT_TYPE "adapter.CMSIS-DAP"
@@ -545,5 +546,4 @@ static int RegisterApi_CmsisDap(lua_State *L, void *opaque) {
   return 0;
 }
 
-LUA_API_ENTRY static luaApi_entry api = {"CMSIS-DAP", RegisterApi_CmsisDap,
-                                         NULL};
+COMPONENT_INIT(CMSIS_DAP, RegisterApi_CmsisDap, NULL);

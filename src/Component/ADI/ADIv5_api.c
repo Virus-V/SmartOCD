@@ -5,14 +5,15 @@
  *      Author: virusv
  */
 
-#include "Component/ADI/include/ADIv5.h"
+#include "Component/ADI/ADIv5.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "Component/lua_api/api.h"
+#include "Component/component.h"
 #include "Library/log/log.h"
-#include "smart_ocd.h"
+#include "Library/lua_api/api.h"
+#include "smartocd.h"
 
 #define ADIV5_LUA_OBJECT_TYPE "arch.ARM.ADIv5"
 #define ADIV5_AP_MEM_LUA_OBJECT_TYPE "arch.ARM.ADIv5.AccessPort.Memory"
@@ -452,4 +453,4 @@ static int RegisterApi_ADIv5(lua_State *L, void *opaque) {
   return 0;
 }
 
-LUA_API_ENTRY luaApi_entry api = {"ADIv5", RegisterApi_ADIv5, NULL};
+COMPONENT_INIT(ADIv5, RegisterApi_ADIv5, NULL);

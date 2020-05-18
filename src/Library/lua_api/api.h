@@ -1,3 +1,12 @@
+/*
+ * @Author: Virus.V
+ * @Date: 2020-05-18 21:17:44
+ * @LastEditTime: 2020-05-18 21:52:17
+ * @LastEditors: Virus.V
+ * @Description:
+ * @FilePath: /SmartOCD/src/Component/lua_api/api.h
+ * @Email: virusv@live.com
+ */
 /***
  * @Author: Virus.V
  * @Date: 2020-05-15 11:30:22
@@ -21,25 +30,6 @@
 #include "Library/lua/src/lauxlib.h"
 #include "Library/lua/src/lua.h"
 #include "Library/lua/src/lualib.h"
-
-// lua api 注册
-#define LUA_API_ENTRY __attribute__((used, section(".data.lua_api")))
-
-// Lua接口注册
-typedef int (*luaApi_reg_fun)(lua_State *L, void *opaque);
-
-typedef struct {
-  // 接口名
-  const char *name;
-  // 注册函数
-  luaApi_reg_fun cb;
-  // 注册函数的自定义参数
-  void *opaque;
-} luaApi_entry;
-
-// link set
-extern luaApi_entry __start_lua_api;
-extern luaApi_entry __stop_lua_api;
 
 typedef struct {
   char *name;

@@ -11,7 +11,7 @@
 #include <string.h>
 #include <math.h>
 
-#include "smart_ocd.h"
+#include "smartocd.h"
 #include "misc/log.h"
 #include "misc/linenoise.h"
 

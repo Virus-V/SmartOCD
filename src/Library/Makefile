@@ -14,6 +14,7 @@ DIR_SRC_FILES = $(wildcard $(CURR_DIR)/jtag/*.c)	\
 	$(wildcard $(CURR_DIR)/linenoise/*.c)	\
 	$(wildcard $(CURR_DIR)/log/*.c)	\
 	$(wildcard $(CURR_DIR)/usb/*.c)	\
+	$(wildcard $(CURR_DIR)/lua_api/*.c)	\
 	$(wildcard $(CURR_DIR)/misc/*.c)
 
 DIR_OBJ_FILES = ${patsubst %.c,%.o,$(DIR_SRC_FILES)}

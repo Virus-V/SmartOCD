@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "smart_ocd.h"
+#include "smartocd.h"
 #include "debugger/usb.h"
 #include "misc/log.h"
 

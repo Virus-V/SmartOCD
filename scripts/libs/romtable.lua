@@ -1,7 +1,6 @@
 --[[
     遍历ROM Table
 ]]
-local dap = require("DAP")  -- 加载DAP库
 local dap_infos = {
     { 0x4BB, 0x000, "Cortex-M3 SCS",              "(System Control Space)", },
 	{ 0x4BB, 0x001, "Cortex-M3 ITM",              "(Instrumentation Trace Module)", },
@@ -98,23 +97,18 @@ local dap_infos = {
 	{ 0x1000, 0x343, "TI DAPCTL",                  "", },
 }
 
--- 打印ROM Table
-function DisplayROMTable(adapter, addr, depth)
+function ComponentInfo(memAccessPort, addr)
 	-- 获得对齐后的地址
     local base_addr = addr & 0xFFFFF000
     -- 读取pid和cid
-    local cid, pid = dap.Get_CID_PID(adapter, base_addr)
+    local cid, pid = memAccessPort:GetCidPid(base_addr)
     if (cid & 0xFFFF0FFF) ~= 0xB105000D then
         -- 无效的CID
         print("Invaild CID:" .. string.format("0x%08X", cid))
         return 
     end
-    print(string.format( "\n* Component CID:0x%08X, PID:0x%010X.", cid, pid))
-    -- 获得该Component占据的空间大小
-    local occupy_size = (pid >> 36) & 0xF
-    if occupy_size > 0 then 
-        print("Start Address :" .. string.format( "0x%08X", base_addr - 0x1000 * occupy_size))
-    end
+    print(string.format( "* Component CID:0x%08X, PID:0x%010X.", cid, pid))
+    
     -- 获得当前Component的类型
     local compon_type = (cid >> 12) & 0xF
     local part_num = pid & 0xFFF
@@ -123,28 +117,23 @@ function DisplayROMTable(adapter, addr, depth)
     -- 打印组件详细信息
     for idx,info in ipairs(dap_infos) do 
         if info[1] == designer_id and info[2] == part_num then
-            print(info[3] .. " " .. info[4])
+            print("- " .. info[3] .. " " .. info[4])
             break
         end
     end
     if compon_type == 0x1 then    -- ROM Table
-        local mem_type = dap.Memory32(adapter, base_addr + 0xFCC)
+        local mem_type = memAccessPort:Memory32(base_addr + 0xFCC)
         if mem_type & 0x1 == 0x1 then
             print("- MEMTYPE system memory present on bus.")
         else
             print("- MEMTYPE system memory not present: dedicated debug bus.")
         end
-					-- 遍历Table Entry 0xefc
-        for entry_offset = 0,0xF00,4 do
-            local entry = dap.Memory32(adapter, base_addr + entry_offset)
-            if entry & 0x1 == 0x1 then  -- 存在表项
-                print(string.format( "- Next Entry:0x%08X BaseAddr:0x%08X.", entry, (base_addr + (entry & 0xFFFFF000)) & 0xFFFFFFFF))
-                						-- 递归调用
-                DisplayROMTable(adapter, (base_addr + (entry & 0xFFFFF000)) & 0xFFFFFFFF, depth+1)
-            elseif entry == 0 then break end
-        end
     elseif compon_type == 0x9 then -- CoreSight component
-        local dev_type = dap.Memory32(adapter, base_addr + 0xFCC)
+        -- 读DEVARCH,DEVID,DEVTYPE
+        local dev_arch = memAccessPort:Memory32(base_addr + 0xFBC)
+        local dev_id = memAccessPort:Memory32(base_addr + 0xFC8)
+        local dev_type = memAccessPort:Memory32(base_addr + 0xFCC)
+        print(string.format( "* DEVARCH:0x%08X, DEVID:0x%08X, DEVTYPE: 0x%08X.", dev_arch, dev_id, dev_type))
         local minor = (dev_type >> 4) & 0x0F
         local major_type, sub_type = "other"
         if dev_type & 0x0F == 0 then

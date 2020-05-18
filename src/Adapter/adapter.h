@@ -9,7 +9,7 @@
 #ifndef SRC_ADAPTER_INCLUDE_ADAPTER_H_
 #define SRC_ADAPTER_INCLUDE_ADAPTER_H_
 
-#include "smart_ocd.h"
+#include "smartocd.h"
 #include "Library/jtag/jtag.h"
 
 /**

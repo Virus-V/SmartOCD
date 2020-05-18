@@ -10,7 +10,7 @@
 
 #include "Adapter/adapter_private.h"
 #include "Library/usb/usb.h"
-#include "smart_ocd.h"
+#include "smartocd.h"
 
 // DAP Transfer Request
 #define CMDAP_TRANSFER_APnDP (1U << 0)

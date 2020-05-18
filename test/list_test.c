@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "smart_ocd.h"
+#include "smartocd.h"
 #include "misc/log.h"
 #include "misc/list/list.h"
 

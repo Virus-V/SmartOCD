@@ -6,7 +6,7 @@
  */
 
 #include <stdlib.h>
-#include "smart_ocd.h"
+#include "smartocd.h"
 #include "Library/log/log.h"
 
 #include "Component/ADI/ADIv5_private.h"
