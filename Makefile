@@ -4,73 +4,44 @@
 # GPLv3
 
 ROOT_DIR := $(shell pwd)
-TARGET := smartocd
 # 版本号
-VERSION := 2.0.0
+VERSION := 0.2.0
 COMPILE_TIME := $(shell date +%FT%T%z)
 
-include $(ROOT_DIR)/src/source.mk
-include $(ROOT_DIR)/test/test.mk
+# 额外库文件
+EXTRA_LIBS = usb-1.0 m dl
 
-ALL_LIB_PATH += $(ROOT_DIR)/src/lua/src
-#==========可变参数区============ 
-# 入口文件
-SMARTOCD_ENTRY_SRC_FILE = $(ROOT_DIR)/src/smart_ocd.c
-SMARTOCD_ENTRY_OBJ_FILE = $(subst .c,.o,$(SMARTOCD_ENTRY_SRC_FILE))
-# SmartOCD 头文件搜索目录
-SMARTOCD_INC_PATHS = $(ROOT_DIR)/src
-# 所有库文件
-ALL_LIBS = usb-1.0 lua m dl
-
-# SmartOCD和TEST对象文件
-SMARTOCD_OBJ_FILES = $(subst .c,.o,$(SMARTOCD_SRC_FILES))
-TEST_OBJ_FILES = $(subst .c,.o,$(TEST_SRC_FILES))
-
-#宏定义
-DEFINES += VERSION=\"$(VERSION)\" COMPILE_TIME=\"$(COMPILE_TIME)\" 
+# 定义当前版本和构建时间
+DEFINES += VERSION=\"$(VERSION)\" COMPILE_TIME=\"$(COMPILE_TIME)\"
 
 # Optimization level [0,1,2,3,s]
-OPT ?= 0
-#DEBUG = 
+OPT = 0
+#DEBUG =
 DEBUG = -ggdb
+
+include config.mk
+
+# parse config
+# ...
 
 CFLAGS = $(DEBUG)
 #开发过程中使用-Werror，所有警告都当做错误来终止编译
 CFLAGS += -O$(OPT) -Werror
-CFLAGS += $(addprefix -D,$(DEFINES)) $(addprefix -I,$(SMARTOCD_INC_PATHS) $(TEST_INC_PATHS))
-# Linker Flags
-LDFLAGS += $(addprefix -L,$(ALL_LIB_PATH))
+CFLAGS += -I$(ROOT_DIR)/src
+CFLAGS += $(addprefix -D,$(DEFINES))
 # 所有库
-LDFLAGS += $(addprefix -l,$(ALL_LIBS))
+LDFLAGS += $(addprefix -l,$(EXTRA_LIBS))
 
-.PRECIOUS : $(SMARTOCD_ENTRY_OBJ_FILE) $(SMARTOCD_OBJ_FILES) $(TEST_OBJ_FILES)
+export ROOT_DIR CFLAGS LDFLAGS
 
-all: $(TARGET) buildcfg
-
-buildcfg:
-	@touch $(SMARTOCD_ENTRY_SRC_FILE)
-
-$(TARGET): $(SMARTOCD_OBJ_FILES) $(SMARTOCD_ENTRY_OBJ_FILE)
-	$(CC) $^ -o $@ $(LDFLAGS) 
-	@echo "Build Complete!"
-
+all:
+	$(MAKE) -C src $@
 
 %_test: $(SMARTOCD_OBJ_FILES) $(TEST_OBJ_FILES) $(ROOT_DIR)/test/%_test.o
-	$(CC) $^ -ggdb -o $(ROOT_DIR)/test/$@ $(LDFLAGS)
-
-#%.o : %.c
-.PHONY: reset all clean
+	$(MAKE) -c test $@
 
 clean:
-	$(RM) $(SMARTOCD_OBJ_FILES) $(SMARTOCD_ENTRY_OBJ_FILE) $(TEST_OBJ_FILES)
-	
-# 重置项目，删除所有动态生成的文件
-reset:
-	$(RM) $(subst .c,.d,$(SMARTOCD_SRC_FILES) $(SMARTOCD_ENTRY_SRC_FILE) $(TEST_SRC_FILES))
+	$(MAKE) -C src clean
+	$(MAKE) -C test clean
 
--include ${patsubst %.c,%.d,$(SMARTOCD_ENTRY_SRC_FILE) $(SMARTOCD_SRC_FILES) $(TEST_SRC_FILES)}
-
-%.d: %.c
-	$(CC) -MM $(CFLAGS) $< > $@.$$$$;	\
-	sed 's,\($(notdir $*)\)\.o[ :]*,$(dir $*)\1.o $@ : ,g' < $@.$$$$ > $@;	\
-	$(RM) -f $@.$$$$
+.PHONY: all clean %_test
