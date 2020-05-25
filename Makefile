@@ -1,7 +1,12 @@
-# SmartOCD
-# 2018年01月26日20:13:09
-# Virus.V <virusv@live.com>
-# GPLv3
+#
+# Author: Virus.V
+# Date: 2020-05-19 08:58:05
+# LastEditors: Virus.V
+# LastEditTime: 2020-05-25 19:02:18
+# Description: file content
+# Email: virusv@live.com
+#
+
 
 ROOT_DIR := $(shell pwd)
 # 版本号
@@ -37,8 +42,8 @@ export ROOT_DIR CFLAGS LDFLAGS
 all:
 	$(MAKE) -C src $@
 
-%_test: $(SMARTOCD_OBJ_FILES) $(TEST_OBJ_FILES) $(ROOT_DIR)/test/%_test.o
-	$(MAKE) -c test $@
+%_test: all $(ROOT_DIR)/test/%_test.o
+	$(MAKE) -C test $@
 
 clean:
 	$(MAKE) -C src clean

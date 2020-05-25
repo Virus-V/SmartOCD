@@ -8,9 +8,13 @@
 #ifndef SRC_ADAPTER_CMSIS_DAP_CMSIS_DAP_H_
 #define SRC_ADAPTER_CMSIS_DAP_CMSIS_DAP_H_
 
-#include "Adapter/adapter_private.h"
-#include "Library/usb/usb.h"
 #include "smartocd.h"
+
+#include "Adapter/adapter_private.h"
+
+#include "Adapter/adapter_dap.h"
+#include "Adapter/adapter_jtag.h"
+#include "Library/usb/usb.h"
 
 // DAP Transfer Request
 #define CMDAP_TRANSFER_APnDP (1U << 0)
@@ -97,7 +101,7 @@
 #define CMDAP_ID_DEVICE_VENDOR 5U
 #define CMDAP_ID_DEVICE_NAME 6U
 #define CMDAP_ID_CAPABILITIES 0xF0U
-#define CMDAP_ID_SWO_BUFFER_SIZE 0xFDU  // V1.1
+#define CMDAP_ID_SWO_BUFFER_SIZE 0xFDU // V1.1
 #define CMDAP_ID_PACKET_COUNT 0xFEU
 #define CMDAP_ID_PACKET_SIZE 0xFFU
 
@@ -106,10 +110,10 @@
 #define CMDAP_TARGET_RUNNING 1U
 
 // DAP Port
-#define CMDAP_PORT_AUTODETECT 0U  // Autodetect Port
-#define CMDAP_PORT_DISABLED 0U    // Port Disabled (I/O pins in High-Z)
-#define CMDAP_PORT_SWD 1U         // SWD Port (SWCLK, SWDIO) + nRESET
-#define CMDAP_PORT_JTAG 2U  // JTAG Port (TCK, TMS, TDI, TDO, nTRST) + nRESET
+#define CMDAP_PORT_AUTODETECT 0U // Autodetect Port
+#define CMDAP_PORT_DISABLED 0U   // Port Disabled (I/O pins in High-Z)
+#define CMDAP_PORT_SWD 1U        // SWD Port (SWCLK, SWDIO) + nRESET
+#define CMDAP_PORT_JTAG 2U // JTAG Port (TCK, TMS, TDI, TDO, nTRST) + nRESET
 
 // DAP Transfer Response
 #define CMDAP_TRANSFER_OK (1U << 0)
@@ -131,40 +135,40 @@
 
 // JTAG底层指令类型
 enum JTAG_InstrType {
-  JTAG_INS_STATUS_MOVE,    // 状态机改变状态
-  JTAG_INS_EXCHANGE_DATA,  // 交换TDI-TDO数据
-  JTAG_INS_IDLE_WAIT,      // 进入IDLE等待几个时钟周期
+  JTAG_INS_STATUS_MOVE,   // 状态机改变状态
+  JTAG_INS_EXCHANGE_DATA, // 交换TDI-TDO数据
+  JTAG_INS_IDLE_WAIT,     // 进入IDLE等待几个时钟周期
 };
 
 // JTAG指令对象
 struct JTAG_Command {
-  enum JTAG_InstrType type;     // JTAG指令类型
-  struct list_head list_entry;  // JTAG指令链表对象
+  enum JTAG_InstrType type;    // JTAG指令类型
+  struct list_head list_entry; // JTAG指令链表对象
   // 指令结构共用体
   union {
     struct {
       enum JTAG_TAP_State toState;
     } statusMove;
     struct {
-      uint8_t *data;          // 需要交换的数据地址
-      unsigned int bitCount;  // 交换的二进制位个数
+      uint8_t *data;         // 需要交换的数据地址
+      unsigned int bitCount; // 交换的二进制位个数
     } exchangeData;
     struct {
-      unsigned int clkCount;  // 时钟个数
+      unsigned int clkCount; // 时钟个数
     } idleWait;
   } instr;
 };
 
 // DAP指令类型
 enum DAP_InstrType {
-  DAP_INS_RW_REG_SINGLE,  // 单次读写nP寄存器
-  DAP_INS_RW_REG_MULTI,   // 多次读写寄存器
+  DAP_INS_RW_REG_SINGLE, // 单次读写nP寄存器
+  DAP_INS_RW_REG_MULTI,  // 多次读写寄存器
 };
 
 // DAP指令对象
 struct DAP_Command {
-  enum DAP_InstrType type;      // DAP指令类型
-  struct list_head list_entry;  // DAP指令链表对象
+  enum DAP_InstrType type;     // DAP指令类型
+  struct list_head list_entry; // DAP指令链表对象
   // 指令结构共用体
   union {
     struct {
@@ -177,10 +181,10 @@ struct DAP_Command {
       uint8_t request;
       // 指令的数据
       union {
-        uint32_t write;  // 写单个寄存器
+        uint32_t write; // 写单个寄存器
         uint32_t *read;
       } data;
-    } singleReg;  // 单次读写寄存器
+    } singleReg; // 单次读写寄存器
     struct {
       /**
        * Bit 0: APnDP: 0 = Debug Port (DP), 1 = Access Port (AP).
@@ -191,32 +195,32 @@ struct DAP_Command {
       uint8_t request;
       // 指令的数据
       uint32_t *data;
-      int count;  // 读写次数
-    } multiReg;   // 多次读写寄存器
+      int count; // 读写次数
+    } multiReg;  // 多次读写寄存器
   } instr;
 };
 
 /* CMSIS-DAP对象 */
 struct cmsis_dap {
-  USB usbObj;                // USB连接对象
-  struct adapter adaperAPI;  // Adapter接口对象
-  BOOL inited;               // 是否已经初始化
-  BOOL connected;            // USB设备是否已连接
+  USB usbObj;               // USB连接对象
+  struct adapter adaperAPI; // Adapter接口对象
+  BOOL inited;              // 是否已经初始化
+  BOOL connected;           // USB设备是否已连接
 
-  enum transfertMode currTransMode;  // 当前传输协议
-  int Version;                       // CMSIS-DAP 版本
-  int MaxPcaketCount;                // 缓冲区最多容纳包的个数
-  int PacketSize;                    // 包最大长度
-  uint8_t *respBuffer;               // 应答缓冲区
-  uint32_t capablityFlag;            // 该仿真器支持的功能
+  enum transfertMode currTransMode; // 当前传输协议
+  int Version;                      // CMSIS-DAP 版本
+  int MaxPcaketCount;               // 缓冲区最多容纳包的个数
+  int PacketSize;                   // 包最大长度
+  uint8_t *respBuffer;              // 应答缓冲区
+  uint32_t capablityFlag;           // 该仿真器支持的功能
 
-  enum JTAG_TAP_State currState;  // JTAG 当前状态
-  struct list_head JtagInsQueue;  // JTAG指令队列，元素类型：struct JTAG_Command
-  struct list_head DapInsQueue;  // DAP指令队列，元素类型struct DAP_Command
-  unsigned int tapCount;         // TAP个数
+  enum JTAG_TAP_State currState; // JTAG 当前状态
+  struct list_head JtagInsQueue; // JTAG指令队列，元素类型：struct JTAG_Command
+  struct list_head DapInsQueue; // DAP指令队列，元素类型struct DAP_Command
+  unsigned int tapCount;        // TAP个数
   unsigned int
-      tapIndex;  // 要操作的TAP在扫描链中的索引,在DAP Transfer相关函数中会用到
-                 // TODO 实现更高版本仿真器支持 SWO、
+      tapIndex; // 要操作的TAP在扫描链中的索引,在DAP Transfer相关函数中会用到
+                // TODO 实现更高版本仿真器支持 SWO、
 };
 
 /*

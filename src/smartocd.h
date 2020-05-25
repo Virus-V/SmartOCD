@@ -1,11 +1,3 @@
-/***
- * @Author: Virus.V
- * @Date: 2020-05-15 11:30:22
- * @LastEditors: Virus.V
- * @LastEditTime: 2020-05-18 19:10:07
- * @Description: file content
- * @Email: virusv@live.com
- */
 /*
  * smartocd.h
  *
@@ -16,6 +8,7 @@
 #ifndef SRC_SMART_OCD_H_
 #define SRC_SMART_OCD_H_
 
+#include <stdlib.h>
 #include <assert.h>
 #include <inttypes.h>
 #include <setjmp.h>
