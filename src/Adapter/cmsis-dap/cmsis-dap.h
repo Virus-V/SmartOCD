@@ -207,20 +207,20 @@ struct cmsis_dap {
   BOOL inited;              // 是否已经初始化
   BOOL connected;           // USB设备是否已连接
 
-  enum transfertMode currTransMode; // 当前传输协议
+  struct jtagCapability jtagCapObj; // jtag能力集对象
+  struct dapCapability dapCapObj;   // dap能力集对象
   int Version;                      // CMSIS-DAP 版本
   int MaxPcaketCount;               // 缓冲区最多容纳包的个数
   int PacketSize;                   // 包最大长度
   uint8_t *respBuffer;              // 应答缓冲区
   uint32_t capablityFlag;           // 该仿真器支持的功能
 
-  enum JTAG_TAP_State currState; // JTAG 当前状态
   struct list_head JtagInsQueue; // JTAG指令队列，元素类型：struct JTAG_Command
   struct list_head DapInsQueue; // DAP指令队列，元素类型struct DAP_Command
   unsigned int tapCount;        // TAP个数
-  unsigned int
-      tapIndex; // 要操作的TAP在扫描链中的索引,在DAP Transfer相关函数中会用到
-                // TODO 实现更高版本仿真器支持 SWO、
+  unsigned int tapIndex;        // 要操作的TAP在扫描链中的索引,
+                                // 在DAP Transfer相关函数中会用到
+  // TODO 实现更高版本仿真器支持 SWO、
 };
 
 /*
@@ -254,6 +254,28 @@ SWO Streaming Trace support:
 #define CMDAP_CAP_SWD_SEQUENCE 5
 #define CMDAP_CAP_TEST_DOMAIN_TIMER 6
 #define CMDAP_CAP_TRACE_DATA_MANAGE 7
+
+/**
+ * 在一串数据中获得第n个二进制位，n从0开始
+ * lsb
+ * data:数据存放的位置指针
+ * n:第几位，最低位是第0位
+ */
+#define GET_Nth_BIT(data, n)                                                   \
+  ((*(CAST(uint8_t *, (data)) + ((n) >> 3)) >> ((n)&0x7)) & 0x1)
+/**
+ * 设置data的第n个二进制位
+ * data:数据存放的位置
+ * n：要修改哪一位，从0开始
+ * val：要设置的位，0或者1，只使用最低位
+ */
+#define SET_Nth_BIT(data, n, val)                                              \
+  do {                                                                         \
+    uint8_t tmp_data = *(CAST(uint8_t *, (data)) + ((n) >> 3));                \
+    tmp_data &= ~(1 << ((n)&0x7));                                             \
+    tmp_data |= ((val)&0x1) << ((n)&0x7);                                      \
+    *(CAST(uint8_t *, (data)) + ((n) >> 3)) = tmp_data;                        \
+  } while (0);
 
 /**
  * 创建CMSIS-DAP对象

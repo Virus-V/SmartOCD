@@ -2,7 +2,7 @@
 # Author: Virus.V
 # Date: 2020-05-15 16:33:34
 # LastEditors: Virus.V
-# LastEditTime: 2020-05-18 18:37:45
+# LastEditTime: 2020-05-29 10:02:11
 # Description: file content
 # Email: virusv@live.com
 #
@@ -20,6 +20,8 @@ all: $(DIR_OBJ_FILES) $(MODULE_LIST)
 	$(CC) $(DIR_OBJ_FILES) -Wl,--whole-archive $(MODULE_LIST) -Wl,--no-whole-archive -o smartocd $(LDFLAGS)
 	@echo "Build Complete!"
 
+modules: $(MODULE_LIST)
+
 clean:
 	$(RM) $(DIR_OBJ_FILES)
 	$(foreach var,$(MODULE_PATH),\
@@ -36,6 +38,6 @@ $(MODULE_LIST):
 	)
 	@echo "Modules build finished..."
 
-.PHONY: all clean $(MODULE_LIST)
+.PHONY: all clean $(MODULE_LIST) modules
 
 include $(ROOT_DIR)/utils.mk

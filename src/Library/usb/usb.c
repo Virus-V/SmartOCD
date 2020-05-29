@@ -64,7 +64,7 @@ static int usbStrDescriptorMatch(libusb_device_handle *devHandle,
 /**
  * 根据pid和vid打开USB设备
  */
-static int USBOpen(USB self, const uint16_t vid, const uint16_t pid,
+int USB_Open(USB self, const uint16_t vid, const uint16_t pid,
                    const char *serial) {
   assert(self != NULL);
 
@@ -134,7 +134,7 @@ static int USBOpen(USB self, const uint16_t vid, const uint16_t pid,
 }
 
 // 关闭USB
-static void USBClose(USB self) {
+void USB_Close(USB self) {
   assert(self != NULL);
   struct _usb_private *usbObj =
       container_of(self, struct _usb_private, usbInterface);
@@ -153,7 +153,7 @@ static void USBClose(USB self) {
 /**
  * 复位设备
  */
-static int USBReset(USB self) {
+int USB_Reset(USB self) {
   assert(self != NULL);
   struct _usb_private *usbObj =
       container_of(self, struct _usb_private, usbInterface);
@@ -170,7 +170,7 @@ static int USBReset(USB self) {
 /**
  * USB控制传输
  */
-static int USBControlTransfer(USB self, uint8_t requestType, uint8_t request,
+int USB_ControlTransfer(USB self, uint8_t requestType, uint8_t request,
                               uint16_t wValue, uint16_t wIndex,
                               unsigned char *data, uint16_t dataLength,
                               unsigned int timeout, int *count) {
@@ -192,7 +192,7 @@ static int USBControlTransfer(USB self, uint8_t requestType, uint8_t request,
 /**
  * 读/写数据块
  */
-static int USBBulkTransfer(USB self, uint8_t endpoint, unsigned char *data,
+int USB_BulkTransfer(USB self, uint8_t endpoint, unsigned char *data,
                            int dataLength, int timeout, int *transferred) {
   int retCode;
   assert(self != NULL);
@@ -244,7 +244,7 @@ static int bulkRead(USB self, unsigned char *data, int dataLength, int timeout,
 /**
  * 中断传输
  */
-static int USBInterruptTransfer(USB self, uint8_t endpoint, unsigned char *data,
+int USB_InterruptTransfer(USB self, uint8_t endpoint, unsigned char *data,
                                 int dataLength, int timeout, int *transferred) {
   int retCode;
   assert(self != NULL);
@@ -310,7 +310,7 @@ static int unsupportRW(USB self, unsigned char *data, int dataLength,
  * 设置活跃配置
  * configurationValue: 配置的索引，第一个配置索引为0
  */
-static int USBSetConfiguration(USB self, uint8_t configurationIndex) {
+int USB_SetConfiguration(USB self, uint8_t configurationIndex) {
   struct libusb_config_descriptor *config = NULL;
   int retCode;
   libusb_device *dev = NULL;
@@ -369,7 +369,7 @@ static int USBSetConfiguration(USB self, uint8_t configurationIndex) {
 /**
  * 声明interface
  */
-static int USBClaimInterface(USB self, uint8_t IFClass, uint8_t IFSubclass,
+int USB_ClaimInterface(USB self, uint8_t IFClass, uint8_t IFSubclass,
                              uint8_t IFProtocol, uint8_t transType) {
   struct libusb_device *dev = NULL;
   struct libusb_config_descriptor *config;
@@ -503,14 +503,6 @@ USB CreateUSB(void) {
   }
   // 填入初始接口
   usbObj->usbInterface.Read = usbObj->usbInterface.Write = unsupportRW;
-  usbObj->usbInterface.Reset = USBReset;
-  usbObj->usbInterface.Open = USBOpen;
-  usbObj->usbInterface.Close = USBClose;
-  usbObj->usbInterface.ControlTransfer = USBControlTransfer;
-  usbObj->usbInterface.SetConfiguration = USBSetConfiguration;
-  usbObj->usbInterface.ClaimInterface = USBClaimInterface;
-  usbObj->usbInterface.BulkTransfer = USBBulkTransfer;
-  usbObj->usbInterface.InterruptTransfer = USBInterruptTransfer;
   usbObj->clamedIFNum = usbObj->currConfVal = -1;
   return (USB)&usbObj->usbInterface;
 }

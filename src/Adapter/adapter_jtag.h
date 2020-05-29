@@ -10,13 +10,9 @@
 #ifndef SRC_ADAPTER_ADAPTER_JTAG_H_
 #define SRC_ADAPTER_ADAPTER_JTAG_H_
 
+#include "Adapter/adapter.h"
 #include "Library/jtag/jtag.h"
 #include "smartocd.h"
-
-/* 仿真器对象 */
-typedef struct adapter *Adapter;
-/* 传输模式接口 */
-struct transport;
 
 // SW和JTAG引脚映射,用于指定ADPT_JTAG_PINS服务的pinSelect参数
 #define SWJ_PIN_SWCLK_TCK_POS 0 // SWCLK/TCK引脚在pinMask参数的对应位置
@@ -111,10 +107,10 @@ typedef int (*ADPT_JTAG_COMMIT)(IN Adapter self);
 typedef int (*ADPT_JTAG_CLEAN_PENDING)(IN Adapter self);
 
 /* JTAG 传输接口 */
-struct jtagTrasnport {
-  struct trasnport header;
+struct jtagCapability {
+  struct capability header;
 
-  enum JTAG_TAP_State currState; // JTAG 当前状态
+  const enum JTAG_TAP_State currState; // JTAG 当前状态
 
   ADPT_JTAG_PINS JtagPins;                  // 读写仿真器的JTAG引脚
   ADPT_JTAG_EXCHANGE_DATA JtagExchangeData; // 交换TDI和TDO的数据

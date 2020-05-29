@@ -11,11 +11,7 @@
 #define SRC_ADAPTER_ADAPTER_DAP_H_
 
 #include "smartocd.h"
-
-/* 仿真器对象 */
-typedef struct adapter *Adapter;
-/* 传输模式接口 */
-struct transport;
+#include "Adapter/adapter.h"
 
 /* DAP寄存器类型 */
 enum dapRegType {
@@ -101,9 +97,9 @@ typedef int (*ADPT_DAP_COMMIT)(IN Adapter self);
  */
 typedef int (*ADPT_DAP_CLEAN_PENDING)(IN Adapter self);
 
-/* DAP 传输接口 */
-struct dapTransport {
-  struct trasnport header;
+/* DAP 能力集 */
+struct dapCapability {
+  struct capability header;
 
   ADPT_DAP_SINGLE_READ DapSingleRead;   // 单次读:AP或者DP,寄存器编号
   ADPT_DAP_SINGLE_WRITE DapSingleWrite; // 单次写:AP或者DP,寄存器编号

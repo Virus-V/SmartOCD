@@ -2,7 +2,7 @@
 # Author: Virus.V
 # Date: 2020-05-19 08:58:05
 # LastEditors: Virus.V
-# LastEditTime: 2020-05-25 19:02:18
+# LastEditTime: 2020-05-29 10:21:35
 # Description: file content
 # Email: virusv@live.com
 #
@@ -42,8 +42,9 @@ export ROOT_DIR CFLAGS LDFLAGS
 all:
 	$(MAKE) -C src $@
 
-%_test: all $(ROOT_DIR)/test/%_test.o
-	$(MAKE) -C test $@
+%_test:
+	#$(MAKE) -C src modules
+	#$(MAKE) -C test $@
 
 clean:
 	$(MAKE) -C src clean

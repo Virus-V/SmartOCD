@@ -1,7 +1,7 @@
 /*
  * @Author: Virus.V
  * @Date: 2020-05-18 21:51:33
- * @LastEditTime: 2020-05-18 21:55:21
+ * @LastEditTime: 2020-05-29 16:42:12
  * @LastEditors: Virus.V
  * @Description:
  * @FilePath: /SmartOCD/src/Component/adapter/adapter_api.c
@@ -14,7 +14,8 @@
  *      Author: virusv
  */
 
-#include "Adapter/adapter.h"
+#include "Adapter/adapter_jtag.h"
+#include "Adapter/adapter_dap.h"
 
 #include "Component/component.h"
 #include "Library/lua_api/api.h"

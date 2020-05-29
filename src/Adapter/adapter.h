@@ -85,20 +85,32 @@ typedef int (*ADPT_RESET)(IN Adapter self, IN enum targetResetType type);
 /**
  * 仿真器传输模式
  */
-enum transfertMode {
+enum transferMode {
+  // Joint Test Action Group，联合测试行动组
   ADPT_MODE_JTAG,
+  // Serial wire Debug 串行调试
   ADPT_MODE_SWD,
-  ADPT_MODE_DAP,
+  // TODO 其他传输模式,SWIM,UART,TCP等
   ADPT_MODE_MAX
 };
 
 /**
- * 传输模式接口
+ * 仿真器能力类型
+ */
+enum capabilityType {
+  // CMSIS-DAP或者STLINK等针对ARM ADI的仿真器
+  ADPT_CAP_DAP,
+  // 传统仿真器的JTAG接口
+  ADPT_CAP_JTAG,
+  ADPT_CAP_MAX
+};
+/**
+ * 仿真器能力集
  * 设备所支持的能力
  */
-struct transport {
-  enum transfertMode mode;     // 传输模式，SWD、DAP、JTAG等
-  struct list_head transports; // 传输模式链表
+struct capability {
+  enum capabilityType type;    // 能力集类型
+  struct list_head capabilities; // 传输模式链表
 };
 
 /**
@@ -112,15 +124,15 @@ struct transport {
  * 	或者其他错误
  */
 typedef int (*ADPT_SET_TRANSFER_MODE)(IN Adapter self,
-                                      IN enum transfertMode mode);
+                                      IN enum transferMode mode);
 
 /**
  * Adapter接口对象
  */
 struct adapter {
   /* 属性 */
-  const struct transport currTransport; // 当前传输协议
-  struct list_head transports; // 传输协议列表（设备支持的能力集）
+  const enum transferMode currTransMode; // 当前传输方式
+  struct list_head capabilities; // 设备支持的能力集列表
 
   /* 服务 */
   ADPT_SET_STATUS SetStatus;              // 仿真器状态指示
@@ -128,27 +140,5 @@ struct adapter {
   ADPT_RESET Reset;                       // 仿真器复位
   ADPT_SET_TRANSFER_MODE SetTransferMode; // 设置传输类型:DAP还是JTAG
 };
-
-/**
- * 在一串数据中获得第n个二进制位，n从0开始
- * lsb
- * data:数据存放的位置指针
- * n:第几位，最低位是第0位
- */
-#define GET_Nth_BIT(data, n)                                                   \
-  ((*(CAST(uint8_t *, (data)) + ((n) >> 3)) >> ((n)&0x7)) & 0x1)
-/**
- * 设置data的第n个二进制位
- * data:数据存放的位置
- * n：要修改哪一位，从0开始
- * val：要设置的位，0或者1，只使用最低位
- */
-#define SET_Nth_BIT(data, n, val)                                              \
-  do {                                                                         \
-    uint8_t tmp_data = *(CAST(uint8_t *, (data)) + ((n) >> 3));                \
-    tmp_data &= ~(1 << ((n)&0x7));                                             \
-    tmp_data |= ((val)&0x1) << ((n)&0x7);                                      \
-    *(CAST(uint8_t *, (data)) + ((n) >> 3)) = tmp_data;                        \
-  } while (0);
 
 #endif /* SRC_ADAPTER_ADAPTER_H_ */

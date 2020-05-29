@@ -65,7 +65,7 @@ static int luaApi_adapter_transmission_mode(lua_State *L) {
     lua_pushinteger(L, cmdapObj->currTransMode);
     return 1;
   } else {                                    // 设置当前传输模式
-    int type = (int)luaL_checkinteger(L, 2);  // 类型
+    enum transferMode type = CAST(enum transferMode, luaL_checkinteger(L, 2));  // 类型
     if (cmdapObj->SetTransferMode(cmdapObj, type) != ADPT_SUCCESS) {
       return luaL_error(L, "Set CMSIS-DAP transmission failed!");
     }
@@ -98,16 +98,24 @@ static int luaApi_adapter_jtag_status_change(lua_State *L) {
   Adapter cmdapObj =
       *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
   int status = (int)luaL_checkinteger(L, 2);
+  struct jtagTrasnport *jtagTransApi;
+
+  if (cmdapObj->currTransMode != ADPT_MODE_JTAG) {
+    return luaL_error(L, "CMSIS-DAP is not in JTAG transport mode!");
+  }
+  jtagTransApi = CAST(struct jtagTrasnport *, cmdapObj->currTransport);
+
   if (status < JTAG_TAP_RESET || status > JTAG_TAP_IRUPDATE) {
     return luaL_error(L, "JTAG state machine new state is illegal!");
   }
-  if (cmdapObj->JtagToState(cmdapObj, status) != ADPT_SUCCESS) {
+
+  if (jtagTransApi->JtagToState(cmdapObj, status) != ADPT_SUCCESS) {
     return luaL_error(L, "Insert to instruction queue failed!");
   }
   // 执行队列
-  if (cmdapObj->JtagCommit(cmdapObj) != ADPT_SUCCESS) {
+  if (jtagTransApi->JtagCommit(cmdapObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    cmdapObj->JtagCleanPending(cmdapObj);
+    jtagTransApi->JtagCleanPending(cmdapObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
   return 0;
@@ -128,6 +136,17 @@ static int luaApi_adapter_jtag_exchange_data(lua_State *L) {
   size_t str_len = 0;
   const char *tdi_data = lua_tolstring(L, 2, &str_len);
   unsigned int bitCnt = (unsigned int)luaL_checkinteger(L, 3);
+  struct jtagTrasnport *jtagTransApi;
+
+  // 传输模式是否合法
+  if (cmdapObj->currTransport == NULL) {
+    return luaL_error(L, "CMSIS-DAP has not been initialized!");
+  }
+  if (cmdapObj->currTransport->mode != ADPT_MODE_JTAG) {
+    return luaL_error(L, "CMSIS-DAP is not in JTAG transport mode!");
+  }
+  jtagTransApi = CAST(struct jtagTrasnport *, cmdapObj->currTransport);
+
   // 判断bit长度是否合法
   if ((str_len << 3) < bitCnt) {  // 字符串长度小于要发送的字节数
     return luaL_error(L, "TDI data length is illegal!");
@@ -140,15 +159,15 @@ static int luaApi_adapter_jtag_exchange_data(lua_State *L) {
   // 拷贝数据
   memcpy(data, tdi_data, str_len * sizeof(uint8_t));
   // 插入JTAG指令
-  if (cmdapObj->JtagExchangeData(cmdapObj, data, bitCnt) != ADPT_SUCCESS) {
+  if (jtagTransApi->JtagExchangeData(cmdapObj, data, bitCnt) != ADPT_SUCCESS) {
     free(data);
     return luaL_error(L, "Insert to instruction queue failed!");
   }
   // 执行队列
-  if (cmdapObj->JtagCommit(cmdapObj) != ADPT_SUCCESS) {
+  if (jtagTransApi->JtagCommit(cmdapObj) != ADPT_SUCCESS) {
     free(data);
     // 清理指令队列
-    cmdapObj->JtagCleanPending(cmdapObj);
+    jtagTransApi->JtagCleanPending(cmdapObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
   // 执行成功，构造lua字符串
@@ -166,13 +185,24 @@ static int luaApi_adapter_jtag_idle_wait(lua_State *L) {
   Adapter cmdapObj =
       *CAST(Adapter *, luaL_checkudata(L, 1, CMDAP_LUA_OBJECT_TYPE));
   unsigned int cycles = (unsigned int)luaL_checkinteger(L, 2);
-  if (cmdapObj->JtagIdle(cmdapObj, cycles) != ADPT_SUCCESS) {
+  struct jtagTrasnport *jtagTransApi;
+
+  // 传输模式是否合法
+  if (cmdapObj->currTransport == NULL) {
+    return luaL_error(L, "CMSIS-DAP has not been initialized!");
+  }
+  if (cmdapObj->currTransport->mode != ADPT_MODE_JTAG) {
+    return luaL_error(L, "CMSIS-DAP is not in JTAG transport mode!");
+  }
+  jtagTransApi = CAST(struct jtagTrasnport *, cmdapObj->currTransport);
+
+  if (jtagTransApi->JtagIdle(cmdapObj, cycles) != ADPT_SUCCESS) {
     return luaL_error(L, "Insert to instruction queue failed!");
   }
   // 执行队列
-  if (cmdapObj->JtagCommit(cmdapObj) != ADPT_SUCCESS) {
+  if (jtagTransApi->JtagCommit(cmdapObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    cmdapObj->JtagCleanPending(cmdapObj);
+    jtagTransApi->JtagCleanPending(cmdapObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
   return 0;
@@ -193,7 +223,18 @@ static int luaApi_adapter_jtag_pins(lua_State *L) {
   uint8_t pin_mask = (uint8_t)luaL_checkinteger(L, 2);
   uint8_t pin_data = (uint8_t)luaL_checkinteger(L, 3);
   unsigned int pin_wait = (unsigned int)luaL_checkinteger(L, 4);
-  if (cmdapObj->JtagPins(cmdapObj, pin_mask, pin_data, &pin_data, pin_wait) !=
+  struct jtagTrasnport *jtagTransApi;
+
+  // 传输模式是否合法
+  if (cmdapObj->currTransport == NULL) {
+    return luaL_error(L, "CMSIS-DAP has not been initialized!");
+  }
+  if (cmdapObj->currTransport->mode != ADPT_MODE_JTAG) {
+    return luaL_error(L, "CMSIS-DAP is not in JTAG transport mode!");
+  }
+  jtagTransApi = CAST(struct jtagTrasnport *, cmdapObj->currTransport);
+
+  if (jtagTransApi->JtagPins(cmdapObj, pin_mask, pin_data, &pin_data, pin_wait) !=
       ADPT_SUCCESS) {
     return luaL_error(L, "Read/Write JTAG pins failed!");
   }
@@ -215,6 +256,18 @@ static int luaApi_adapter_dap_single_read(lua_State *L) {
   uint32_t data;
   int type = (int)luaL_checkinteger(L, 2);
   int reg = (int)luaL_checkinteger(L, 3);
+  struct dapTransport *dapTransApi;
+
+  // 传输模式是否合法
+  if (cmdapObj->currTransport == NULL) {
+    return luaL_error(L, "CMSIS-DAP has not been initialized!");
+  }
+  if (cmdapObj->currTransport->mode != ADPT_MODE_DAP) {
+    return luaL_error(L, "CMSIS-DAP is not in DAP transport mode!");
+  }
+
+  jtagTransApi = CAST(struct jtagTrasnport *, cmdapObj->currTransport);
+
   if (cmdapObj->DapSingleRead(cmdapObj, type, reg, &data) != ADPT_SUCCESS) {
     return luaL_error(L, "Insert to instruction queue failed!");
   }
