@@ -1,17 +1,26 @@
-/***
- * @Author: Virus.V
- * @Date: 2020-05-25 14:11:03
- * @LastEditors: Virus.V
- * @LastEditTime: 2020-05-25 14:11:04
- * @Description: DAP Highlevel Transport API based on SWD
- * @Email: virusv@live.com
+/**
+ * src/Adapter/adapter_dap.h
+ * Copyright (c) 2020 Virus.V <virusv@live.com>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef SRC_ADAPTER_ADAPTER_DAP_H_
 #define SRC_ADAPTER_ADAPTER_DAP_H_
 
-#include "smartocd.h"
 #include "Adapter/adapter.h"
+#include "smartocd.h"
 
 /* DAP寄存器类型 */
 enum dapRegType {
@@ -29,8 +38,8 @@ enum dapRegType {
  * 	data:将寄存器的内容写入到该参数指定的地址
  * 返回:
  */
-typedef int (*ADPT_DAP_SINGLE_READ)(IN Adapter self, IN enum dapRegType type,
-                                    IN int reg, OUT uint32_t *data);
+typedef int (*ADPT_DAP_SINGLE_READ)(IN Adapter self, IN enum dapRegType type, IN int reg,
+                                    OUT uint32_t *data);
 
 /**
  * DapSingleWrite - 单次写:AP或者DP,寄存器地址
@@ -42,8 +51,8 @@ typedef int (*ADPT_DAP_SINGLE_READ)(IN Adapter self, IN enum dapRegType type,
  * 	data:将该参数的数据写入到寄存器
  * 返回:
  */
-typedef int (*ADPT_DAP_SINGLE_WRITE)(IN Adapter self, IN enum dapRegType type,
-                                     IN int reg, IN uint32_t data);
+typedef int (*ADPT_DAP_SINGLE_WRITE)(IN Adapter self, IN enum dapRegType type, IN int reg,
+                                     IN uint32_t data);
 
 /**
  * DapMultiRead - 多次读:AP或者DP,寄存器地址
@@ -56,9 +65,8 @@ typedef int (*ADPT_DAP_SINGLE_WRITE)(IN Adapter self, IN enum dapRegType type,
  * 	data:将寄存器的内容写入到该参数指定的数组
  * 返回:
  */
-typedef int (*ADPT_DAP_MULTI_READ)(IN Adapter self, IN enum dapRegType type,
-                                   IN int reg, IN int count,
-                                   OUT uint32_t *data);
+typedef int (*ADPT_DAP_MULTI_READ)(IN Adapter self, IN enum dapRegType type, IN int reg,
+                                   IN int count, OUT uint32_t *data);
 
 /**
  * DapMultiWrite - 多次写:AP或者DP,寄存器地址
@@ -71,9 +79,8 @@ typedef int (*ADPT_DAP_MULTI_READ)(IN Adapter self, IN enum dapRegType type,
  * 	data:将该参数指定数组的数据写入到寄存器
  * 返回:
  */
-typedef int (*ADPT_DAP_MULTI_WRITE)(IN Adapter self, IN enum dapRegType type,
-                                    IN int reg, IN int count,
-                                    IN uint32_t *data);
+typedef int (*ADPT_DAP_MULTI_WRITE)(IN Adapter self, IN enum dapRegType type, IN int reg,
+                                    IN int count, IN uint32_t *data);
 
 /**
  * DapCommit - 提交Pending的动作
@@ -98,15 +105,21 @@ typedef int (*ADPT_DAP_COMMIT)(IN Adapter self);
 typedef int (*ADPT_DAP_CLEAN_PENDING)(IN Adapter self);
 
 /* DAP 能力集 */
-struct dapCapability {
-  struct capability header;
+struct dapSkill {
+  struct skill header;
 
-  ADPT_DAP_SINGLE_READ DapSingleRead;   // 单次读:AP或者DP,寄存器编号
-  ADPT_DAP_SINGLE_WRITE DapSingleWrite; // 单次写:AP或者DP,寄存器编号
-  ADPT_DAP_MULTI_READ DapMultiRead;     // 连续读
-  ADPT_DAP_MULTI_WRITE DapMultiWrite;   // 连续写
-  ADPT_DAP_COMMIT DapCommit;            // 提交Pending动作
+  ADPT_DAP_SINGLE_READ DapSingleRead;     // 单次读:AP或者DP,寄存器编号
+  ADPT_DAP_SINGLE_WRITE DapSingleWrite;   // 单次写:AP或者DP,寄存器编号
+  ADPT_DAP_MULTI_READ DapMultiRead;       // 连续读
+  ADPT_DAP_MULTI_WRITE DapMultiWrite;     // 连续写
+  ADPT_DAP_COMMIT DapCommit;              // 提交Pending动作
   ADPT_DAP_CLEAN_PENDING DapCleanPending; // 清除Pending的动作
 };
+
+/* DAP 能力集对象 */
+typedef const struct dapSkill *DapSkill;
+
+/* 获得Adapter DAP能力接口 */
+#define ADAPTER_GET_DAP_SKILL(adapter) (CAST(DapSkill, Adapter_GetSkill((adapter), ADPT_SKILL_DAP)))
 
 #endif

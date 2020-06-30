@@ -1,8 +1,19 @@
-/*
- * cmsis-dap.h
+/**
+ * src/Adapter/cmsis-dap/cmsis-dap.h
+ * Copyright (c) 2020 Virus.V <virusv@live.com>
  *
- *  Created on: 2018-2-19
- *      Author: virusv
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef SRC_ADAPTER_CMSIS_DAP_CMSIS_DAP_H_
@@ -113,7 +124,7 @@
 #define CMDAP_PORT_AUTODETECT 0U // Autodetect Port
 #define CMDAP_PORT_DISABLED 0U   // Port Disabled (I/O pins in High-Z)
 #define CMDAP_PORT_SWD 1U        // SWD Port (SWCLK, SWDIO) + nRESET
-#define CMDAP_PORT_JTAG 2U // JTAG Port (TCK, TMS, TDI, TDO, nTRST) + nRESET
+#define CMDAP_PORT_JTAG 2U       // JTAG Port (TCK, TMS, TDI, TDO, nTRST) + nRESET
 
 // DAP Transfer Response
 #define CMDAP_TRANSFER_OK (1U << 0)
@@ -207,19 +218,19 @@ struct cmsis_dap {
   BOOL inited;              // 是否已经初始化
   BOOL connected;           // USB设备是否已连接
 
-  struct jtagCapability jtagCapObj; // jtag能力集对象
-  struct dapCapability dapCapObj;   // dap能力集对象
-  int Version;                      // CMSIS-DAP 版本
-  int MaxPcaketCount;               // 缓冲区最多容纳包的个数
-  int PacketSize;                   // 包最大长度
-  uint8_t *respBuffer;              // 应答缓冲区
-  uint32_t capablityFlag;           // 该仿真器支持的功能
+  struct jtagSkill jtagSkillObj; // jtag能力集对象
+  struct dapSkill dapSkillObj;   // dap能力集对象
+  int Version;                   // CMSIS-DAP 版本
+  int MaxPcaketCount;            // 缓冲区最多容纳包的个数
+  int PacketSize;                // 包最大长度
+  uint8_t *respBuffer;           // 应答缓冲区
+  uint32_t capablityFlag;        // 该仿真器支持的功能
 
   struct list_head JtagInsQueue; // JTAG指令队列，元素类型：struct JTAG_Command
-  struct list_head DapInsQueue; // DAP指令队列，元素类型struct DAP_Command
-  unsigned int tapCount;        // TAP个数
-  unsigned int tapIndex;        // 要操作的TAP在扫描链中的索引,
-                                // 在DAP Transfer相关函数中会用到
+  struct list_head DapInsQueue;  // DAP指令队列，元素类型struct DAP_Command
+  unsigned int tapCount;         // TAP个数
+  unsigned int tapIndex;         // 要操作的TAP在扫描链中的索引,
+                                 // 在DAP Transfer相关函数中会用到
   // TODO 实现更高版本仿真器支持 SWO、
 };
 
@@ -261,20 +272,19 @@ SWO Streaming Trace support:
  * data:数据存放的位置指针
  * n:第几位，最低位是第0位
  */
-#define GET_Nth_BIT(data, n)                                                   \
-  ((*(CAST(uint8_t *, (data)) + ((n) >> 3)) >> ((n)&0x7)) & 0x1)
+#define GET_Nth_BIT(data, n) ((*(CAST(uint8_t *, (data)) + ((n) >> 3)) >> ((n)&0x7)) & 0x1)
 /**
  * 设置data的第n个二进制位
  * data:数据存放的位置
  * n：要修改哪一位，从0开始
  * val：要设置的位，0或者1，只使用最低位
  */
-#define SET_Nth_BIT(data, n, val)                                              \
-  do {                                                                         \
-    uint8_t tmp_data = *(CAST(uint8_t *, (data)) + ((n) >> 3));                \
-    tmp_data &= ~(1 << ((n)&0x7));                                             \
-    tmp_data |= ((val)&0x1) << ((n)&0x7);                                      \
-    *(CAST(uint8_t *, (data)) + ((n) >> 3)) = tmp_data;                        \
+#define SET_Nth_BIT(data, n, val)                               \
+  do {                                                          \
+    uint8_t tmp_data = *(CAST(uint8_t *, (data)) + ((n) >> 3)); \
+    tmp_data &= ~(1 << ((n)&0x7));                              \
+    tmp_data |= ((val)&0x1) << ((n)&0x7);                       \
+    *(CAST(uint8_t *, (data)) + ((n) >> 3)) = tmp_data;         \
   } while (0);
 
 /**
@@ -299,8 +309,8 @@ void DestroyCmsisDap(IN Adapter *self);
  * 	serialNum:设备序列号
  * 返回:
  */
-int ConnectCmsisDap(IN Adapter self, IN const uint16_t *vids,
-                    IN const uint16_t *pids, IN const char *serialNum);
+int ConnectCmsisDap(IN Adapter self, IN const uint16_t *vids, IN const uint16_t *pids,
+                    IN const char *serialNum);
 
 /**
  * DisconnectCmsisDap - 断开CMSIS-DAP设备
@@ -316,8 +326,8 @@ int DisconnectCmsisDap(IN Adapter self);
  * matchRetry：如果在匹配模式下发现值不匹配，重试的次数
  * SWD、JTAG模式下均有效
  */
-int CmdapTransferConfigure(IN Adapter self, IN uint8_t idleCycle,
-                           IN uint16_t waitRetry, IN uint16_t matchRetry);
+int CmdapTransferConfigure(IN Adapter self, IN uint8_t idleCycle, IN uint16_t waitRetry,
+                           IN uint16_t matchRetry);
 
 /**
  * 设置JTAG信息

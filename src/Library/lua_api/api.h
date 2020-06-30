@@ -1,25 +1,19 @@
-/*
- * @Author: Virus.V
- * @Date: 2020-05-18 21:17:44
- * @LastEditTime: 2020-05-18 21:52:17
- * @LastEditors: Virus.V
- * @Description:
- * @FilePath: /SmartOCD/src/Component/lua_api/api.h
- * @Email: virusv@live.com
- */
-/***
- * @Author: Virus.V
- * @Date: 2020-05-15 11:30:22
- * @LastEditors: Virus.V
- * @LastEditTime: 2020-05-18 19:45:53
- * @Description: file content
- * @Email: virusv@live.com
- */
-/*
- * api.h
+/**
+ * src/Library/lua_api/api.h
+ * Copyright (c) 2020 Virus.V <virusv@live.com>
  *
- *  Created on: 2018-4-20
- *      Author: virusv
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef SRC_API_API_H_
@@ -43,9 +37,8 @@ typedef struct {
  * 初始化Lua接口
  */
 void LuaApiInit(lua_State *L);
+void LuaApi_reg_constant(lua_State *L, const luaApi_regConst *c);
+void LuaApi_create_new_type(lua_State *L, const char *tname, lua_CFunction gc, const luaL_Reg *oo, const char *tparent);
+void *LuaApi_check_object_type(lua_State *L, int ud, const char *type); 
 
-void LuaApiRegConstant(lua_State *L, const luaApi_regConst *c);
-
-void LuaApiNewTypeMetatable(lua_State *L, const char *tname, lua_CFunction gc,
-                            const luaL_Reg *oo);
 #endif /* SRC_API_API_H_ */

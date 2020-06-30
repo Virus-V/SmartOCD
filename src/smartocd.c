@@ -1,8 +1,19 @@
-/*
- * smart_ocd.c
+/**
+ * src/smartocd.c
+ * Copyright (c) 2020 Virus.V <virusv@live.com>
  *
- *  Created on: 2018-2-4
- *      Author: virusv
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "smartocd.h"
@@ -12,7 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>  // usleep
+#include <unistd.h> // usleep
 
 #include "Component/component.h"
 #include "Library/linenoise/linenoise.h"
@@ -25,12 +36,7 @@ static lua_State *globalL = NULL;
 static FILE *logFd = NULL;
 
 static const struct option long_option[] = {
-    {"logfile", required_argument, NULL, 'l'},
-    {"help", no_argument, NULL, 'h'},
-    {"file", required_argument, NULL, 'f'},
-    {"debuglevel", required_argument, NULL, 'd'},
-    {"exit", no_argument, NULL, 'e'},
-    {NULL, 0, NULL, 0}};
+    {"logfile", required_argument, NULL, 'l'}, {"help", no_argument, NULL, 'h'}, {"file", required_argument, NULL, 'f'}, {"debuglevel", required_argument, NULL, 'd'}, {"exit", no_argument, NULL, 'e'}, {NULL, 0, NULL, 0}};
 
 // 打印帮助信息
 static void printHelp(char *progName) {
@@ -95,8 +101,7 @@ static int msghandler(lua_State *L) {
         lua_type(L, -1) == LUA_TSTRING)      /* that produces a string? */
       return 1;                              /* that is the message */
     else
-      msg = lua_pushfstring(L, "(error object is a %s value)",
-                            luaL_typename(L, 1));
+      msg = lua_pushfstring(L, "(error object is a %s value)", luaL_typename(L, 1));
   }
   luaL_traceback(L, L, msg, 1); /* append a standard traceback */
   return 1;                     /* return the traceback */
@@ -114,25 +119,25 @@ static int handleScript(lua_State *L, char *script) {
     // 错误处理handle
     lua_pushcfunction(L, msghandler);
     lua_insert(L, -2);
-    globalL = L;             /* to be available to 'laction' */
-    signal(SIGINT, laction); /* set C-signal handler */
-    status = lua_pcall(L, 0, LUA_MULTRET, -2);  // -2 错误处理函数
-    signal(SIGINT, SIG_DFL);                    /* reset C-signal handler */
-    lua_remove(L, -2);                          /* 移除错误处理函数 */
+    globalL = L;                               /* to be available to 'laction' */
+    signal(SIGINT, laction);                   /* set C-signal handler */
+    status = lua_pcall(L, 0, LUA_MULTRET, -2); // -2 错误处理函数
+    signal(SIGINT, SIG_DFL);                   /* reset C-signal handler */
+    lua_remove(L, -2);                         /* 移除错误处理函数 */
   }
   return report(L, status);
 }
 
 static int docall(lua_State *L, int narg, int nres) {
   int status;
-  int base = lua_gettop(L) - narg;          /* function index */
-  lua_pushcfunction(L, msghandler);         /* push message handler */
-  lua_insert(L, base);                      /* put it under function and args */
-  globalL = L;                              /* to be available to 'laction' */
-  signal(SIGINT, laction);                  /* set C-signal handler */
-  status = lua_pcall(L, narg, nres, base);  // base is error handle function
-  signal(SIGINT, SIG_DFL);                  /* reset C-signal handler */
-  lua_remove(L, base); /* remove message handler from the stack */
+  int base = lua_gettop(L) - narg;         /* function index */
+  lua_pushcfunction(L, msghandler);        /* push message handler */
+  lua_insert(L, base);                     /* put it under function and args */
+  globalL = L;                             /* to be available to 'laction' */
+  signal(SIGINT, laction);                 /* set C-signal handler */
+  status = lua_pcall(L, narg, nres, base); // base is error handle function
+  signal(SIGINT, SIG_DFL);                 /* reset C-signal handler */
+  lua_remove(L, base);                     /* remove message handler from the stack */
   return status;
 }
 
@@ -165,13 +170,14 @@ static int pushline(lua_State *L, int firstline) {
   const char *prmt = firstline ? "SmartOCD> " : "SmartOCD>> ";
   int readstatus = (line = linenoise(prmt), line != NULL);
   // 没有输入，Ctrl-d结束
-  if (readstatus == 0) return 0;
+  if (readstatus == 0)
+    return 0;
 
   l = strlen(line);
   if (l > 0 && line[l - 1] == '\n') /* line ends with newline? */
     line[--l] = '\0';               /* remove it */
 
-  if (firstline && line[0] == '=') { /* for compatibility with 5.2, ... */
+  if (firstline && line[0] == '=') {           /* for compatibility with 5.2, ... */
     lua_pushfstring(L, "return %s", line + 1); /* change '=' to 'return' */
   } else
     lua_pushlstring(L, line, l);
@@ -233,8 +239,8 @@ static int loadline(lua_State *L) {
   if (!pushline(L, 1))                   // 读取一行压入栈中
     return -1;                           /* no input */
   if ((status = addreturn(L)) != LUA_OK) /* 'return ...' did not work? */
-    status = multiline(L); /* try as command, maybe with continuation lines */
-  lua_remove(L, 1);        /* remove line from the stack */
+    status = multiline(L);               /* try as command, maybe with continuation lines */
+  lua_remove(L, 1);                      /* remove line from the stack */
   // 栈中只有一个元素是代码块
   lua_assert(lua_gettop(L) == 1);
   return status;
@@ -247,11 +253,10 @@ static void l_print(lua_State *L) {
   int n = lua_gettop(L);
   if (n > 0) { /* any result to be printed? */
     luaL_checkstack(L, LUA_MINSTACK, "too many results to print");
-    lua_getglobal(L, "print");  //
+    lua_getglobal(L, "print"); //
     lua_insert(L, 1);
     if (lua_pcall(L, n, 0, 0) != LUA_OK)
-      log_error("%s", lua_pushfstring(L, "error calling 'print' (%s)",
-                                      lua_tostring(L, -1)));
+      log_error("%s", lua_pushfstring(L, "error calling 'print' (%s)", lua_tostring(L, -1)));
   }
 }
 
@@ -260,14 +265,12 @@ static void l_print(lua_State *L) {
  */
 // delay毫秒
 static int global_fun_sleep(lua_State *L) {
-  lua_Number delay = luaL_checknumber(L, 1);  // ms
+  lua_Number delay = luaL_checknumber(L, 1); // ms
   // 转换成微秒
   delay *= 1000;
   lua_Integer delay_us = 0;
   if (!lua_numbertointeger(delay, &delay_us)) {
-    return luaL_error(
-        L,
-        "Unable to convert milliseconds to microseconds, data is not legal?");
+    return luaL_error(L, "Unable to convert milliseconds to microseconds, data is not legal?");
   }
   if (delay_us == 0) {
     return 0;
@@ -279,9 +282,9 @@ static int global_fun_sleep(lua_State *L) {
 // 设置一些全局变量
 static int setGlobal(lua_State *L) {
   lua_pushfstring(L, "%s", VERSION);
-  lua_setglobal(L, "_SMARTOCD_VERSION");  // 版本信息
+  lua_setglobal(L, "_SMARTOCD_VERSION"); // 版本信息
   lua_pushcfunction(L, global_fun_sleep);
-  lua_setglobal(L, "sleep");  // 延时函数
+  lua_setglobal(L, "sleep"); // 延时函数
   return LUA_OK;
 }
 
@@ -291,11 +294,11 @@ static int setGlobal(lua_State *L) {
 */
 static void doREPL(lua_State *L) {
   int status;
-  while ((status = loadline(L)) != -1) {  // -1 是没有输入的时候
+  while ((status = loadline(L)) != -1) { // -1 是没有输入的时候
     if (status == LUA_OK)
-      status = docall(L, 0, LUA_MULTRET);  // 0个参数，多个返回值
+      status = docall(L, 0, LUA_MULTRET); // 0个参数，多个返回值
     if (status == LUA_OK)
-      l_print(L);  // 打印返回值
+      l_print(L); // 打印返回值
     else
       report(L, status);
   }
@@ -330,7 +333,7 @@ static int smartocd_init(lua_State *L) {
   int argc = (int)lua_tointeger(L, -2);
   char **argv = lua_touserdata(L, -1);
   int opt, logLevel = LOG_INFO;
-  int exitFlag = 0;  // 执行脚本后结束运行
+  int exitFlag = 0; // 执行脚本后结束运行
 
   // 打开标准库
   luaL_openlibs(L);
@@ -340,44 +343,45 @@ static int smartocd_init(lua_State *L) {
     return 1;
   }
   // 注册SmartOCD API接口
-  ComponentInit(L);
+  component_init(L);
   // LOG默认静默模式
   log_set_quiet(1);
   // 解析参数
   while ((opt = getopt_long(argc, argv, "f:d:ehl:", long_option, NULL)) != -1) {
     switch (opt) {
-      case 'f':  // 执行脚本
-        // log_debug("script name:%s", optarg);
-        handleScript(L, optarg);
-        break;
-      case 'd':  // 日志输出等级 -1 不输出任何日志， 转换失败则会返回0
-        logLevel = atoi(optarg);
-        if (logLevel > 0) {
-          log_set_quiet(0);  // 关闭静默模式
-          log_set_level(logLevel - 1);
-        }
-        break;
-      case 'e':  // 执行脚本后不进入交互模式，直接退出
-        exitFlag = 1;
-        break;
-      case 'h':  // help
-        printHelp(argv[0]);
-        lua_pushboolean(L, 1);
+    case 'f': // 执行脚本
+      // log_debug("script name:%s", optarg);
+      handleScript(L, optarg);
+      break;
+    case 'd': // 日志输出等级 -1 不输出任何日志， 转换失败则会返回0
+      logLevel = atoi(optarg);
+      if (logLevel > 0) {
+        log_set_quiet(0); // 关闭静默模式
+        log_set_level(logLevel - 1);
+      }
+      break;
+    case 'e': // 执行脚本后不进入交互模式，直接退出
+      exitFlag = 1;
+      break;
+    case 'h': // help
+      printHelp(argv[0]);
+      lua_pushboolean(L, 1);
+      return 1;
+      break;
+    case 'l': // logfile 日志重定向到文件
+      // FIXME 这个日志文件无法及时关闭
+      if (setLogfile(optarg)) {
+        lua_pushboolean(L, 0);
         return 1;
-        break;
-      case 'l':  // logfile 日志重定向到文件
-        // FIXME 这个日志文件无法及时关闭
-        if (setLogfile(optarg)) {
-          lua_pushboolean(L, 0);
-          return 1;
-        }
-        break;
-      default:;  // 0 error: label at end of compound statement
+      }
+      break;
+    default:; // 0 error: label at end of compound statement
     }
   }
-  if (exitFlag) goto EXIT;
+  if (exitFlag)
+    goto EXIT;
   // line noise初始化
-  linenoiseSetMultiLine(1);  // 多行编辑
+  linenoiseSetMultiLine(1); // 多行编辑
   linenoiseSetCompletionCallback(completion);
   linenoiseSetHintsCallback(hints);
   // 加载历史输入
@@ -401,7 +405,8 @@ static void printVersion() {
                   "/____/_/ /_/ /_/\\__,_/_/   \\__/\\____/\\____/_____/  ",
                   NULL};
   int i;
-  for (i = 0; logo[i]; i++) printf("%s\n", logo[i]);
+  for (i = 0; logo[i]; i++)
+    printf("%s\n", logo[i]);
 
   printf(
       " * SmartOCD v%s By: Virus.V <virusv@live.com>\n"
@@ -420,11 +425,11 @@ int main(int argc, char **argv) {
   // 设置初始日志级别
   log_set_level(LOG_INFO);
   switch (setjmp(fatalException)) {
-    default:
-      log_fatal("Fatal Error! Abort!");
-      return 1;
-    case 0:
-      break;
+  default:
+    log_fatal("Fatal Error! Abort!");
+    return 1;
+  case 0:
+    break;
   }
   // 打印logo和版本
   printVersion();

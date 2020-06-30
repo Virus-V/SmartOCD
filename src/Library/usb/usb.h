@@ -1,8 +1,19 @@
-/*
- * USB.h
+/**
+ * src/Library/usb/usb.h
+ * Copyright (c) 2020 Virus.V <virusv@live.com>
  *
- *  Created on: 2019-5-7
- *      Author: virusv
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef SRC_USB_INCLUDE_USB_H_
@@ -35,8 +46,7 @@ typedef struct usb *USB;
  *  USB_ERR_NOT_FOUND：未找到指定设备
  *  USB_ERR_INTERNAL_ERROR：内部错误
  */
-int USB_Open(IN USB self, IN uint16_t vid, IN uint16_t pid,
-             OPTIONAL const char *serial);
+int USB_Open(IN USB self, IN uint16_t vid, IN uint16_t pid, OPTIONAL const char *serial);
 
 /**
  * Close - 关闭USB设备
@@ -71,9 +81,8 @@ int USB_Reset(IN USB self);
  * 	USB_SUCCESS:操作成功
  * 	USB_ERR_INTERNAL_ERROR:内部错误
  */
-int USB_ControlTransfer(IN USB self, IN uint8_t requestType, IN uint8_t request,
-                        IN uint16_t wValue, IN uint16_t wIndex,
-                        IN unsigned char *data, IN uint16_t dataLength,
+int USB_ControlTransfer(IN USB self, IN uint8_t requestType, IN uint8_t request, IN uint16_t wValue,
+                        IN uint16_t wIndex, IN unsigned char *data, IN uint16_t dataLength,
                         IN unsigned int timeout, OUT int *count);
 
 /**
@@ -89,8 +98,8 @@ int USB_ControlTransfer(IN USB self, IN uint8_t requestType, IN uint8_t request,
  * 	USB_SUCCESS:操作成功
  * 	USB_ERR_INTERNAL_ERROR:内部错误
  */
-int USB_BulkTransfer(IN USB self, IN uint8_t endpoint, IN unsigned char *data,
-                     IN int dataLength, IN int timeout, OUT int *transferred);
+int USB_BulkTransfer(IN USB self, IN uint8_t endpoint, IN unsigned char *data, IN int dataLength,
+                     IN int timeout, OUT int *transferred);
 
 /**
  * InterruptTransfer - 中断传输
@@ -105,9 +114,8 @@ int USB_BulkTransfer(IN USB self, IN uint8_t endpoint, IN unsigned char *data,
  * 	USB_SUCCESS:操作成功
  * 	USB_ERR_INTERNAL_ERROR:内部错误
  */
-int USB_InterruptTransfer(IN USB self, IN uint8_t endpoint,
-                          IN unsigned char *data, IN int dataLength,
-                          IN int timeout, OUT int *transferred);
+int USB_InterruptTransfer(IN USB self, IN uint8_t endpoint, IN unsigned char *data,
+                          IN int dataLength, IN int timeout, OUT int *transferred);
 
 /**
  * SetConfiguration - 激活配置
@@ -153,9 +161,8 @@ int USB_ClaimInterface(IN USB self, IN uint8_t IFClass, IN uint8_t IFSubclass,
  * 	USB_SUCCESS:操作成功
  * 	USB_ERR_INTERNAL_ERROR:内部错误
  */
-typedef int (*USB_READ_WRITE)(IN USB self, IN unsigned char *data,
-                              IN int dataLength, IN int timeout,
-                              OUT int *transferred);
+typedef int (*USB_READ_WRITE)(IN USB self, IN unsigned char *data, IN int dataLength,
+                              IN int timeout, OUT int *transferred);
 
 /**
  * USB接口定义结构体

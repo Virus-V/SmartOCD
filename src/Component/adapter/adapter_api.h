@@ -1,5 +1,5 @@
 /**
- * src/Adapter/adapter_private.h
+ * src/Component/adapter/adapter_api.h
  * Copyright (c) 2020 Virus.V <virusv@live.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -16,13 +16,28 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SRC_ADAPTER_ADAPTER_PRIVATE_H_
-#define SRC_ADAPTER_ADAPTER_PRIVATE_H_
-
-#include "smartocd.h"
-#include "Library/misc/list.h"
+#ifndef __ADAPTER_API_H__
+#define __ADAPTER_API_H__ 
 
 #include "Adapter/adapter.h"
+#include "Adapter/adapter_dap.h"
+#include "Adapter/adapter_jtag.h"
 
+#define ADAPTER_LUA_OBJECT_TYPE "adapter"
+#define SKILL_DAP_LUA_OBJECT_TYPE "skill.dap"
+#define SKILL_JTAG_LUA_OBJECT_TYPE "skill.jtag"
 
-#endif /* SRC_ADAPTER_ADAPTER_PRIVATE_H_ */
+struct luaApi_jtagSkill {
+  Adapter self;
+  JtagSkill skill;
+};
+
+struct luaApi_dapSkill {
+  Adapter self;
+  DapSkill skill;  
+};
+
+void LuaApi_create_jtag_skill_object(lua_State *L, Adapter self, const struct skill *skill);
+void LuaApi_create_dap_skill_object(lua_State *L, Adapter self, const struct skill *skill);
+
+#endif

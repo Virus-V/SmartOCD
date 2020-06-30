@@ -34,23 +34,21 @@ struct luaApi_accessPort {
  */
 static void *checkAdapter(lua_State *L, int ud) {
   void *p = lua_touserdata(L, ud);
-  if (p != NULL) {                 /* value is a userdata? */
-    if (lua_getmetatable(L, ud)) { /* does it have a metatable? */
-      if (lua_getfield(L, -1, "__name") !=
-          LUA_TSTRING) {  //获得metatable的__name字段
+  if (p != NULL) {                                         /* value is a userdata? */
+    if (lua_getmetatable(L, ud)) {                         /* does it have a metatable? */
+      if (lua_getfield(L, -1, "__name") != LUA_TSTRING) {  //获得metatable的__name字段
         lua_pop(L, 2);
         return NULL;
       }
       const char *typeName = lua_tostring(L, -1);  // 获得类型字符串
-      if (strncmp(typeName, "adapter", 7) !=
-          0) {  // 判断是否是Adapter类型的metatable
+      if (strncmp(typeName, "adapter", 7) != 0) {  // 判断是否是Adapter类型的metatable
         lua_pop(L, 2);
         return NULL;
       }
       luaL_getmetatable(L, typeName); /* get correct metatable */
       if (!lua_rawequal(L, -1, -3))   /* not the same? */
-        p = NULL;    /* value is a userdata with wrong metatable */
-      lua_pop(L, 3); /* remove both metatables */
+        p = NULL;                     /* value is a userdata with wrong metatable */
+      lua_pop(L, 3);                  /* remove both metatables */
       return p;
     }
   }
@@ -72,8 +70,7 @@ static int luaApi_adiv5_create_dap(lua_State *L) {
   }
   Adapter adapterObj = *CAST(Adapter *, udata);
 
-  struct luaApi_dap *luaDap =
-      lua_newuserdata(L, sizeof(struct luaApi_dap));  // +1
+  struct luaApi_dap *luaDap = lua_newuserdata(L, sizeof(struct luaApi_dap));  // +1
   luaDap->dap = ADIv5_CreateDap(adapterObj);
   if (luaDap->dap == NULL) {
     return luaL_error(L, "Failed to create ADIv5 DAP object.");
@@ -100,10 +97,8 @@ static int luaApi_adiv5_find_access_port(lua_State *L) {
   int type = luaL_checkinteger(L, 2);
   int bus = luaL_optinteger(L, 3, 0);
   // 创建AP对象
-  struct luaApi_accessPort *luaAp =
-      lua_newuserdata(L, sizeof(struct luaApi_accessPort));  // +1
-  if (dapObj->dap->FindAccessPort(dapObj->dap, (enum AccessPortType)type,
-                                  (enum busType)bus,
+  struct luaApi_accessPort *luaAp = lua_newuserdata(L, sizeof(struct luaApi_accessPort));  // +1
+  if (dapObj->dap->FindAccessPort(dapObj->dap, (enum AccessPortType)type, (enum busType)bus,
                                   &luaAp->ap) != ADI_SUCCESS) {
     return luaL_error(L, "Failed to find the AP.");
   }
@@ -126,8 +121,7 @@ static int luaApi_adiv5_find_access_port(lua_State *L) {
  * 1#: rom table
  */
 static int luaApi_adiv5_ap_mem_rom_table(lua_State *L) {
-  struct luaApi_accessPort *luaApObj =
-      luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
+  struct luaApi_accessPort *luaApObj = luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
   if (luaApObj->ap->type != AccessPort_Memory) {
     return luaL_error(L, "Not a memory access port.");
   }
@@ -144,23 +138,20 @@ static int luaApi_adiv5_ap_mem_rom_table(lua_State *L) {
  * 1#：数据
  */
 static int luaApi_adiv5_ap_mem_csw(lua_State *L) {
-  struct luaApi_accessPort *luaApObj =
-      luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
+  struct luaApi_accessPort *luaApObj = luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
   uint32_t data = 0;
   if (luaApObj->ap->type != AccessPort_Memory) {
     return luaL_error(L, "Not a memory access port.");
   }
   if (lua_isnone(L, 2)) {  // 读CSW
-    if (luaApObj->ap->Interface.Memory.ReadCSW(luaApObj->ap, &data) !=
-        ADI_SUCCESS) {
+    if (luaApObj->ap->Interface.Memory.ReadCSW(luaApObj->ap, &data) != ADI_SUCCESS) {
       return luaL_error(L, "Read CSW register failed!");
     }
     lua_pushinteger(L, data);
     return 1;
   } else {  // 写CSW
     data = (uint32_t)luaL_checkinteger(L, 2);
-    if (luaApObj->ap->Interface.Memory.WriteCSW(luaApObj->ap, data) !=
-        ADI_SUCCESS) {
+    if (luaApObj->ap->Interface.Memory.WriteCSW(luaApObj->ap, data) != ADI_SUCCESS) {
       return luaL_error(L, "Write CSW register failed!");
     }
     return 0;
@@ -173,8 +164,7 @@ static int luaApi_adiv5_ap_mem_csw(lua_State *L) {
  * 返回：空
  */
 static int luaApi_adiv5_ap_mem_abort(lua_State *L) {
-  struct luaApi_accessPort *luaApObj =
-      luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
+  struct luaApi_accessPort *luaApObj = luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
   if (luaApObj->ap->type != AccessPort_Memory) {
     return luaL_error(L, "Not a memory access port.");
   }
@@ -194,24 +184,21 @@ static int luaApi_adiv5_ap_mem_abort(lua_State *L) {
  * 1#：数据
  */
 static int luaApi_adiv5_ap_mem_rw_8(lua_State *L) {
-  struct luaApi_accessPort *luaApObj =
-      luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
+  struct luaApi_accessPort *luaApObj = luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
   uint64_t addr = luaL_checkinteger(L, 2);
   uint8_t data = 0;
   if (luaApObj->ap->type != AccessPort_Memory) {
     return luaL_error(L, "Not a memory access port.");
   }
   if (lua_isnone(L, 3)) {  // 读内存
-    if (luaApObj->ap->Interface.Memory.Read8(luaApObj->ap, addr, &data) !=
-        ADI_SUCCESS) {
+    if (luaApObj->ap->Interface.Memory.Read8(luaApObj->ap, addr, &data) != ADI_SUCCESS) {
       return luaL_error(L, "Read byte memory %p failed!", addr);
     }
     lua_pushinteger(L, data);
     return 1;
   } else {  // 写内存
     data = (uint8_t)luaL_checkinteger(L, 3);
-    if (luaApObj->ap->Interface.Memory.Write8(luaApObj->ap, addr, data) !=
-        ADI_SUCCESS) {
+    if (luaApObj->ap->Interface.Memory.Write8(luaApObj->ap, addr, data) != ADI_SUCCESS) {
       return luaL_error(L, "Write byte memory %p failed!", addr);
     }
     return 0;
@@ -219,24 +206,21 @@ static int luaApi_adiv5_ap_mem_rw_8(lua_State *L) {
 }
 
 static int luaApi_adiv5_ap_mem_rw_16(lua_State *L) {
-  struct luaApi_accessPort *luaApObj =
-      luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
+  struct luaApi_accessPort *luaApObj = luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
   uint64_t addr = luaL_checkinteger(L, 2);
   uint16_t data = 0;
   if (luaApObj->ap->type != AccessPort_Memory) {
     return luaL_error(L, "Not a memory access port.");
   }
   if (lua_isnone(L, 3)) {  // 读内存
-    if (luaApObj->ap->Interface.Memory.Read16(luaApObj->ap, addr, &data) !=
-        ADI_SUCCESS) {
+    if (luaApObj->ap->Interface.Memory.Read16(luaApObj->ap, addr, &data) != ADI_SUCCESS) {
       return luaL_error(L, "Read halfword memory %p failed!", addr);
     }
     lua_pushinteger(L, data);
     return 1;
   } else {  // 写内存
     data = (uint16_t)luaL_checkinteger(L, 3);
-    if (luaApObj->ap->Interface.Memory.Write16(luaApObj->ap, addr, data) !=
-        ADI_SUCCESS) {
+    if (luaApObj->ap->Interface.Memory.Write16(luaApObj->ap, addr, data) != ADI_SUCCESS) {
       return luaL_error(L, "Write halfword memory %p failed!", addr);
     }
     return 0;
@@ -244,24 +228,21 @@ static int luaApi_adiv5_ap_mem_rw_16(lua_State *L) {
 }
 
 static int luaApi_adiv5_ap_mem_rw_32(lua_State *L) {
-  struct luaApi_accessPort *luaApObj =
-      luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
+  struct luaApi_accessPort *luaApObj = luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
   uint64_t addr = luaL_checkinteger(L, 2);
   uint32_t data;
   if (luaApObj->ap->type != AccessPort_Memory) {
     return luaL_error(L, "Not a memory access port.");
   }
   if (lua_isnone(L, 3)) {  // 读内存
-    if (luaApObj->ap->Interface.Memory.Read32(luaApObj->ap, addr, &data) !=
-        ADI_SUCCESS) {
+    if (luaApObj->ap->Interface.Memory.Read32(luaApObj->ap, addr, &data) != ADI_SUCCESS) {
       return luaL_error(L, "Read word memory %p failed!", addr);
     }
     lua_pushinteger(L, data);
     return 1;
   } else {  // 写内存
     data = (uint32_t)luaL_checkinteger(L, 3);
-    if (luaApObj->ap->Interface.Memory.Write32(luaApObj->ap, addr, data) !=
-        ADI_SUCCESS) {
+    if (luaApObj->ap->Interface.Memory.Write32(luaApObj->ap, addr, data) != ADI_SUCCESS) {
       return luaL_error(L, "Write word memory %p failed!", addr);
     }
     return 0;
@@ -279,8 +260,7 @@ static int luaApi_adiv5_ap_mem_rw_32(lua_State *L) {
  * 1#:读取的数据 字符串形式
  */
 static int luaApi_adiv5_ap_read_mem_block(lua_State *L) {
-  struct luaApi_accessPort *luaApObj =
-      luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
+  struct luaApi_accessPort *luaApObj = luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
   uint64_t addr = luaL_checkinteger(L, 2);
   int addrIncMode = (int)luaL_checkinteger(L, 3);
   int dataSize = (int)luaL_checkinteger(L, 4);
@@ -289,8 +269,7 @@ static int luaApi_adiv5_ap_read_mem_block(lua_State *L) {
     return luaL_error(L, "Not a memory access port.");
   }
   uint8_t *buff = (uint8_t *)lua_newuserdata(L, transCnt * sizeof(uint32_t));
-  if (luaApObj->ap->Interface.Memory.BlockRead(luaApObj->ap, addr, addrIncMode,
-                                               dataSize, transCnt,
+  if (luaApObj->ap->Interface.Memory.BlockRead(luaApObj->ap, addr, addrIncMode, dataSize, transCnt,
                                                buff) != ADI_SUCCESS) {
     return luaL_error(L, "Block read failed!");
   }
@@ -307,8 +286,7 @@ static int luaApi_adiv5_ap_read_mem_block(lua_State *L) {
  * 5#:要写的数据（字符串）
  */
 static int luaApi_adiv5_ap_write_mem_block(lua_State *L) {
-  struct luaApi_accessPort *luaApObj =
-      luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
+  struct luaApi_accessPort *luaApObj = luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
   uint64_t addr = luaL_checkinteger(L, 2);
   int addrIncMode = (int)luaL_checkinteger(L, 3);
   int dataSize = (int)luaL_checkinteger(L, 4);
@@ -318,13 +296,10 @@ static int luaApi_adiv5_ap_write_mem_block(lua_State *L) {
     return luaL_error(L, "Not a memory access port.");
   }
   if (transCnt & 0x3) {
-    return luaL_error(
-        L,
-        "The length of the data to be written is not a multiple of the word.");
+    return luaL_error(L, "The length of the data to be written is not a multiple of the word.");
   }
-  if (luaApObj->ap->Interface.Memory.BlockWrite(luaApObj->ap, addr, addrIncMode,
-                                                dataSize, (int)transCnt >> 2,
-                                                buff) != ADI_SUCCESS) {
+  if (luaApObj->ap->Interface.Memory.BlockWrite(luaApObj->ap, addr, addrIncMode, dataSize,
+                                                (int)transCnt >> 2, buff) != ADI_SUCCESS) {
     return luaL_error(L, "Block write failed!");
   }
   return 0;
@@ -339,8 +314,7 @@ static int luaApi_adiv5_ap_write_mem_block(lua_State *L) {
  * 2#：pid 64位
  */
 static int luaApi_adiv5_ap_get_pid_cid(lua_State *L) {
-  struct luaApi_accessPort *luaApObj =
-      luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
+  struct luaApi_accessPort *luaApObj = luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE);
   uint64_t base = luaL_checkinteger(L, 2);
   uint32_t cid;
   uint64_t pid;
@@ -371,8 +345,7 @@ static int luaApi_adiv5_gc(lua_State *L) {
  */
 static int luaApi_adiv5_access_port_gc(lua_State *L) {
   struct luaApi_accessPort *luaAp =
-      CAST(struct luaApi_accessPort *,
-           luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE));
+      CAST(struct luaApi_accessPort *, luaL_checkudata(L, 1, ADIV5_AP_MEM_LUA_OBJECT_TYPE));
   log_trace("[GC] Access Port");
   // 取消引用DAP对象
   luaL_unref(L, LUA_REGISTRYINDEX, luaAp->reference);
@@ -380,8 +353,7 @@ static int luaApi_adiv5_access_port_gc(lua_State *L) {
 }
 
 // 模块静态函数
-static const luaL_Reg lib_adiv5_f[] = {{"Create", luaApi_adiv5_create_dap},
-                                       {NULL, NULL}};
+static const luaL_Reg lib_adiv5_f[] = {{"Create", luaApi_adiv5_create_dap}, {NULL, NULL}};
 
 // 模块常量
 static const luaApi_regConst lib_adiv5_const[] = {
@@ -407,9 +379,9 @@ static const luaApi_regConst lib_adiv5_const[] = {
 
 // 初始化ADIv5库
 int luaopen_adiv5(lua_State *L) {
-  lua_createtable(L, 0,
-                  sizeof(lib_adiv5_const) /
-                      sizeof(lib_adiv5_const[0]));  // 预分配索引空间，提高效率
+  lua_createtable(
+      L, 0,
+      sizeof(lib_adiv5_const) / sizeof(lib_adiv5_const[0]));  // 预分配索引空间，提高效率
   // 注册常量到模块中
   LuaApiRegConstant(L, lib_adiv5_const);
   // 将函数注册进去
@@ -443,10 +415,9 @@ static const luaL_Reg lib_access_port_oo[] = {
 // 注册接口调用
 static int RegisterApi_ADIv5(lua_State *L, void *opaque) {
   // 创建
-  LuaApiNewTypeMetatable(L, ADIV5_LUA_OBJECT_TYPE, luaApi_adiv5_gc,
-                         lib_adiv5_oo);
-  LuaApiNewTypeMetatable(L, ADIV5_AP_MEM_LUA_OBJECT_TYPE,
-                         luaApi_adiv5_access_port_gc, lib_access_port_oo);
+  LuaApiNewTypeMetatable(L, ADIV5_LUA_OBJECT_TYPE, luaApi_adiv5_gc, lib_adiv5_oo);
+  LuaApiNewTypeMetatable(L, ADIV5_AP_MEM_LUA_OBJECT_TYPE, luaApi_adiv5_access_port_gc,
+                         lib_access_port_oo);
   luaL_requiref(L, "ADIv5", luaopen_adiv5, 0);
   lua_pop(L, 1);
 

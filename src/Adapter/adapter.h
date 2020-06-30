@@ -1,9 +1,19 @@
-/*
- * adapter.h
- * SmartOCD
+/**
+ * src/Adapter/adapter.h
+ * Copyright (c) 2020 Virus.V <virusv@live.com>
  *
- *  Created on: 2018-1-29
- *      Author: virusv
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef SRC_ADAPTER_INCLUDE_ADAPTER_H_
@@ -22,12 +32,12 @@ enum {
   ADPT_ERR_PROTOCOL_ERROR,  // 传输协议错误
   ADPT_ERR_NO_DEVICE,       // 找不到设备
   ADPT_ERR_UNSUPPORT,       // 不支持的操作
-  ADPT_ERR_INTERNAL_ERROR, // 内部错误,不是由于Adapter功能部分造成的失败
-  ADPT_ERR_BAD_PARAMETER, // 无效的参数
+  ADPT_ERR_INTERNAL_ERROR,  // 内部错误,不是由于Adapter功能部分造成的失败
+  ADPT_ERR_BAD_PARAMETER,   // 无效的参数
 };
 
 /* 仿真器对象 */
-typedef struct adapter *Adapter;
+typedef const struct adapter *Adapter;
 
 // 仿真器的状态
 enum adapterStatus {
@@ -97,20 +107,20 @@ enum transferMode {
 /**
  * 仿真器能力类型
  */
-enum capabilityType {
+enum skillType {
   // CMSIS-DAP或者STLINK等针对ARM ADI的仿真器
-  ADPT_CAP_DAP,
+  ADPT_SKILL_DAP,
   // 传统仿真器的JTAG接口
-  ADPT_CAP_JTAG,
-  ADPT_CAP_MAX
+  ADPT_SKILL_JTAG,
+  ADPT_SKILL_MAX
 };
 /**
  * 仿真器能力集
  * 设备所支持的能力
  */
-struct capability {
-  enum capabilityType type;    // 能力集类型
-  struct list_head capabilities; // 传输模式链表
+struct skill {
+  enum skillType type;     // 能力集类型
+  struct list_head skills; // 传输模式链表
 };
 
 /**
@@ -123,16 +133,17 @@ struct capability {
  * 	ADPT_FAILED:失败
  * 	或者其他错误
  */
-typedef int (*ADPT_SET_TRANSFER_MODE)(IN Adapter self,
-                                      IN enum transferMode mode);
+typedef int (*ADPT_SET_TRANSFER_MODE)(IN Adapter self, IN enum transferMode mode);
 
 /**
  * Adapter接口对象
  */
 struct adapter {
   /* 属性 */
-  const enum transferMode currTransMode; // 当前传输方式
-  struct list_head capabilities; // 设备支持的能力集列表
+  enum adapterStatus currStatus;   // 当前状态
+  unsigned int currFrequent;       // 当前频率
+  enum transferMode currTransMode; // 当前传输方式
+  struct list_head skills;         // 设备支持的能力集列表
 
   /* 服务 */
   ADPT_SET_STATUS SetStatus;              // 仿真器状态指示
@@ -141,4 +152,11 @@ struct adapter {
   ADPT_SET_TRANSFER_MODE SetTransferMode; // 设置传输类型:DAP还是JTAG
 };
 
+/**
+ * 获取设备能力集
+ * 参数:
+ *  adapter:Adapter对象
+ *  type:Skill类型
+ **/
+const struct skill *Adapter_GetSkill(Adapter adapter, enum skillType type);
 #endif /* SRC_ADAPTER_ADAPTER_H_ */

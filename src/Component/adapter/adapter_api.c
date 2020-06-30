@@ -1,26 +1,30 @@
-/*
- * @Author: Virus.V
- * @Date: 2020-05-18 21:51:33
- * @LastEditTime: 2020-05-29 16:42:12
- * @LastEditors: Virus.V
- * @Description:
- * @FilePath: /SmartOCD/src/Component/adapter/adapter_api.c
- * @Email: virusv@live.com
- */
-/*
- * adapter.c
+/**
+ * src/Component/adapter/adapter_api.c
+ * Copyright (c) 2020 Virus.V <virusv@live.com>
  *
- *  Created on: 2019-5-16
- *      Author: virusv
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "Adapter/adapter_jtag.h"
-#include "Adapter/adapter_dap.h"
+#include "Adapter/adapter.h"
+
+#include "Component/adapter/adapter_api.h"
 
 #include "Component/component.h"
 #include "Library/lua_api/api.h"
 
 // 模块常量
+// XXX 在metatable里防止常量被改写
 static const luaApi_regConst lib_adapter_const[] = {
     // 传输方式
     {"JTAG", ADPT_MODE_JTAG},
@@ -62,15 +66,167 @@ static const luaApi_regConst lib_adapter_const[] = {
     {"STATUS_IDLE", ADPT_STATUS_IDLE},
     {NULL, 0}};
 
+/**
+ * 设置/读取Adapter状态
+ * 第一个参数：AdapterObject指针
+ * 第二个参数：状态：CONNECTED、DISCONNECT、RUNING、IDLE
+ * 返回：无
+ */
+static int luaApi_adapter_status(lua_State *L) {
+  // 获得adapter接口对象
+  void *udata = LuaApi_check_object_type(L, 1, ADAPTER_LUA_OBJECT_TYPE);
+  if (udata == NULL) {
+    return luaL_error(L, "Not a vailed Adapter object!");
+  }
+  Adapter adapterObj = *CAST(Adapter *, udata);
+
+  if (lua_gettop(L) == 1) {
+    lua_pushinteger(L, adapterObj->currStatues);
+    return 1;
+  } else {
+    int type = (int)luaL_checkinteger(L, 2); // 类型
+    if (adapterObj->SetStatus(adapterObj, type) != ADPT_SUCCESS) {
+      return luaL_error(L, "Set adapter status failed!");
+    }
+    return 0;
+  }
+}
+
+/**
+ * 设置仿真器时钟
+ * 第一个参数：AdapterObject指针
+ * 第二个参数：整数，频率 Hz
+ */
+static int luaApi_adapter_frequent(lua_State *L) {
+  void *udata = LuaApi_check_object_type(L, 1, ADAPTER_LUA_OBJECT_TYPE);
+  if (udata == NULL) {
+    return luaL_error(L, "Not a vailed Adapter object!");
+  }
+  Adapter adapterObj = *CAST(Adapter *, udata);
+
+  if (lua_gettop(L) == 1) {
+    lua_pushinteger(L, adapterObj->currFrequent);
+    return 1;
+  } else {
+    int clockHz = (int)luaL_checkinteger(L, 2);
+    if (adapterObj->SetFrequent(adapterObj, clockHz) != ADPT_SUCCESS) {
+      return luaL_error(L, "Set adapter clock failed!");
+    }
+    return 0;
+  }
+}
+
+/**
+ * 选择仿真器的传输模式
+ * 第一个参数：AdapterObject指针
+ * 第二个参数：传输方式类型adapter.SWD或adapter.JTAG。。
+ * 如果不提供第二个参数，则表示读取当前活动的传输模式
+ * 返回值：无返回值或者1返回值
+ * 1#：当前活动的传输模式
+ */
+static int luaApi_adapter_transmission_mode(lua_State *L) {
+  void *udata = LuaApi_check_object_type(L, 1, ADAPTER_LUA_OBJECT_TYPE);
+  if (udata == NULL) {
+    return luaL_error(L, "Not a vailed Adapter object!");
+  }
+  Adapter adapterObj = *CAST(Adapter *, udata);
+
+  if (lua_gettop(L) == 1) { // 读取当前活动传输模式
+    lua_pushinteger(L, adapterObj->currTransMode);
+    return 1;
+  } else {                                                                     // 设置当前传输模式
+    enum transferMode type = CAST(enum transferMode, luaL_checkinteger(L, 2)); // 类型
+    if (adapterObj->SetTransferMode(adapterObj, type) != ADPT_SUCCESS) {
+      return luaL_error(L, "Set adapter transmission failed!");
+    }
+    return 0;
+  }
+}
+
+/**
+ * 获取Adapter的能力集
+ * 1#: adapter对象
+ * 2#: 能力集类型
+ * 返回: 能力集对象，
+ *      如果没有指定的能力集，返回nil
+ *      其他错误抛出异常
+ */
+static int luaApi_adapter_get_skill(lua_State *L) {
+  void *udata = LuaApi_check_object_type(L, 1, ADAPTER_LUA_OBJECT_TYPE);
+  if (udata == NULL) {
+    return luaL_error(L, "Not a vailed Adapter object!");
+  }
+  Adapter adapterObj = *CAST(Adapter *, udata);
+
+  enum skillType skill_type = (enum skillType)luaL_checkinteger(L, 2);
+  if (skill_type < 0 || skill_type >= ADPT_SKILL_MAX) {
+    return luaL_argerror(L, 2, "Invaild Skill Type!");
+  }
+
+  struct skill *skill = Adapter_GetSkill(adapterObj, skill_type);
+  if (skill == NULL) {
+    lua_pushnil(L);
+    return 1;
+  }
+
+  switch (skill_type) {
+  case ADPT_SKILL_DAP:
+    LuaApi_create_dap_skill_object(L, skill);
+    break;
+  case ADPT_SKILL_JTAG:
+    LuaApi_create_jtag_skill_object(L, skill);
+    break;
+
+  default:
+    return luaL_error(L, "Unknow skill type");
+  }
+
+  return 1;
+}
+
+/**
+ * 复位Target
+ * 1#:adapter对象
+ * 2#：复位类型
+ * 无返回值，失败会报错
+ */
+static int luaApi_adapter_reset(lua_State *L) {
+  void *udata = LuaApi_check_object_type(L, 1, ADAPTER_LUA_OBJECT_TYPE);
+  if (udata == NULL) {
+    return luaL_error(L, "Not a vailed Adapter object!");
+  }
+  Adapter adapterObj = *CAST(Adapter *, udata);
+
+  int type = (int)luaL_optinteger(L, 2, ADPT_RESET_SYSTEM_RESET);
+  if (adapterObj->Reset(adapterObj, type) != ADPT_SUCCESS) {
+    return luaL_error(L, "Reset adapter failed!");
+  }
+  return 0;
+}
+
+static const luaL_Reg lib_adapter_oo[] = {
+    // 基本函数
+    {"Status", luaApi_adapter_status},
+    {"Frequent", luaApi_adapter_frequent},
+    {"TransferMode", luaApi_adapter_transmission_mode},
+    {"GetSkill", luaApi_adapter_get_skill},
+    {"Reset", luaApi_adapter_reset},
+
+    {NULL, NULL}};
+
 // 初始化Adapter库
 int luaopen_adapter(lua_State *L) {
   // create module table
-  lua_createtable(
-      L, 0,
-      sizeof(lib_adapter_const) /
-          sizeof(lib_adapter_const[0]));  // 预分配索引空间，提高效率
-  // 注册常量到模块中
-  LuaApiRegConstant(L, lib_adapter_const);
+  lua_createtable(L, 0, sizeof(lib_adapter_const) / sizeof(lib_adapter_const[0]));
+  
+  // 注册Adapter常量到模块中
+  LuaApi_reg_constant(L, lib_adapter_const);
+  
+  // 注册skill类型、Adapter类型
+  LuaApi_create_new_type(L, ADAPTER_LUA_OBJECT_TYPE, NULL, lib_adapter_oo, NULL);
+  LuaApi_dap_skill_type_register(L);
+  LuaApi_jtag_skill_type_register(L);
+
   return 1;
 }
 

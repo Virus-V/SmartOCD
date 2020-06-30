@@ -1,18 +1,29 @@
-/*
- * smartocd.h
+/**
+ * src/smartocd.h
+ * Copyright (c) 2020 Virus.V <virusv@live.com>
  *
- *  Created on: 2018-1-19
- *      Author: virusv
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef SRC_SMART_OCD_H_
 #define SRC_SMART_OCD_H_
 
-#include <stdlib.h>
 #include <assert.h>
 #include <inttypes.h>
 #include <setjmp.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #ifdef HAVE_CONFIG
 #include "global_config.h"
@@ -55,6 +66,7 @@ extern jmp_buf fatalException;
 #define BYTE_IDX(data, idx) (((data) >> (idx * 8)) & 0xff)
 // 接口常量值初始化(只可以在结构体中的常量使用):
 // type:const常量类型,obj:const常量对象,val:const常量值.
+// FIXME 名字改成INTERFACE_PROTO_SET更合适
 #define INTERFACE_CONST_INIT(type, obj, val) (*((type *)&(obj)) = (type)(val))
 
 // 用户输入lua命令历史记录文件

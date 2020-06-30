@@ -1,10 +1,19 @@
-/***
- * @Author: Virus.V
- * @Date: 2020-05-25 12:53:07
- * @LastEditors: Virus.V
- * @LastEditTime: 2020-05-25 14:05:51
- * @Description: JTAG Transport API
- * @Email: virusv@live.com
+/**
+ * src/Adapter/adapter_jtag.h
+ * Copyright (c) 2020 Virus.V <virusv@live.com>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef SRC_ADAPTER_ADAPTER_JTAG_H_
@@ -44,9 +53,8 @@
  * 	ADPT_FAILED:失败
  * 	或者其他错误
  */
-typedef int (*ADPT_JTAG_PINS)(IN Adapter self, IN uint8_t pinMask,
-                              IN uint8_t pinDataOut, OUT uint8_t *pinDataIn,
-                              IN unsigned int pinWait);
+typedef int (*ADPT_JTAG_PINS)(IN Adapter self, IN uint8_t pinMask, IN uint8_t pinDataOut,
+                              OUT uint8_t *pinDataIn, IN unsigned int pinWait);
 
 /**
  * JtagExchangeData - 交换TDI和TDO的数据
@@ -60,8 +68,7 @@ typedef int (*ADPT_JTAG_PINS)(IN Adapter self, IN uint8_t pinMask,
  * 	ADPT_FAILED:失败
  * 	或者其他错误
  */
-typedef int (*ADPT_JTAG_EXCHANGE_DATA)(IN Adapter self, IN uint8_t *data,
-                                       IN unsigned int bitCount);
+typedef int (*ADPT_JTAG_EXCHANGE_DATA)(IN Adapter self, IN uint8_t *data, IN unsigned int bitCount);
 
 /**
  * JtagIdle - 在Idle状态等待几个周期
@@ -81,8 +88,7 @@ typedef int (*ADPT_JTAG_IDLE)(IN Adapter self, IN unsigned int clkCount);
  * 	toState:JTAG状态机的最终状态
  * 返回:
  */
-typedef int (*ADPT_JTAG_TO_STATE)(IN Adapter self,
-                                  IN enum JTAG_TAP_State toState);
+typedef int (*ADPT_JTAG_TO_STATE)(IN Adapter self, IN enum JTAG_TAP_State toState);
 
 /**
  * JtagCommit - 提交Pending的动作
@@ -107,17 +113,23 @@ typedef int (*ADPT_JTAG_COMMIT)(IN Adapter self);
 typedef int (*ADPT_JTAG_CLEAN_PENDING)(IN Adapter self);
 
 /* JTAG 传输接口 */
-struct jtagCapability {
-  struct capability header;
+struct jtagSkill {
+  struct skill header;
 
   const enum JTAG_TAP_State currState; // JTAG 当前状态
 
   ADPT_JTAG_PINS JtagPins;                  // 读写仿真器的JTAG引脚
   ADPT_JTAG_EXCHANGE_DATA JtagExchangeData; // 交换TDI和TDO的数据
   ADPT_JTAG_IDLE JtagIdle;                  // 在Idle状态等待几个周期
-  ADPT_JTAG_TO_STATE JtagToState; // 切换到JTAG状态机的某个状态
-  ADPT_JTAG_COMMIT JtagCommit;    // 提交Pending的动作
+  ADPT_JTAG_TO_STATE JtagToState;           // 切换到JTAG状态机的某个状态
+  ADPT_JTAG_COMMIT JtagCommit;              // 提交Pending的动作
   ADPT_JTAG_CLEAN_PENDING JtagCleanPending; // 清除pending的动作
 };
+
+/* JTAG 能力集对象 */
+typedef const struct jtagSkill *JtagSkill;
+
+/* 获得JTAG 能力接口 */
+#define ADAPTER_GET_JTAG_SKILL(adapter) (CAST(JtagSkill, Adapter_GetSkill((adapter), ADPT_SKILL_JTAG)))
 
 #endif

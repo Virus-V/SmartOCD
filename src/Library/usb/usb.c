@@ -1,10 +1,19 @@
-/*
- * SmartOCD
- * usb.c
+/**
+ * src/Library/usb/usb.c
+ * Copyright (c) 2020 Virus.V <virusv@live.com>
  *
- *  Created on: 2018-1-5
- *  Author:  Virus.V <virusv@live.com>
- * LICENSED UNDER GPL.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifdef HAVE_CONFIG
@@ -19,30 +28,28 @@
 #include "private_usb.h"
 #include "smartocd.h"
 
-static int bulkWrite(USB self, unsigned char *data, int dataLength, int timeout,
-                     int *transferred);
-static int bulkRead(USB self, unsigned char *data, int dataLength, int timeout,
-                    int *transferred);
-static int interruptWrite(USB self, unsigned char *data, int dataLength,
-                          int timeout, int *transferred);
-static int interruptRead(USB self, unsigned char *data, int dataLength,
-                         int timeout, int *transferred);
-static int unsupportRW(USB self, unsigned char *data, int dataLength,
-                       int timeout, int *transferred);
+static int bulkWrite(USB self, unsigned char *data, int dataLength, int timeout, int *transferred);
+static int bulkRead(USB self, unsigned char *data, int dataLength, int timeout, int *transferred);
+static int interruptWrite(USB self, unsigned char *data, int dataLength, int timeout,
+                          int *transferred);
+static int interruptRead(USB self, unsigned char *data, int dataLength, int timeout,
+                         int *transferred);
+static int unsupportRW(USB self, unsigned char *data, int dataLength, int timeout,
+                       int *transferred);
 
 /**
  * 检查设备的序列号与指定序列号是否一致
  */
-static int usbStrDescriptorMatch(libusb_device_handle *devHandle,
-                                 uint8_t descIndex, const char *snString) {
+static int usbStrDescriptorMatch(libusb_device_handle *devHandle, uint8_t descIndex,
+                                 const char *snString) {
   int retcode;
   // 描述字符串缓冲区
-  char descString[256 + 1];  // XXX 较大的数组在栈中分配！
+  char descString[256 + 1]; // XXX 较大的数组在栈中分配！
 
-  if (descIndex == 0) return USB_ERR_BAD_PARAMETER;
+  if (descIndex == 0)
+    return USB_ERR_BAD_PARAMETER;
 
-  retcode = libusb_get_string_descriptor_ascii(devHandle, descIndex,
-                                               (unsigned char *)descString,
+  retcode = libusb_get_string_descriptor_ascii(devHandle, descIndex, (unsigned char *)descString,
                                                sizeof(descString) - 1);
   if (retcode < 0) {
     log_error("libusb_get_string_descriptor_ascii() return code:%d", retcode);
@@ -64,20 +71,17 @@ static int usbStrDescriptorMatch(libusb_device_handle *devHandle,
 /**
  * 根据pid和vid打开USB设备
  */
-int USB_Open(USB self, const uint16_t vid, const uint16_t pid,
-                   const char *serial) {
+int USB_Open(USB self, const uint16_t vid, const uint16_t pid, const char *serial) {
   assert(self != NULL);
 
-  struct _usb_private *usbObj =
-      container_of(self, struct _usb_private, usbInterface);
+  struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
   int devCount, index;
   libusb_device_handle *devHandle = NULL;
 
   // 获得USB设备总数
   devCount = libusb_get_device_list(usbObj->libusbContext, &usbObj->devs);
   if (devCount < 0) {
-    log_error("libusb_get_device_list() failed. error:%s.",
-              libusb_error_name(devCount));
+    log_error("libusb_get_device_list() failed. error:%s.", libusb_error_name(devCount));
     return USB_ERR_INTERNAL_ERROR;
   } else {
     log_debug("Found %d usb devices.", devCount);
@@ -91,20 +95,19 @@ int USB_Open(USB self, const uint16_t vid, const uint16_t pid,
       continue;
 
     // 检查该usb设备
-    if (devDesc_tmp.idProduct != pid || devDesc_tmp.idVendor != vid) continue;
+    if (devDesc_tmp.idProduct != pid || devDesc_tmp.idVendor != vid)
+      continue;
 
     retCode = libusb_open(usbObj->devs[index], &devHandle);
 
     if (retCode) {
-      log_warn("libusb_open() error:%s,vid:%x,pid:%x.",
-               libusb_error_name(retCode), devDesc_tmp.idVendor,
-               devDesc_tmp.idProduct);
+      log_warn("libusb_open() error:%s,vid:%x,pid:%x.", libusb_error_name(retCode),
+               devDesc_tmp.idVendor, devDesc_tmp.idProduct);
       continue;
     }
     // 检查设备序列号
     if (serial != NULL &&
-        USB_SUCCESS != usbStrDescriptorMatch(
-                           devHandle, devDesc_tmp.iSerialNumber, serial)) {
+        USB_SUCCESS != usbStrDescriptorMatch(devHandle, devDesc_tmp.iSerialNumber, serial)) {
       libusb_close(devHandle);
       continue;
     }
@@ -136,8 +139,7 @@ int USB_Open(USB self, const uint16_t vid, const uint16_t pid,
 // 关闭USB
 void USB_Close(USB self) {
   assert(self != NULL);
-  struct _usb_private *usbObj =
-      container_of(self, struct _usb_private, usbInterface);
+  struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
   assert(usbObj->devHandle != NULL);
 
   /* Close device */
@@ -155,8 +157,7 @@ void USB_Close(USB self) {
  */
 int USB_Reset(USB self) {
   assert(self != NULL);
-  struct _usb_private *usbObj =
-      container_of(self, struct _usb_private, usbInterface);
+  struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
   assert(usbObj->devHandle != NULL);
   int retCode = libusb_reset_device(usbObj->devHandle);
   if (retCode == 0) {
@@ -170,17 +171,15 @@ int USB_Reset(USB self) {
 /**
  * USB控制传输
  */
-int USB_ControlTransfer(USB self, uint8_t requestType, uint8_t request,
-                              uint16_t wValue, uint16_t wIndex,
-                              unsigned char *data, uint16_t dataLength,
-                              unsigned int timeout, int *count) {
+int USB_ControlTransfer(USB self, uint8_t requestType, uint8_t request, uint16_t wValue,
+                        uint16_t wIndex, unsigned char *data, uint16_t dataLength,
+                        unsigned int timeout, int *count) {
   assert(self != NULL);
-  struct _usb_private *usbObj =
-      container_of(self, struct _usb_private, usbInterface);
+  struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
   assert(usbObj->devHandle != NULL);
 
-  *count = libusb_control_transfer(usbObj->devHandle, requestType, request,
-                                   wValue, wIndex, data, dataLength, timeout);
+  *count = libusb_control_transfer(usbObj->devHandle, requestType, request, wValue, wIndex, data,
+                                   dataLength, timeout);
   if (*count < 0) {
     log_error("libusb_control_transfer():%s", libusb_error_name(*count));
     *count = 0;
@@ -192,16 +191,15 @@ int USB_ControlTransfer(USB self, uint8_t requestType, uint8_t request,
 /**
  * 读/写数据块
  */
-int USB_BulkTransfer(USB self, uint8_t endpoint, unsigned char *data,
-                           int dataLength, int timeout, int *transferred) {
+int USB_BulkTransfer(USB self, uint8_t endpoint, unsigned char *data, int dataLength, int timeout,
+                     int *transferred) {
   int retCode;
   assert(self != NULL);
-  struct _usb_private *usbObj =
-      container_of(self, struct _usb_private, usbInterface);
+  struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
   assert(usbObj->devHandle != NULL);
 
-  retCode = libusb_bulk_transfer(usbObj->devHandle, endpoint, data, dataLength,
-                                 transferred, timeout);
+  retCode =
+      libusb_bulk_transfer(usbObj->devHandle, endpoint, data, dataLength, transferred, timeout);
   if (retCode < 0) {
     log_error("libusb_bulk_transfer():%s", libusb_error_name(retCode));
     return USB_ERR_INTERNAL_ERROR;
@@ -209,15 +207,12 @@ int USB_BulkTransfer(USB self, uint8_t endpoint, unsigned char *data,
   return USB_SUCCESS;
 }
 
-static int bulkWrite(USB self, unsigned char *data, int dataLength, int timeout,
-                     int *transferred) {
+static int bulkWrite(USB self, unsigned char *data, int dataLength, int timeout, int *transferred) {
   int tmp, result;
   assert(self != NULL);
-  struct _usb_private *usbObj =
-      container_of(self, struct _usb_private, usbInterface);
+  struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
   // 向默认写端点发送数据
-  result = USBBulkTransfer(self, usbObj->writeEP, data, dataLength, timeout,
-                           transferred);
+  result = USBBulkTransfer(self, usbObj->writeEP, data, dataLength, timeout, transferred);
   if (USB_SUCCESS != result) {
     return result;
   }
@@ -232,28 +227,24 @@ static int bulkWrite(USB self, unsigned char *data, int dataLength, int timeout,
   return USB_SUCCESS;
 }
 
-static int bulkRead(USB self, unsigned char *data, int dataLength, int timeout,
-                    int *transferred) {
+static int bulkRead(USB self, unsigned char *data, int dataLength, int timeout, int *transferred) {
   assert(self != NULL);
-  struct _usb_private *usbObj =
-      container_of(self, struct _usb_private, usbInterface);
-  return USBBulkTransfer(self, usbObj->readEP, data, dataLength, timeout,
-                         transferred);
+  struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
+  return USBBulkTransfer(self, usbObj->readEP, data, dataLength, timeout, transferred);
 }
 
 /**
  * 中断传输
  */
-int USB_InterruptTransfer(USB self, uint8_t endpoint, unsigned char *data,
-                                int dataLength, int timeout, int *transferred) {
+int USB_InterruptTransfer(USB self, uint8_t endpoint, unsigned char *data, int dataLength,
+                          int timeout, int *transferred) {
   int retCode;
   assert(self != NULL);
-  struct _usb_private *usbObj =
-      container_of(self, struct _usb_private, usbInterface);
+  struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
   assert(usbObj->devHandle != NULL);
 
-  retCode = libusb_interrupt_transfer(usbObj->devHandle, endpoint, data,
-                                      dataLength, transferred, timeout);
+  retCode = libusb_interrupt_transfer(usbObj->devHandle, endpoint, data, dataLength, transferred,
+                                      timeout);
   if (retCode < 0) {
     log_error("libusb_interrupt_transfer():%s", libusb_error_name(retCode));
     return USB_ERR_INTERNAL_ERROR;
@@ -261,23 +252,20 @@ int USB_InterruptTransfer(USB self, uint8_t endpoint, unsigned char *data,
   return USB_SUCCESS;
 }
 
-static int interruptWrite(USB self, unsigned char *data, int dataLength,
-                          int timeout, int *transferred) {
+static int interruptWrite(USB self, unsigned char *data, int dataLength, int timeout,
+                          int *transferred) {
   int tmp, result;
   assert(self != NULL);
-  struct _usb_private *usbObj =
-      container_of(self, struct _usb_private, usbInterface);
+  struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
 
-  result = USBInterruptTransfer(self, usbObj->writeEP, data, dataLength,
-                                timeout, transferred);
+  result = USBInterruptTransfer(self, usbObj->writeEP, data, dataLength, timeout, transferred);
   if (USB_SUCCESS != result) {
     return result;
   }
   // 如果写入的数据长度正好等于EP Max pack
   // Size的整数倍，则发送0长度告诉对端传输完成
   if (dataLength % usbObj->writeEPMaxPackSize == 0) {
-    result = USBInterruptTransfer(self, usbObj->writeEP, data, 0, timeout,
-                                  transferred);
+    result = USBInterruptTransfer(self, usbObj->writeEP, data, 0, timeout, transferred);
     if (USB_SUCCESS != result) {
       return result;
     }
@@ -285,17 +273,15 @@ static int interruptWrite(USB self, unsigned char *data, int dataLength,
   return USB_SUCCESS;
 }
 
-static int interruptRead(USB self, unsigned char *data, int dataLength,
-                         int timeout, int *transferred) {
+static int interruptRead(USB self, unsigned char *data, int dataLength, int timeout,
+                         int *transferred) {
   assert(self != NULL);
-  struct _usb_private *usbObj =
-      container_of(self, struct _usb_private, usbInterface);
-  return USBInterruptTransfer(self, usbObj->readEP, data, dataLength, timeout,
-                              transferred);
+  struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
+  return USBInterruptTransfer(self, usbObj->readEP, data, dataLength, timeout, transferred);
 }
 
-static int unsupportRW(USB self, unsigned char *data, int dataLength,
-                       int timeout, int *transferred) {
+static int unsupportRW(USB self, unsigned char *data, int dataLength, int timeout,
+                       int *transferred) {
   (void)self;
   (void)data;
   (void)dataLength;
@@ -315,8 +301,7 @@ int USB_SetConfiguration(USB self, uint8_t configurationIndex) {
   int retCode;
   libusb_device *dev = NULL;
   assert(self != NULL);
-  struct _usb_private *usbObj =
-      container_of(self, struct _usb_private, usbInterface);
+  struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
 
   assert(usbObj->devHandle != NULL);
 
@@ -348,8 +333,7 @@ int USB_SetConfiguration(USB self, uint8_t configurationIndex) {
     return USB_ERR_INTERNAL_ERROR;
   }
   if (usbObj->currConfVal != config->bConfigurationValue) {
-    if ((retCode = libusb_set_configuration(usbObj->devHandle,
-                                            config->bConfigurationValue)) < 0) {
+    if ((retCode = libusb_set_configuration(usbObj->devHandle, config->bConfigurationValue)) < 0) {
       log_error("libusb_set_configuration():%s", libusb_error_name(retCode));
       libusb_free_config_descriptor(config);
       return USB_ERR_INTERNAL_ERROR;
@@ -369,15 +353,14 @@ int USB_SetConfiguration(USB self, uint8_t configurationIndex) {
 /**
  * 声明interface
  */
-int USB_ClaimInterface(USB self, uint8_t IFClass, uint8_t IFSubclass,
-                             uint8_t IFProtocol, uint8_t transType) {
+int USB_ClaimInterface(USB self, uint8_t IFClass, uint8_t IFSubclass, uint8_t IFProtocol,
+                       uint8_t transType) {
   struct libusb_device *dev = NULL;
   struct libusb_config_descriptor *config;
   int retCode;
 
   assert(self != NULL);
-  struct _usb_private *usbObj =
-      container_of(self, struct _usb_private, usbInterface);
+  struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
 
   assert(usbObj->devHandle != NULL);
 
@@ -387,8 +370,7 @@ int USB_ClaimInterface(USB self, uint8_t IFClass, uint8_t IFSubclass,
   }
 
   dev = libusb_get_device(usbObj->devHandle);
-  retCode =
-      libusb_get_config_descriptor_by_value(dev, usbObj->currConfVal, &config);
+  retCode = libusb_get_config_descriptor_by_value(dev, usbObj->currConfVal, &config);
   if (retCode != 0) {
     log_error("libusb_get_config_descriptor():%s", libusb_error_name(retCode));
     return USB_ERR_INTERNAL_ERROR;
@@ -397,8 +379,7 @@ int USB_ClaimInterface(USB self, uint8_t IFClass, uint8_t IFSubclass,
   for (int i = 0; i < (int)config->bNumInterfaces; i++) {
     // 获得interface
     const struct libusb_interface *interface = &config->interface[i];
-    const struct libusb_interface_descriptor *interfaceDesc =
-        &interface->altsetting[0];
+    const struct libusb_interface_descriptor *interfaceDesc = &interface->altsetting[0];
     // XXX altsetting的理解或许有问题
     if (interface->num_altsetting > 1) {
       log_info("The interface has more than one settings.");
@@ -417,8 +398,7 @@ int USB_ClaimInterface(USB self, uint8_t IFClass, uint8_t IFSubclass,
     // 判断是否已经声明了interface，如果声明了与当前不同的interface，则释放原来的
     if (usbObj->clamedIFNum != -1) {
       log_info("Release declared interface %d.", usbObj->clamedIFNum);
-      retCode =
-          libusb_release_interface(usbObj->devHandle, usbObj->clamedIFNum);
+      retCode = libusb_release_interface(usbObj->devHandle, usbObj->clamedIFNum);
       if (retCode < 0) {
         log_error("libusb_release_interface():%s", libusb_error_name(retCode));
         return USB_ERR_INTERNAL_ERROR;
@@ -427,12 +407,13 @@ int USB_ClaimInterface(USB self, uint8_t IFClass, uint8_t IFSubclass,
     }
 
     for (int k = 0; k < (int)interfaceDesc->bNumEndpoints; k++) {
-      uint8_t epNum;  // 端点号
+      uint8_t epNum; // 端点号
       const struct libusb_endpoint_descriptor *epDesc;
 
       epDesc = &interfaceDesc->endpoint[k];
 
-      if ((epDesc->bmAttributes & 0x3) != transType) continue;
+      if ((epDesc->bmAttributes & 0x3) != transType)
+        continue;
 
       epNum = epDesc->bEndpointAddress;
 
@@ -449,39 +430,36 @@ int USB_ClaimInterface(USB self, uint8_t IFClass, uint8_t IFSubclass,
         usbObj->writeEPMaxPackSize = epDesc->wMaxPacketSize & 0x7ff;
         INTERFACE_CONST_INIT(uint16_t, usbObj->usbInterface.writeMaxPackSize,
                              usbObj->writeEPMaxPackSize);
-        log_debug("usb end point 'out' 0x%02x, max packet size %d bytes.",
-                  epNum, usbObj->writeEPMaxPackSize);
+        log_debug("usb end point 'out' 0x%02x, max packet size %d bytes.", epNum,
+                  usbObj->writeEPMaxPackSize);
       }
 
       // XXX 这里没有考虑端点0
       if (usbObj->readEP && usbObj->writeEP) {
         // 写入回调
         switch (transType) {
-          case 3:  //中断传输
-            usbObj->usbInterface.Write = interruptWrite;
-            usbObj->usbInterface.Read = interruptRead;
-            break;
+        case 3: //中断传输
+          usbObj->usbInterface.Write = interruptWrite;
+          usbObj->usbInterface.Read = interruptRead;
+          break;
 
-          case 2:  // 批量传输
-            usbObj->usbInterface.Write = bulkWrite;
-            usbObj->usbInterface.Read = bulkRead;
-            break;
-          default:
-            usbObj->usbInterface.Write = usbObj->usbInterface.Read =
-                unsupportRW;
-            log_info("Unsupported endpoint type.");
+        case 2: // 批量传输
+          usbObj->usbInterface.Write = bulkWrite;
+          usbObj->usbInterface.Read = bulkRead;
+          break;
+        default:
+          usbObj->usbInterface.Write = usbObj->usbInterface.Read = unsupportRW;
+          log_info("Unsupported endpoint type.");
         }
         usbObj->clamedIFNum = interfaceDesc->bInterfaceNumber;
-        log_debug("Claiming interface %d",
-                  (int)interfaceDesc->bInterfaceNumber);
-        libusb_claim_interface(usbObj->devHandle,
-                               (int)interfaceDesc->bInterfaceNumber);
+        log_debug("Claiming interface %d", (int)interfaceDesc->bInterfaceNumber);
+        libusb_claim_interface(usbObj->devHandle, (int)interfaceDesc->bInterfaceNumber);
         libusb_free_config_descriptor(config);
         return USB_SUCCESS;
       }
 
-    }  // for (int k = 0; k < (int)interfaceDesc->bNumEndpoints; k++)
-  }    // for (int i = 0; i < (int)config->bNumInterfaces; i++)
+    } // for (int k = 0; k < (int)interfaceDesc->bNumEndpoints; k++)
+  }   // for (int i = 0; i < (int)config->bNumInterfaces; i++)
   libusb_free_config_descriptor(config);
 
   return USB_ERR_NOT_FOUND;
@@ -512,8 +490,7 @@ USB CreateUSB(void) {
  */
 void DestoryUSB(USB *self) {
   assert(*self != NULL);
-  struct _usb_private *usbObj =
-      container_of(*self, struct _usb_private, usbInterface);
+  struct _usb_private *usbObj = container_of(*self, struct _usb_private, usbInterface);
   assert(usbObj->libusbContext != NULL);
   libusb_exit(usbObj->libusbContext);
   free(usbObj);

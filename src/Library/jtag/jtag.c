@@ -1,8 +1,19 @@
-/*
- * JTAG.c
+/**
+ * src/Library/jtag/jtag.c
+ * Copyright (c) 2020 Virus.V <virusv@live.com>
  *
- *  Created on: 2018-3-24
- *      Author: virusv
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "jtag.h"
@@ -10,18 +21,15 @@
 #include "log/log.h"
 
 // 判断一个状态是不是在某个阶段中
-#define JTAG_IN_DR(state) \
-  (JTAG_TAP_DRSELECT <= (state) && (state) <= JTAG_TAP_DRUPDATE)
-#define JTAG_IN_IR(state) \
-  (JTAG_TAP_IRSELECT <= (state) && (state) <= JTAG_TAP_IRUPDATE)
+#define JTAG_IN_DR(state) (JTAG_TAP_DRSELECT <= (state) && (state) <= JTAG_TAP_DRUPDATE)
+#define JTAG_IN_IR(state) (JTAG_TAP_IRSELECT <= (state) && (state) <= JTAG_TAP_IRUPDATE)
 
 /**
  * 用于产生在当前状态到指定状态的TMS时序
  * 返回值：sequence 高8位为时序信息，低八位为时序个数
  * 时序信息是最低位先发送。比如 0101 1111，则发送顺序是 <-1111 1010<-
  */
-TMS_SeqInfo JtagGetTmsSequence(enum JTAG_TAP_State fromState,
-                               enum JTAG_TAP_State toState) {
+TMS_SeqInfo JtagGetTmsSequence(enum JTAG_TAP_State fromState, enum JTAG_TAP_State toState) {
   assert(fromState >= JTAG_TAP_RESET && fromState <= JTAG_TAP_IRUPDATE);
   assert(toState >= JTAG_TAP_RESET && toState <= JTAG_TAP_IRUPDATE);
   int sequence, idx;

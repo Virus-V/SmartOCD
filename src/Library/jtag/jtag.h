@@ -1,8 +1,19 @@
-/*
- * JTAG.h
+/**
+ * src/Library/jtag/jtag.h
+ * Copyright (c) 2020 Virus.V <virusv@live.com>
  *
- *  Created on: 2018-3-24
- *      Author: virusv
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef SRC_JTAG_JTAG_H_
@@ -47,8 +58,7 @@ typedef uint16_t TMS_SeqInfo;
  * 返回:
  * 	TMS时序,见TMS_SeqInfo类型定义
  */
-TMS_SeqInfo JtagGetTmsSequence(IN enum JTAG_TAP_State fromState,
-                               IN enum JTAG_TAP_State toState);
+TMS_SeqInfo JtagGetTmsSequence(IN enum JTAG_TAP_State fromState, IN enum JTAG_TAP_State toState);
 
 /**
  * 获得当前状态通过一个给定TMS信号时切换到的状态
@@ -58,8 +68,7 @@ TMS_SeqInfo JtagGetTmsSequence(IN enum JTAG_TAP_State fromState,
  * 返回:
  * 	下一个状态机状态
  */
-enum JTAG_TAP_State JtagNextStatus(IN enum JTAG_TAP_State fromState,
-                                   IN int tms);
+enum JTAG_TAP_State JtagNextStatus(IN enum JTAG_TAP_State fromState, IN int tms);
 
 /**
  * 计算多少个TMS信号有多少个电平状态
