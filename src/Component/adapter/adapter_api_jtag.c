@@ -162,7 +162,7 @@ void LuaApi_create_jtag_skill_object(lua_State *L, Adapter self, const struct sk
 
   struct luaApi_jtagSkill *jtagSkillObj;
 
-  jtagSkillObj = CAST(struct luaApi_jtagSkill *, lua_newuserdata(L, sizeof(struct luaApi_jtagSkill)));
+  jtagSkillObj = CAST(struct luaApi_jtagSkill *, lua_newuserdatauv(L, sizeof(struct luaApi_jtagSkill), 1));
 
   jtagSkillObj->self = self;
   jtagSkillObj->skill = CAST(JtagSkill, skill);

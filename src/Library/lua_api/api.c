@@ -72,11 +72,11 @@ void LuaApi_create_new_type(lua_State *L, const char *tname, lua_CFunction gc, c
   lua_newtable(L); // +1
 
   lua_pushvalue(L, -1); // +1
-  lua_setfield(L, -2, "__index"); // -1
+  lua_setfield(L, -3, "__index"); // -1
 
   if (gc != NULL){
     lua_pushcfunction(L, gc); // +1
-    lua_setfield(L, -2, "__gc"); // -1
+    lua_setfield(L, -3, "__gc"); // -1
   }
 
   // 注册method到method表

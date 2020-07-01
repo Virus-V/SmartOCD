@@ -26,8 +26,13 @@
 // XXX 在metatable里防止常量被改写
 static const luaApi_regConst lib_adapter_const[] = {
     // 传输方式
-    {"JTAG", ADPT_MODE_JTAG},
-    {"SWD", ADPT_MODE_SWD},
+    {"MODE_JTAG", ADPT_MODE_JTAG},
+    {"MODE_SWD", ADPT_MODE_SWD},
+    
+    // Skill类型
+    {"SKILL_DAP", ADPT_SKILL_DAP},
+    {"SKILL_JTAG", ADPT_SKILL_JTAG},
+
     // JTAG引脚bit mask
     {"PIN_SWCLK_TCK", SWJ_PIN_SWCLK_TCK},
     {"PIN_SWDIO_TMS", SWJ_PIN_SWDIO_TMS},
@@ -35,12 +40,15 @@ static const luaApi_regConst lib_adapter_const[] = {
     {"PIN_TDO", SWJ_PIN_TDO},
     {"PIN_nTRST", SWJ_PIN_nTRST},
     {"PIN_nRESET", SWJ_PIN_nRESET},
+    
     // 复位类型
     {"RESET_SYSTEM", ADPT_RESET_SYSTEM_RESET},
     {"RESET_DEBUG", ADPT_RESET_DEBUG_RESET},
+    
     // DAP寄存器类型
     {"REG_DP", ADPT_DAP_DP_REG},
     {"REG_AP", ADPT_DAP_AP_REG},
+    
     // TAP 状态
     {"TAP_RESET", JTAG_TAP_RESET},
     {"TAP_IDLE", JTAG_TAP_IDLE},
@@ -58,6 +66,7 @@ static const luaApi_regConst lib_adapter_const[] = {
     {"TAP_IR_PAUSE", JTAG_TAP_IRPAUSE},
     {"TAP_IR_EXIT2", JTAG_TAP_IREXIT2},
     {"TAP_IR_UPDATE", JTAG_TAP_IRUPDATE},
+    
     // 仿真器的状态
     {"STATUS_CONNECTED", ADPT_STATUS_CONNECTED},
     {"STATUS_DISCONNECT", ADPT_STATUS_DISCONNECT},
@@ -179,6 +188,10 @@ static int luaApi_adapter_get_skill(lua_State *L) {
   default:
     return luaL_error(L, "Unknow skill type");
   }
+
+  // 绑定Adapter对象，防止过早被GC释放
+  lua_pushvalue(L, -3); // 复制Adapter对象
+  lua_setiuservalue(L, -2, 1);
 
   return 1;
 }

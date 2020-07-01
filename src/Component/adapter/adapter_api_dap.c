@@ -168,7 +168,7 @@ void LuaApi_create_dap_skill_object(lua_State *L, Adapter self, const struct ski
 
   struct luaApi_dapSkill *dapSkillObj;
 
-  dapSkillObj = CAST(struct luaApi_dapSkill *, lua_newuserdata(L, sizeof(struct luaApi_dapSkill)));
+  dapSkillObj = CAST(struct luaApi_dapSkill *, lua_newuserdatauv(L, sizeof(struct luaApi_dapSkill), 1));
 
   dapSkillObj->self = self;
   dapSkillObj->skill = CAST(DapSkill, skill);
