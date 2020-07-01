@@ -343,10 +343,12 @@ static int smartocd_init(lua_State *L) {
     lua_pushboolean(L, 0);
     return 1;
   }
+
+  // 默认日志等级
+  log_set_level(logLevel);
   // 注册SmartOCD API接口
   component_init(L);
-  // LOG默认静默模式
-  log_set_quiet(1);
+  
   // 解析参数
   while ((opt = getopt_long(argc, argv, "f:d:ehl:", long_option, NULL)) != -1) {
     switch (opt) {
@@ -357,7 +359,6 @@ static int smartocd_init(lua_State *L) {
     case 'd': // 日志输出等级 -1 不输出任何日志， 转换失败则会返回0
       logLevel = atoi(optarg);
       if (logLevel > 0) {
-        log_set_quiet(0); // 关闭静默模式
         log_set_level(logLevel - 1);
       }
       break;
