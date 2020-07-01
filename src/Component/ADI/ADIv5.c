@@ -28,7 +28,7 @@
  */
 static int dapInit(struct ADIv5_Dap *dap) {
   // 调试部分复位
-  dap->adapter->Reset(dap->adapter, ADPT_RESET_DEBUG_RESET);
+  dap->adapter->Reset(dap->adapter, ADPT_RESET_DEBUG);
   if (dap->adapter->currTransMode == ADPT_MODE_SWD) {
     uint32_t dpidr = 0;
     // SWD模式下第一个读取的寄存器必须要是DPIDR，这样才能读取其他的寄存器

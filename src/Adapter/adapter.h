@@ -76,8 +76,8 @@ typedef int (*ADPT_SET_FREQUENT)(IN Adapter self, IN unsigned int freq);
  * target复位类型
  */
 enum targetResetType {
-  ADPT_RESET_SYSTEM_RESET, // 全部系统复位
-  ADPT_RESET_DEBUG_RESET,  // 调试系统复位
+  ADPT_RESET_SYSTEM, // 全部系统复位
+  ADPT_RESET_DEBUG,  // 调试系统复位
 };
 
 /**

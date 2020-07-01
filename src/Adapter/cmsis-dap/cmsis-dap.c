@@ -973,7 +973,7 @@ static int dapReset(Adapter self, enum targetResetType type) {
   struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
   uint8_t pinData = 0, pinMask = 0; // 状态机复位，
   switch (type) {
-  case ADPT_RESET_SYSTEM_RESET: // 系统复位,assert nSRST
+  case ADPT_RESET_SYSTEM: // 系统复位,assert nSRST
     pinMask |= SWJ_PIN_nRESET;
     if (dapSwjPins(self, pinMask, pinData, &pinData, 100000) != ADPT_SUCCESS) { // 死区时间100ms
       log_error("Assert reset pin failed!");
@@ -988,7 +988,7 @@ static int dapReset(Adapter self, enum targetResetType type) {
     // 更新TAP状态机
     INTERFACE_CONST_INIT(enum JTAG_TAP_State, cmdapObj->jtagSkillObj.currState, JTAG_TAP_RESET);
     return ADPT_SUCCESS;
-  case ADPT_RESET_DEBUG_RESET:
+  case ADPT_RESET_DEBUG:
     if (self->currTransMode == ADPT_MODE_JTAG) {
       // TMS上面5周期的高电平
       uint8_t resetSeq[] = {0x45, 0x00};

@@ -42,8 +42,8 @@ static const luaApi_regConst lib_adapter_const[] = {
     {"PIN_nRESET", SWJ_PIN_nRESET},
     
     // 复位类型
-    {"RESET_SYSTEM", ADPT_RESET_SYSTEM_RESET},
-    {"RESET_DEBUG", ADPT_RESET_DEBUG_RESET},
+    {"RESET_SYSTEM", ADPT_RESET_SYSTEM},
+    {"RESET_DEBUG", ADPT_RESET_DEBUG},
     
     // DAP寄存器类型
     {"REG_DP", ADPT_DAP_DP_REG},
@@ -209,7 +209,7 @@ static int luaApi_adapter_reset(lua_State *L) {
   }
   Adapter adapterObj = *CAST(Adapter *, udata);
 
-  int type = (int)luaL_optinteger(L, 2, ADPT_RESET_SYSTEM_RESET);
+  int type = (int)luaL_optinteger(L, 2, ADPT_RESET_SYSTEM);
   if (adapterObj->Reset(adapterObj, type) != ADPT_SUCCESS) {
     return luaL_error(L, "Reset adapter failed!");
   }
