@@ -198,8 +198,7 @@ int USB_BulkTransfer(USB self, uint8_t endpoint, unsigned char *data, int dataLe
   struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
   assert(usbObj->devHandle != NULL);
 
-  retCode =
-      libusb_bulk_transfer(usbObj->devHandle, endpoint, data, dataLength, transferred, timeout);
+  retCode = libusb_bulk_transfer(usbObj->devHandle, endpoint, data, dataLength, transferred, timeout);
   if (retCode < 0) {
     log_error("libusb_bulk_transfer():%s", libusb_error_name(retCode));
     return USB_ERR_INTERNAL_ERROR;
@@ -212,14 +211,14 @@ static int bulkWrite(USB self, unsigned char *data, int dataLength, int timeout,
   assert(self != NULL);
   struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
   // 向默认写端点发送数据
-  result = USBBulkTransfer(self, usbObj->writeEP, data, dataLength, timeout, transferred);
+  result = USB_BulkTransfer(self, usbObj->writeEP, data, dataLength, timeout, transferred);
   if (USB_SUCCESS != result) {
     return result;
   }
   // 如果写入的数据长度正好等于EP Max pack
   // Size的整数倍，则发送0长度告诉对端传输完成
   if (dataLength % usbObj->writeEPMaxPackSize == 0) {
-    result = USBBulkTransfer(self, usbObj->writeEP, data, 0, timeout, &tmp);
+    result = USB_BulkTransfer(self, usbObj->writeEP, data, 0, timeout, &tmp);
     if (USB_SUCCESS != result) {
       return result;
     }
@@ -230,7 +229,7 @@ static int bulkWrite(USB self, unsigned char *data, int dataLength, int timeout,
 static int bulkRead(USB self, unsigned char *data, int dataLength, int timeout, int *transferred) {
   assert(self != NULL);
   struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
-  return USBBulkTransfer(self, usbObj->readEP, data, dataLength, timeout, transferred);
+  return USB_BulkTransfer(self, usbObj->readEP, data, dataLength, timeout, transferred);
 }
 
 /**
@@ -258,14 +257,14 @@ static int interruptWrite(USB self, unsigned char *data, int dataLength, int tim
   assert(self != NULL);
   struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
 
-  result = USBInterruptTransfer(self, usbObj->writeEP, data, dataLength, timeout, transferred);
+  result = USB_InterruptTransfer(self, usbObj->writeEP, data, dataLength, timeout, transferred);
   if (USB_SUCCESS != result) {
     return result;
   }
   // 如果写入的数据长度正好等于EP Max pack
   // Size的整数倍，则发送0长度告诉对端传输完成
   if (dataLength % usbObj->writeEPMaxPackSize == 0) {
-    result = USBInterruptTransfer(self, usbObj->writeEP, data, 0, timeout, transferred);
+    result = USB_InterruptTransfer(self, usbObj->writeEP, data, 0, timeout, transferred);
     if (USB_SUCCESS != result) {
       return result;
     }
@@ -277,7 +276,7 @@ static int interruptRead(USB self, unsigned char *data, int dataLength, int time
                          int *transferred) {
   assert(self != NULL);
   struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
-  return USBInterruptTransfer(self, usbObj->readEP, data, dataLength, timeout, transferred);
+  return USB_InterruptTransfer(self, usbObj->readEP, data, dataLength, timeout, transferred);
 }
 
 static int unsupportRW(USB self, unsigned char *data, int dataLength, int timeout,

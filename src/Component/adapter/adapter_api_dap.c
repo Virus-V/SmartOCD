@@ -34,27 +34,18 @@ static int luaApi_adapter_dap_single_read(lua_State *L) {
   uint32_t data;
   int type = (int)luaL_checkinteger(L, 2);
   int reg = (int)luaL_checkinteger(L, 3);
-  struct dapTransport *dapTransApi;
 
-  // 传输模式是否合法
-  if (skillObj->currTransport == NULL) {
-    return luaL_error(L, "CMSIS-DAP has not been initialized!");
-  }
-  if (skillObj->currTransport->mode != ADPT_MODE_DAP) {
-    return luaL_error(L, "CMSIS-DAP is not in DAP transport mode!");
-  }
-
-  jtagTransApi = CAST(struct jtagTrasnport *, skillObj->currTransport);
-
-  if (skillObj->DapSingleRead(skillObj, type, reg, &data) != ADPT_SUCCESS) {
+  if (skillObj->skill->DapSingleRead(skillObj->self, type, reg, &data) != ADPT_SUCCESS) {
     return luaL_error(L, "Insert to instruction queue failed!");
   }
+
   // 执行队列
-  if (skillObj->DapCommit(skillObj) != ADPT_SUCCESS) {
+  if (skillObj->skill->DapCommit(skillObj->self) != ADPT_SUCCESS) {
     // 清理指令队列
-    skillObj->DapCleanPending(skillObj);
+    skillObj->skill->DapCleanPending(skillObj->self);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
+
   lua_pushinteger(L, data);
   return 1;
 }
@@ -71,15 +62,18 @@ static int luaApi_adapter_dap_single_write(lua_State *L) {
   int type = (int)luaL_checkinteger(L, 2);
   int reg = (int)luaL_checkinteger(L, 3);
   uint32_t data = (uint32_t)luaL_checkinteger(L, 4);
-  if (skillObj->DapSingleWrite(skillObj, type, reg, data) != ADPT_SUCCESS) {
+  
+  if (skillObj->skill->DapSingleWrite(skillObj->self, type, reg, data) != ADPT_SUCCESS) {
     return luaL_error(L, "Insert to instruction queue failed!");
   }
+
   // 执行队列
-  if (skillObj->DapCommit(skillObj) != ADPT_SUCCESS) {
+  if (skillObj->skill->DapCommit(skillObj->self) != ADPT_SUCCESS) {
     // 清理指令队列
-    skillObj->DapCleanPending(skillObj);
+    skillObj->skill->DapCleanPending(skillObj->self);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
+
   return 0;
 }
 
@@ -97,23 +91,28 @@ static int luaApi_adapter_dap_multi_read(lua_State *L) {
   int type = (int)luaL_checkinteger(L, 2);
   int reg = (int)luaL_checkinteger(L, 3);
   int count = (int)luaL_checkinteger(L, 4);
+
   // 开辟缓冲内存空间
   uint32_t *buff = malloc(count * sizeof(uint32_t));
   if (buff == NULL) {
     return luaL_error(L, "Multi-read buff alloc Failed!");
   }
-  if (skillObj->DapMultiRead(skillObj, type, reg, count, buff) != ADPT_SUCCESS) {
+  
+  if (skillObj->skill->DapMultiRead(skillObj->self, type, reg, count, buff) != ADPT_SUCCESS) {
+    free(buff);
     return luaL_error(L, "Insert to instruction queue failed!");
   }
+  
   // 执行队列
-  if (skillObj->DapCommit(skillObj) != ADPT_SUCCESS) {
+  if (skillObj->skill->DapCommit(skillObj->self) != ADPT_SUCCESS) {
     free(buff);
     // 清理指令队列
-    skillObj->DapCleanPending(skillObj);
+    skillObj->skill->DapCleanPending(skillObj->self);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
   lua_pushlstring(L, (char *)buff, count * sizeof(uint32_t));
   free(buff);
+
   return 1;
 }
 
@@ -130,18 +129,22 @@ static int luaApi_adapter_dap_multi_write(lua_State *L) {
   int reg = (int)luaL_checkinteger(L, 3);
   size_t transCnt; // 注意size_t在在64位环境下是8字节，int在64位下是4字节
   uint32_t *buff = (uint32_t *)luaL_checklstring(L, 4, &transCnt);
+
   if (transCnt == 0 || (transCnt & 0x3)) {
     return luaL_error(L, "The length of the data to be written is not a multiple of the word.");
   }
-  if (skillObj->DapMultiWrite(skillObj, type, reg, transCnt >> 2, buff) != ADPT_SUCCESS) {
+
+  if (skillObj->skill->DapMultiWrite(skillObj->self, type, reg, transCnt >> 2, buff) != ADPT_SUCCESS) {
     return luaL_error(L, "Insert to instruction queue failed!");
   }
+
   // 执行队列
-  if (skillObj->DapCommit(skillObj) != ADPT_SUCCESS) {
+  if (skillObj->skill->DapCommit(skillObj->self) != ADPT_SUCCESS) {
     // 清理指令队列
-    skillObj->DapCleanPending(skillObj);
+    skillObj->skill->DapCleanPending(skillObj->self);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
+
   return 0;
 }
 
@@ -168,7 +171,7 @@ void LuaApi_create_dap_skill_object(lua_State *L, Adapter self, const struct ski
   dapSkillObj = CAST(struct luaApi_dapSkill *, lua_newuserdata(L, sizeof(struct luaApi_dapSkill)));
 
   dapSkillObj->self = self;
-  dapSkillObj->skill = CAST(struct luaApi_dapSkill *, skill);
+  dapSkillObj->skill = CAST(DapSkill, skill);
 
   // 绑定metatable
   luaL_setmetatable(L, SKILL_DAP_LUA_OBJECT_TYPE);

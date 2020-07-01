@@ -28,24 +28,26 @@
 //
 typedef int (*ComponentInitFunc)(lua_State *L, void *opaque);
 
-// XXX 增加优先级
 struct componentEntry {
   const char *name;
   ComponentInitFunc init;
   void *opaque;
+  unsigned int priority;
   struct list_head entry;
 };
 
-extern struct componentEntry components;
+enum componentPriority {
+  COM_ADAPTER = 0x0 << 16,
+};
 
 void component_regist(struct componentEntry *c);
 void component_init(lua_State *L);
 
-#define COMPONENT_INIT(name, init, opaque)                                                  \
-  static struct componentEntry _component_item_##name = {                                   \
-      #name, init, opaque, {&_component_item_##name.entry, &_component_item_##name.entry}}; \
-  void __attribute__((used, constructor)) _component_item_##name##_register(void) {         \
-    component_regist(&_component_item_##name);                                               \
+#define COMPONENT_INIT(name, init, opaque, com, pri)                                                       \
+  static struct componentEntry _component_item_##name = {                                                  \
+      #name, init, opaque, (com) + (pri), {&_component_item_##name.entry, &_component_item_##name.entry}}; \
+  void __attribute__((used, constructor)) _component_item_##name##_register(void) {                        \
+    component_regist(&_component_item_##name);                                                             \
   }
 
 #endif

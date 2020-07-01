@@ -47,19 +47,24 @@ void LuaApi_create_new_type(lua_State *L, const char *tname, lua_CFunction gc, c
   assert(L != NULL);
   assert(tname != NULL);
   assert(oo != NULL);
-  
+ 
+  int tparent_idx, stack_top;
+
+  stack_top = lua_gettop(L);
+
   if (tparent != NULL){
     // 获得tparent对应的metatable
     if (LUA_TNIL == luaL_getmetatable(L, tparent)){ // +1
-      luaL_error("Unknow object type %s.\n", tparent);
-      lua_settop(L, 0);
+      luaL_error(L, "Unknow object type %s.\n", tparent);
+      lua_settop(L, stack_top);
       return;
     }
+    tparent_idx = lua_absindex(L, -1);
   }
 
   if (luaL_newmetatable(L, tname) == 0) { // +1
     log_warn("Type %s already registed.\n", tname);
-    lua_settop(L, 0);
+    lua_settop(L, stack_top);
     return;
   }
 
@@ -79,11 +84,11 @@ void LuaApi_create_new_type(lua_State *L, const char *tname, lua_CFunction gc, c
   
   if (tparent != NULL){
     // 将tparent类型元表压栈
-    lua_pushvalue(L, 1);  // +1
+    lua_pushvalue(L, tparent_idx);  // +1
     lua_setmetatable(L, -2);  // -1
   }
   
-  lua_settop(L, 0);
+  lua_settop(L, stack_top);
 }
 
 /**

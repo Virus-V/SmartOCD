@@ -22,6 +22,7 @@
 #include "Adapter/adapter.h"
 #include "Adapter/adapter_dap.h"
 #include "Adapter/adapter_jtag.h"
+#include "Library/lua_api/api.h"
 
 #define ADAPTER_LUA_OBJECT_TYPE "adapter"
 #define SKILL_DAP_LUA_OBJECT_TYPE "skill.dap"
@@ -36,6 +37,9 @@ struct luaApi_dapSkill {
   Adapter self;
   DapSkill skill;  
 };
+
+void LuaApi_jtag_skill_type_register(lua_State *L);
+void LuaApi_dap_skill_type_register(lua_State *L);
 
 void LuaApi_create_jtag_skill_object(lua_State *L, Adapter self, const struct skill *skill);
 void LuaApi_create_dap_skill_object(lua_State *L, Adapter self, const struct skill *skill);

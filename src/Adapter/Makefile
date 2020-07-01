@@ -9,7 +9,8 @@
 
 # 构建Adapter
 CURR_DIR = $(shell pwd)
-DIR_OBJ_FILES = $(CURR_DIR)/cmsis-dap/cmsis-dap.o
+DIR_OBJ_FILES = $(CURR_DIR)/cmsis-dap/cmsis-dap.o	\
+								$(CURR_DIR)/adapter.o
 
 all: $(CURR_DIR)/libAdapter.a
 

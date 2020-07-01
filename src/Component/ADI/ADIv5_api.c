@@ -1,8 +1,19 @@
-/*
- * ADIv5.c
+/**
+ * src/Component/ADI/ADIv5_api.c
+ * Copyright (c) 2020 Virus.V <virusv@live.com>
  *
- *  Created on: 2019-6-2
- *      Author: virusv
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "Component/ADI/ADIv5.h"
@@ -19,29 +30,31 @@
 #define ADIV5_AP_MEM_LUA_OBJECT_TYPE "arch.ARM.ADIv5.AccessPort.Memory"
 #define ADIV5_AP_JTAG_LUA_OBJECT_TYPE "arch.ARM.ADIv5.AccessPort.Jtag"
 
+// TODO(重新Design)
+
 struct luaApi_dap {
-  int adapterRef;  // adapter的Lua对象引用
-  DAP dap;         // DAP 对象
+  int adapterRef; // adapter的Lua对象引用
+  DAP dap;        // DAP 对象
 };
 
 struct luaApi_accessPort {
-  int reference;  // lua_dap对象的reference
-  AccessPort ap;  // AP对象
+  int reference; // lua_dap对象的reference
+  AccessPort ap; // AP对象
 };
 
 /**
- * 检查是否是Adapter对象
+ * TODO(Remove) 检查是否是Adapter对象
  */
 static void *checkAdapter(lua_State *L, int ud) {
   void *p = lua_touserdata(L, ud);
-  if (p != NULL) {                                         /* value is a userdata? */
-    if (lua_getmetatable(L, ud)) {                         /* does it have a metatable? */
-      if (lua_getfield(L, -1, "__name") != LUA_TSTRING) {  //获得metatable的__name字段
+  if (p != NULL) {                                        /* value is a userdata? */
+    if (lua_getmetatable(L, ud)) {                        /* does it have a metatable? */
+      if (lua_getfield(L, -1, "__name") != LUA_TSTRING) { //获得metatable的__name字段
         lua_pop(L, 2);
         return NULL;
       }
-      const char *typeName = lua_tostring(L, -1);  // 获得类型字符串
-      if (strncmp(typeName, "adapter", 7) != 0) {  // 判断是否是Adapter类型的metatable
+      const char *typeName = lua_tostring(L, -1); // 获得类型字符串
+      if (strncmp(typeName, "adapter", 7) != 0) { // 判断是否是Adapter类型的metatable
         lua_pop(L, 2);
         return NULL;
       }
@@ -70,7 +83,7 @@ static int luaApi_adiv5_create_dap(lua_State *L) {
   }
   Adapter adapterObj = *CAST(Adapter *, udata);
 
-  struct luaApi_dap *luaDap = lua_newuserdata(L, sizeof(struct luaApi_dap));  // +1
+  struct luaApi_dap *luaDap = lua_newuserdata(L, sizeof(struct luaApi_dap)); // +1
   luaDap->dap = ADIv5_CreateDap(adapterObj);
   if (luaDap->dap == NULL) {
     return luaL_error(L, "Failed to create ADIv5 DAP object.");
@@ -79,7 +92,7 @@ static int luaApi_adiv5_create_dap(lua_State *L) {
   // adapter对象增加引用
   lua_pushvalue(L, -1);
   luaDap->adapterRef = luaL_ref(L, LUA_REGISTRYINDEX);
-  return 1;  // 返回压到栈中的返回值个数
+  return 1; // 返回压到栈中的返回值个数
 }
 
 /**
@@ -97,14 +110,14 @@ static int luaApi_adiv5_find_access_port(lua_State *L) {
   int type = luaL_checkinteger(L, 2);
   int bus = luaL_optinteger(L, 3, 0);
   // 创建AP对象
-  struct luaApi_accessPort *luaAp = lua_newuserdata(L, sizeof(struct luaApi_accessPort));  // +1
+  struct luaApi_accessPort *luaAp = lua_newuserdata(L, sizeof(struct luaApi_accessPort)); // +1
   if (dapObj->dap->FindAccessPort(dapObj->dap, (enum AccessPortType)type, (enum busType)bus,
                                   &luaAp->ap) != ADI_SUCCESS) {
     return luaL_error(L, "Failed to find the AP.");
   }
   // 根据不同的类型,选择不同的元表
   if (type == AccessPort_Memory) {
-    luaL_setmetatable(L, ADIV5_AP_MEM_LUA_OBJECT_TYPE);  // 添加元表
+    luaL_setmetatable(L, ADIV5_AP_MEM_LUA_OBJECT_TYPE); // 添加元表
   } else if (type == AccessPort_JTAG) {
     // TODO ...
   }
@@ -143,13 +156,13 @@ static int luaApi_adiv5_ap_mem_csw(lua_State *L) {
   if (luaApObj->ap->type != AccessPort_Memory) {
     return luaL_error(L, "Not a memory access port.");
   }
-  if (lua_isnone(L, 2)) {  // 读CSW
+  if (lua_isnone(L, 2)) { // 读CSW
     if (luaApObj->ap->Interface.Memory.ReadCSW(luaApObj->ap, &data) != ADI_SUCCESS) {
       return luaL_error(L, "Read CSW register failed!");
     }
     lua_pushinteger(L, data);
     return 1;
-  } else {  // 写CSW
+  } else { // 写CSW
     data = (uint32_t)luaL_checkinteger(L, 2);
     if (luaApObj->ap->Interface.Memory.WriteCSW(luaApObj->ap, data) != ADI_SUCCESS) {
       return luaL_error(L, "Write CSW register failed!");
@@ -190,13 +203,13 @@ static int luaApi_adiv5_ap_mem_rw_8(lua_State *L) {
   if (luaApObj->ap->type != AccessPort_Memory) {
     return luaL_error(L, "Not a memory access port.");
   }
-  if (lua_isnone(L, 3)) {  // 读内存
+  if (lua_isnone(L, 3)) { // 读内存
     if (luaApObj->ap->Interface.Memory.Read8(luaApObj->ap, addr, &data) != ADI_SUCCESS) {
       return luaL_error(L, "Read byte memory %p failed!", addr);
     }
     lua_pushinteger(L, data);
     return 1;
-  } else {  // 写内存
+  } else { // 写内存
     data = (uint8_t)luaL_checkinteger(L, 3);
     if (luaApObj->ap->Interface.Memory.Write8(luaApObj->ap, addr, data) != ADI_SUCCESS) {
       return luaL_error(L, "Write byte memory %p failed!", addr);
@@ -212,13 +225,13 @@ static int luaApi_adiv5_ap_mem_rw_16(lua_State *L) {
   if (luaApObj->ap->type != AccessPort_Memory) {
     return luaL_error(L, "Not a memory access port.");
   }
-  if (lua_isnone(L, 3)) {  // 读内存
+  if (lua_isnone(L, 3)) { // 读内存
     if (luaApObj->ap->Interface.Memory.Read16(luaApObj->ap, addr, &data) != ADI_SUCCESS) {
       return luaL_error(L, "Read halfword memory %p failed!", addr);
     }
     lua_pushinteger(L, data);
     return 1;
-  } else {  // 写内存
+  } else { // 写内存
     data = (uint16_t)luaL_checkinteger(L, 3);
     if (luaApObj->ap->Interface.Memory.Write16(luaApObj->ap, addr, data) != ADI_SUCCESS) {
       return luaL_error(L, "Write halfword memory %p failed!", addr);
@@ -234,13 +247,13 @@ static int luaApi_adiv5_ap_mem_rw_32(lua_State *L) {
   if (luaApObj->ap->type != AccessPort_Memory) {
     return luaL_error(L, "Not a memory access port.");
   }
-  if (lua_isnone(L, 3)) {  // 读内存
+  if (lua_isnone(L, 3)) { // 读内存
     if (luaApObj->ap->Interface.Memory.Read32(luaApObj->ap, addr, &data) != ADI_SUCCESS) {
       return luaL_error(L, "Read word memory %p failed!", addr);
     }
     lua_pushinteger(L, data);
     return 1;
-  } else {  // 写内存
+  } else { // 写内存
     data = (uint32_t)luaL_checkinteger(L, 3);
     if (luaApObj->ap->Interface.Memory.Write32(luaApObj->ap, addr, data) != ADI_SUCCESS) {
       return luaL_error(L, "Write word memory %p failed!", addr);
@@ -290,7 +303,7 @@ static int luaApi_adiv5_ap_write_mem_block(lua_State *L) {
   uint64_t addr = luaL_checkinteger(L, 2);
   int addrIncMode = (int)luaL_checkinteger(L, 3);
   int dataSize = (int)luaL_checkinteger(L, 4);
-  size_t transCnt;  // 注意size_t在在64位环境下是8字节，int在64位下是4字节
+  size_t transCnt; // 注意size_t在在64位环境下是8字节，int在64位下是4字节
   uint8_t *buff = (uint8_t *)lua_tolstring(L, 5, &transCnt);
   if (luaApObj->ap->type != AccessPort_Memory) {
     return luaL_error(L, "Not a memory access port.");
@@ -379,9 +392,10 @@ static const luaApi_regConst lib_adiv5_const[] = {
 
 // 初始化ADIv5库
 int luaopen_adiv5(lua_State *L) {
-  lua_createtable(
-      L, 0,
-      sizeof(lib_adiv5_const) / sizeof(lib_adiv5_const[0]));  // 预分配索引空间，提高效率
+  LuaApi_create_new_type(L, ADIV5_LUA_OBJECT_TYPE, luaApi_adiv5_gc, lib_adiv5_oo, NULL);
+  LuaApi_create_new_type(L, ADIV5_AP_MEM_LUA_OBJECT_TYPE, luaApi_adiv5_access_port_gc, lib_access_port_oo, NULL);
+
+  lua_createtable(L, 0, sizeof(lib_adiv5_const) / sizeof(lib_adiv5_const[0])); 
   // 注册常量到模块中
   LuaApiRegConstant(L, lib_adiv5_const);
   // 将函数注册进去
@@ -414,14 +428,11 @@ static const luaL_Reg lib_access_port_oo[] = {
 
 // 注册接口调用
 static int RegisterApi_ADIv5(lua_State *L, void *opaque) {
-  // 创建
-  LuaApiNewTypeMetatable(L, ADIV5_LUA_OBJECT_TYPE, luaApi_adiv5_gc, lib_adiv5_oo);
-  LuaApiNewTypeMetatable(L, ADIV5_AP_MEM_LUA_OBJECT_TYPE, luaApi_adiv5_access_port_gc,
-                         lib_access_port_oo);
+
   luaL_requiref(L, "ADIv5", luaopen_adiv5, 0);
   lua_pop(L, 1);
 
   return 0;
 }
 
-COMPONENT_INIT(ADIv5, RegisterApi_ADIv5, NULL);
+COMPONENT_INIT(ADIv5, RegisterApi_ADIv5, NULL, 1<<16, 0);

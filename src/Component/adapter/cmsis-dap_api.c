@@ -194,12 +194,6 @@ static int luaApi_cmsis_dap_gc(lua_State *L) {
 static const luaL_Reg lib_cmdap_f[] = {{"Create", luaApi_cmsis_dap_new}, // 创建CMSIS-DAP对象
                                        {NULL, NULL}};
 
-// 初始化Adapter库
-static int luaopen_cmsis_dap(lua_State *L) {
-  luaL_newlib(L, lib_cmdap_f);
-  return 1;
-}
-
 // 模块的面向对象方法
 static const luaL_Reg lib_cmdap_oo[] = {
     // CMSIS-DAP 特定接口
@@ -212,14 +206,20 @@ static const luaL_Reg lib_cmdap_oo[] = {
     {"SetTapIndex", luaApi_cmsis_dap_set_tap_index},
     {NULL, NULL}};
 
-// 注册接口调用
-static int RegisterApi_CmsisDap(lua_State *L, void *opaque) {
+// 初始化Adapter库
+static int luaopen_cmsis_dap(lua_State *L) {
   // 创建CMSIS-DAP类型对应的元表
   LuaApi_create_new_type(L, CMDAP_LUA_OBJECT_TYPE, luaApi_cmsis_dap_gc, lib_cmdap_oo, ADAPTER_LUA_OBJECT_TYPE);
+  luaL_newlib(L, lib_cmdap_f);
+  return 1;
+}
+
+// 注册接口调用
+static int RegisterApi_CmsisDap(lua_State *L, void *opaque) {
   luaL_requiref(L, "CMSIS-DAP", luaopen_cmsis_dap, 0);
   lua_pop(L, 1);
 
   return 0;
 }
 
-COMPONENT_INIT(CMSIS_DAP, RegisterApi_CmsisDap, NULL);
+COMPONENT_INIT(CMSIS_DAP, RegisterApi_CmsisDap, NULL, COM_ADAPTER, 1);

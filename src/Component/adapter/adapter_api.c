@@ -19,9 +19,8 @@
 #include "Adapter/adapter.h"
 
 #include "Component/adapter/adapter_api.h"
-
 #include "Component/component.h"
-#include "Library/lua_api/api.h"
+
 
 // 模块常量
 // XXX 在metatable里防止常量被改写
@@ -81,7 +80,7 @@ static int luaApi_adapter_status(lua_State *L) {
   Adapter adapterObj = *CAST(Adapter *, udata);
 
   if (lua_gettop(L) == 1) {
-    lua_pushinteger(L, adapterObj->currStatues);
+    lua_pushinteger(L, adapterObj->currStatus);
     return 1;
   } else {
     int type = (int)luaL_checkinteger(L, 2); // 类型
@@ -163,7 +162,7 @@ static int luaApi_adapter_get_skill(lua_State *L) {
     return luaL_argerror(L, 2, "Invaild Skill Type!");
   }
 
-  struct skill *skill = Adapter_GetSkill(adapterObj, skill_type);
+  const struct skill *skill = Adapter_GetSkill(adapterObj, skill_type);
   if (skill == NULL) {
     lua_pushnil(L);
     return 1;
@@ -171,10 +170,10 @@ static int luaApi_adapter_get_skill(lua_State *L) {
 
   switch (skill_type) {
   case ADPT_SKILL_DAP:
-    LuaApi_create_dap_skill_object(L, skill);
+    LuaApi_create_dap_skill_object(L, adapterObj, skill);
     break;
   case ADPT_SKILL_JTAG:
-    LuaApi_create_jtag_skill_object(L, skill);
+    LuaApi_create_jtag_skill_object(L, adapterObj, skill);
     break;
 
   default:
@@ -239,4 +238,4 @@ static int RegisterApi_Adapter(lua_State *L, void *opaque) {
   return 0;
 }
 
-COMPONENT_INIT(Adapter, RegisterApi_Adapter, NULL);
+COMPONENT_INIT(Adapter, RegisterApi_Adapter, NULL, COM_ADAPTER, 0);

@@ -85,7 +85,7 @@ static void laction(int i) {
 static int report(lua_State *L, int status) {
   if (status != LUA_OK) {
     const char *msg = lua_tostring(L, -1);
-    fprintf(stderr, "%s\n", msg);
+    log_error("%s", msg);
     lua_pop(L, 1); /* remove message */
   }
   return status;
