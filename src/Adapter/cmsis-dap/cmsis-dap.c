@@ -551,9 +551,8 @@ static int dapSwjClock(Adapter self, unsigned int freq) {
  * response：TDO返回数据
  * 该函数会造成TAP状态机状态与CMSIS-DAP类记录的不一样
  */
-static int CmdapJtagSequence(Adapter self, int sequenceCount, uint8_t *data, uint8_t *response) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+static int cmdapJtagSequence(struct cmsis_dap *cmdapObj, int sequenceCount, uint8_t *data, uint8_t *response) {
+  assert(cmdapObj != NULL);
   assert(cmdapObj->PacketSize != 0 && cmdapObj->MaxPcaketCount != 0);
   // 判断当前是否是JTAG模式
   if (self->currTransMode != ADPT_MODE_JTAG) {
@@ -738,10 +737,9 @@ struct dap_pack_info {
  * XXX：由于DAP指令可能会出错，出错之后要立即停止执行后续指令，所以就
  * 不使用批量功能 ,此函数内默认cmsis_dapObj->MaxPcaketCount = 1
  */
-static int CmdapTransfer(Adapter self, uint8_t index, int sequenceCnt, uint8_t *data,
+static int cmdapTransfer(struct cmsis_dap *cmdapObj, uint8_t index, int sequenceCnt, uint8_t *data,
                          uint8_t *response, int *okSeqCnt) {
-  assert(self != NULL && okSeqCnt != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  assert(cmdapObj != NULL && okSeqCnt != NULL);
   assert(cmdapObj->PacketSize != 0);
   // 先清零
   *okSeqCnt = 0;
@@ -864,10 +862,9 @@ MAKE_PACKT:
  * 对单个寄存器进行多次读写，常配合地址自增使用
  * 参数列表和意义与DAP_Transfer相同
  */
-static int CmdapTransferBlock(Adapter self, uint8_t index, int sequenceCnt, uint8_t *data,
+static int cmdapTransferBlock(struct cmsis_dap *cmdapObj, uint8_t index, int sequenceCnt, uint8_t *data,
                               uint8_t *response, int *okSeqCnt) {
-  assert(self != NULL && okSeqCnt != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  assert(cmdapObj != NULL && okSeqCnt != NULL);
 
   assert(cmdapObj->PacketSize != 0);
   int result = ADPT_FAILED;
@@ -992,7 +989,7 @@ static int dapReset(Adapter self, enum targetResetType type) {
     if (self->currTransMode == ADPT_MODE_JTAG) {
       // TMS上面5周期的高电平
       uint8_t resetSeq[] = {0x45, 0x00};
-      if (CmdapJtagSequence(self, 1, resetSeq, NULL) != ADPT_SUCCESS) {
+      if (cmdapJtagSequence(cmdapObj, 1, resetSeq, NULL) != ADPT_SUCCESS) {
         log_error("Failed to send 5 clock high level signal to TMS.");
         return ADPT_FAILED;
       }
@@ -1233,7 +1230,7 @@ static int executeJtagCmd(JtagSkill self) {
   }
 
   // 执行指令
-  if (CmdapJtagSequence((Adapter)&cmdapObj->adaperAPI, seqCnt, writeBuff, readBuff) != ADPT_SUCCESS) {
+  if (cmdapJtagSequence(cmdapObj, seqCnt, writeBuff, readBuff) != ADPT_SUCCESS) {
     log_warn("Execute JTAG Instruction Failed.");
     free(writeBuff);
     free(readBuff);
@@ -1468,7 +1465,7 @@ REEXEC:;
   switch (thisType) {
   case DAP_INS_RW_REG_SINGLE:
     // 执行指令 DAP_Transfer
-    if (CmdapTransfer((Adapter)&cmdapObj->adaperAPI, cmdapObj->tapIndex, seqCnt, writeBuff, readBuff, &okSeqCnt) != ADPT_SUCCESS) {
+    if (cmdapTransfer(cmdapObj, cmdapObj->tapIndex, seqCnt, writeBuff, readBuff, &okSeqCnt) != ADPT_SUCCESS) {
       log_error(
           "DAP_Transfer:Some DAP Instruction Execute Failed. Success:%d, "
           "All:%d.",
@@ -1479,7 +1476,7 @@ REEXEC:;
 
   case DAP_INS_RW_REG_MULTI:
     // transfer block
-    if (CmdapTransferBlock((Adapter)&cmdapObj->adaperAPI, cmdapObj->tapIndex, seqCnt, writeBuff, readBuff, &okSeqCnt) != ADPT_SUCCESS) {
+    if (cmdapTransferBlock(cmdapObj, cmdapObj->tapIndex, seqCnt, writeBuff, readBuff, &okSeqCnt) != ADPT_SUCCESS) {
       log_error(
           "DAP_TransferBlock:Some DAP Instruction Execute Failed. "
           "Success:%d, All:%d.",
