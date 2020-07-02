@@ -21,14 +21,13 @@
 #include "Component/adapter/adapter_api.h"
 #include "Component/component.h"
 
-
 // 模块常量
 // XXX 在metatable里防止常量被改写
 static const luaApi_regConst lib_adapter_const[] = {
     // 传输方式
     {"MODE_JTAG", ADPT_MODE_JTAG},
     {"MODE_SWD", ADPT_MODE_SWD},
-    
+
     // Skill类型
     {"SKILL_DAP", ADPT_SKILL_DAP},
     {"SKILL_JTAG", ADPT_SKILL_JTAG},
@@ -40,15 +39,15 @@ static const luaApi_regConst lib_adapter_const[] = {
     {"PIN_TDO", SWJ_PIN_TDO},
     {"PIN_nTRST", SWJ_PIN_nTRST},
     {"PIN_nRESET", SWJ_PIN_nRESET},
-    
+
     // 复位类型
     {"RESET_SYSTEM", ADPT_RESET_SYSTEM},
     {"RESET_DEBUG", ADPT_RESET_DEBUG},
-    
+
     // DAP寄存器类型
-    {"REG_DP", ADPT_DAP_DP_REG},
-    {"REG_AP", ADPT_DAP_AP_REG},
-    
+    {"REG_DP", SKILL_DAP_DP_REG},
+    {"REG_AP", SKILL_DAP_AP_REG},
+
     // TAP 状态
     {"TAP_RESET", JTAG_TAP_RESET},
     {"TAP_IDLE", JTAG_TAP_IDLE},
@@ -66,7 +65,7 @@ static const luaApi_regConst lib_adapter_const[] = {
     {"TAP_IR_PAUSE", JTAG_TAP_IRPAUSE},
     {"TAP_IR_EXIT2", JTAG_TAP_IREXIT2},
     {"TAP_IR_UPDATE", JTAG_TAP_IRUPDATE},
-    
+
     // 仿真器的状态
     {"STATUS_CONNECTED", ADPT_STATUS_CONNECTED},
     {"STATUS_DISCONNECT", ADPT_STATUS_DISCONNECT},
@@ -179,10 +178,10 @@ static int luaApi_adapter_get_skill(lua_State *L) {
 
   switch (skill_type) {
   case ADPT_SKILL_DAP:
-    LuaApi_create_dap_skill_object(L, adapterObj, skill);
+    LuaApi_create_dap_skill_object(L, skill);
     break;
   case ADPT_SKILL_JTAG:
-    LuaApi_create_jtag_skill_object(L, adapterObj, skill);
+    LuaApi_create_jtag_skill_object(L, skill);
     break;
 
   default:
@@ -230,10 +229,10 @@ static const luaL_Reg lib_adapter_oo[] = {
 int luaopen_adapter(lua_State *L) {
   // create module table
   lua_createtable(L, 0, sizeof(lib_adapter_const) / sizeof(lib_adapter_const[0]));
-  
+
   // 注册Adapter常量到模块中
   LuaApi_reg_constant(L, lib_adapter_const);
-  
+
   // 注册skill类型、Adapter类型
   LuaApi_create_new_type(L, ADAPTER_LUA_OBJECT_TYPE, NULL, lib_adapter_oo, NULL);
   LuaApi_dap_skill_type_register(L);

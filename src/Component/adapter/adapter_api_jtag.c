@@ -28,21 +28,21 @@
  * 2#：状态
  */
 static int luaApi_adapter_jtag_status_change(lua_State *L) {
-  struct luaApi_jtagSkill *skillObj = CAST(struct luaApi_jtagSkill *, luaL_checkudata(L, 1, SKILL_JTAG_LUA_OBJECT_TYPE));
+  JtagSkill skillObj = *CAST(JtagSkill *, luaL_checkudata(L, 1, SKILL_JTAG_LUA_OBJECT_TYPE));
   enum JTAG_TAP_State state = (enum JTAG_TAP_State)luaL_checkinteger(L, 2);
 
   if (state < JTAG_TAP_RESET || state > JTAG_TAP_IRUPDATE) {
     return luaL_error(L, "JTAG state machine new state is illegal!");
   }
 
-  if (skillObj->skill->JtagToState(skillObj->self, state) != ADPT_SUCCESS) {
+  if (skillObj->JtagToState(skillObj, state) != ADPT_SUCCESS) {
     return luaL_error(L, "Insert to instruction queue failed!");
   }
 
   // 执行队列
-  if (skillObj->skill->JtagCommit(skillObj->self) != ADPT_SUCCESS) {
+  if (skillObj->JtagCommit(skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    skillObj->skill->JtagCleanPending(skillObj->self);
+    skillObj->JtagCleanPending(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
   return 0;
@@ -58,7 +58,7 @@ static int luaApi_adapter_jtag_status_change(lua_State *L) {
  * 1#：捕获到的TDO数据
  */
 static int luaApi_adapter_jtag_exchange_data(lua_State *L) {
-  struct luaApi_jtagSkill *skillObj = CAST(struct luaApi_jtagSkill *, luaL_checkudata(L, 1, SKILL_JTAG_LUA_OBJECT_TYPE));
+  JtagSkill skillObj = *CAST(JtagSkill *, luaL_checkudata(L, 1, SKILL_JTAG_LUA_OBJECT_TYPE));
   size_t str_len = 0;
   const char *tdi_data = lua_tolstring(L, 2, &str_len);
   unsigned int bitCnt = (unsigned int)luaL_checkinteger(L, 3);
@@ -77,16 +77,16 @@ static int luaApi_adapter_jtag_exchange_data(lua_State *L) {
   // 拷贝数据
   memcpy(data, tdi_data, str_len * sizeof(uint8_t));
   // 插入JTAG指令
-  if (skillObj->skill->JtagExchangeData(skillObj->self, data, bitCnt) != ADPT_SUCCESS) {
+  if (skillObj->JtagExchangeData(skillObj, data, bitCnt) != ADPT_SUCCESS) {
     free(data);
     return luaL_error(L, "Insert to instruction queue failed!");
   }
 
   // 执行队列
-  if (skillObj->skill->JtagCommit(skillObj->self) != ADPT_SUCCESS) {
+  if (skillObj->JtagCommit(skillObj) != ADPT_SUCCESS) {
     free(data);
     // 清理指令队列
-    skillObj->skill->JtagCleanPending(skillObj->self);
+    skillObj->JtagCleanPending(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
 
@@ -103,17 +103,17 @@ static int luaApi_adapter_jtag_exchange_data(lua_State *L) {
  * 2#:cycles要进入Idle等待的周期
  */
 static int luaApi_adapter_jtag_idle_wait(lua_State *L) {
-  struct luaApi_jtagSkill *skillObj = CAST(struct luaApi_jtagSkill *, luaL_checkudata(L, 1, SKILL_JTAG_LUA_OBJECT_TYPE));
+  JtagSkill skillObj = *CAST(JtagSkill *, luaL_checkudata(L, 1, SKILL_JTAG_LUA_OBJECT_TYPE));
   unsigned int cycles = (unsigned int)luaL_checkinteger(L, 2);
 
-  if (skillObj->skill->JtagIdle(skillObj->self, cycles) != ADPT_SUCCESS) {
+  if (skillObj->JtagIdle(skillObj, cycles) != ADPT_SUCCESS) {
     return luaL_error(L, "Insert to instruction queue failed!");
   }
 
   // 执行队列
-  if (skillObj->skill->JtagCommit(skillObj->self) != ADPT_SUCCESS) {
+  if (skillObj->JtagCommit(skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    skillObj->skill->JtagCleanPending(skillObj->self);
+    skillObj->JtagCleanPending(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
   return 0;
@@ -129,12 +129,12 @@ static int luaApi_adapter_jtag_idle_wait(lua_State *L) {
  * 1#:读取的引脚值
  */
 static int luaApi_adapter_jtag_pins(lua_State *L) {
-  struct luaApi_jtagSkill *skillObj = CAST(struct luaApi_jtagSkill *, luaL_checkudata(L, 1, SKILL_JTAG_LUA_OBJECT_TYPE));
+  JtagSkill skillObj = *CAST(JtagSkill *, luaL_checkudata(L, 1, SKILL_JTAG_LUA_OBJECT_TYPE));
   uint8_t pin_mask = (uint8_t)luaL_checkinteger(L, 2);
   uint8_t pin_data = (uint8_t)luaL_checkinteger(L, 3);
   unsigned int pin_wait = (unsigned int)luaL_checkinteger(L, 4);
 
-  if (skillObj->skill->JtagPins(skillObj->self, pin_mask, pin_data, &pin_data, pin_wait) != ADPT_SUCCESS) {
+  if (skillObj->JtagPins(skillObj, pin_mask, pin_data, &pin_data, pin_wait) != ADPT_SUCCESS) {
     return luaL_error(L, "Read/Write JTAG pins failed!");
   }
   lua_pushinteger(L, pin_data);
@@ -156,16 +156,15 @@ void LuaApi_jtag_skill_type_register(lua_State *L) {
 }
 
 /* 创建JTAG能力集对象 */
-void LuaApi_create_jtag_skill_object(lua_State *L, Adapter self, const struct skill *skill) {
+void LuaApi_create_jtag_skill_object(lua_State *L, const struct skill *skill) {
   assert(L != NULL);
-  assert(self != NULL && skill != NULL);
+  assert(skill != NULL);
 
-  struct luaApi_jtagSkill *jtagSkillObj;
+  JtagSkill *jtagSkillObj;
 
-  jtagSkillObj = CAST(struct luaApi_jtagSkill *, lua_newuserdatauv(L, sizeof(struct luaApi_jtagSkill), 1));
+  jtagSkillObj = CAST(JtagSkill *, lua_newuserdatauv(L, sizeof(JtagSkill), 1));
 
-  jtagSkillObj->self = self;
-  jtagSkillObj->skill = CAST(JtagSkill, skill);
+  *jtagSkillObj = CAST(JtagSkill, skill);
 
   // 绑定metatable
   luaL_setmetatable(L, SKILL_JTAG_LUA_OBJECT_TYPE);

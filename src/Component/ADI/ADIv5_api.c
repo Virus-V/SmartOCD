@@ -43,32 +43,6 @@ struct luaApi_accessPort {
 };
 
 /**
- * TODO(Remove) 检查是否是Adapter对象
- */
-static void *checkAdapter(lua_State *L, int ud) {
-  void *p = lua_touserdata(L, ud);
-  if (p != NULL) {                                        /* value is a userdata? */
-    if (lua_getmetatable(L, ud)) {                        /* does it have a metatable? */
-      if (lua_getfield(L, -1, "__name") != LUA_TSTRING) { //获得metatable的__name字段
-        lua_pop(L, 2);
-        return NULL;
-      }
-      const char *typeName = lua_tostring(L, -1); // 获得类型字符串
-      if (strncmp(typeName, "adapter", 7) != 0) { // 判断是否是Adapter类型的metatable
-        lua_pop(L, 2);
-        return NULL;
-      }
-      luaL_getmetatable(L, typeName); /* get correct metatable */
-      if (!lua_rawequal(L, -1, -3))   /* not the same? */
-        p = NULL;                     /* value is a userdata with wrong metatable */
-      lua_pop(L, 3);                  /* remove both metatables */
-      return p;
-    }
-  }
-  return NULL; /* value is not a userdata with a metatable */
-}
-
-/**
  * 创建DAP对象
  * 参数:
  * 1# Adapter对象
@@ -395,7 +369,7 @@ int luaopen_adiv5(lua_State *L) {
   LuaApi_create_new_type(L, ADIV5_LUA_OBJECT_TYPE, luaApi_adiv5_gc, lib_adiv5_oo, NULL);
   LuaApi_create_new_type(L, ADIV5_AP_MEM_LUA_OBJECT_TYPE, luaApi_adiv5_access_port_gc, lib_access_port_oo, NULL);
 
-  lua_createtable(L, 0, sizeof(lib_adiv5_const) / sizeof(lib_adiv5_const[0])); 
+  lua_createtable(L, 0, sizeof(lib_adiv5_const) / sizeof(lib_adiv5_const[0]));
   // 注册常量到模块中
   LuaApiRegConstant(L, lib_adiv5_const);
   // 将函数注册进去

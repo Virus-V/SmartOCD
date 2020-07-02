@@ -333,7 +333,7 @@ static int smartocd_init(lua_State *L) {
   // 取回参数个数和参数数据
   int argc = (int)lua_tointeger(L, -2);
   char **argv = lua_touserdata(L, -1);
-  int opt, logLevel = LOG_INFO;
+  int opt, logLevel = LOG_WARN;
   int exitFlag = 0; // 执行脚本后结束运行
 
   // 打开标准库

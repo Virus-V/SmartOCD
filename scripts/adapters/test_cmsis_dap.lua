@@ -13,7 +13,7 @@ dapSkill = cmObj:GetSkill(adapter.SKILL_DAP);
 
 -- 读取DP IDR
 local dpidr = dapSkill:DapSingleRead(adapter.REG_DP, 0)
-print(string.format("DPIDR: 0x%X", dpidr))
+print(string.format("DPIDR: 0x%X", dpidr)) -- 0x2BA01477
 -- 写ABORT寄存器
 dapSkill:DapSingleWrite(adapter.REG_DP, 0, 0x1e)
 -- 写SELECT寄存器

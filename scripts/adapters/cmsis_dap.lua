@@ -24,8 +24,8 @@ cmObj:TransferConfig(5, 5, 5)
 -- SWD参数
 cmObj:SwdConfig(0)
 -- 设置传输频率
-cmObj:Frequent(5000000)	-- 500KHz
-print("CMSIS-DAP: Current frequent is 5MHz")
+cmObj:Frequent(20000000)	-- 500KHz
+print("CMSIS-DAP: Current frequent is " .. cmObj:Frequent() .. "Hz")
 -- 选择SWD传输模式
 local transMode = cmObj:TransferMode()
 if transMode == adapter.MODE_SWD then
@@ -74,21 +74,24 @@ else
 end
 
 -- 系统复位
-cmObj:Reset(adapter.RESET_SYSTEM)
+cmObj:Reset(adapter.RESET_DEBUG)
 
--- -- JTAG 原生方式读取IDCODE
--- AdapterObj:jtagStatusChange(adapter.TAP_RESET)	-- TAP到RESET状态，默认连接IDCODE扫描链
--- AdapterObj:jtagStatusChange(adapter.TAP_DR_SHIFT)	-- TAP到DR-Shift状态，读取idcode
--- local idcodes = AdapterObj:jtagExchangeIO(string.pack("I4I4", 0, 0), 64)
--- local idcodesa, idcodesb = string.unpack("I4I4", idcodes)
--- print(string.format("%x,%x", idcodesa, idcodesb))
+cmObj:TransferMode(adapter.MODE_JTAG)
+print("Change transfer mode to JTAG")
 
--- AdapterObj:reset()	-- 复位
+-- JTAG 原生方式读取IDCODE
+jtagSkill:JtagToState(adapter.TAP_RESET)	-- TAP到RESET状态，默认连接IDCODE扫描链
+jtagSkill:JtagToState(adapter.TAP_DR_SHIFT)	-- TAP到DR-Shift状态，读取idcode
+local idcodes = jtagSkill:JtagExchangeData(string.pack("I4I4", 0, 0), 64)
+local idcodesa, idcodesb = string.unpack("I4I4", idcodes)
+print(string.format("%x,%x", idcodesa, idcodesb))
+
+-- cmObj:Reset(adapter.RESET_DEBUG)
+
 -- -- SmartOCD扩展方式读取IDCODE
--- AdapterObj:jtagSetTAPInfo{4,5}
--- print(adapter.JTAG_IDCODE)
--- AdapterObj:jtagWriteTAPIR(0, adapter.JTAG_IDCODE)
--- local arm_idcode = AdapterObj:jtagExchangeTAPDR(0, "\000\000\000\000", 32)
+-- cmObj:JtagConfig{4,5}
+-- cmObj:jtagWriteTAPIR(0, adapter.JTAG_IDCODE)
+-- local arm_idcode = cmObj:jtagExchangeTAPDR(0, "\000\000\000\000", 32)
 -- print(string.format("%x", string.unpack("I4", arm_idcode)))
 
 

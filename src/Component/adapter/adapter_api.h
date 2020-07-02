@@ -28,20 +28,10 @@
 #define SKILL_DAP_LUA_OBJECT_TYPE "skill.dap"
 #define SKILL_JTAG_LUA_OBJECT_TYPE "skill.jtag"
 
-struct luaApi_jtagSkill {
-  Adapter self;
-  JtagSkill skill;
-};
-
-struct luaApi_dapSkill {
-  Adapter self;
-  DapSkill skill;  
-};
-
 void LuaApi_jtag_skill_type_register(lua_State *L);
 void LuaApi_dap_skill_type_register(lua_State *L);
 
-void LuaApi_create_jtag_skill_object(lua_State *L, Adapter self, const struct skill *skill);
-void LuaApi_create_dap_skill_object(lua_State *L, Adapter self, const struct skill *skill);
+void LuaApi_create_jtag_skill_object(lua_State *L, const struct skill *skill);
+void LuaApi_create_dap_skill_object(lua_State *L, const struct skill *skill);
 
 #endif

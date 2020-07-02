@@ -420,7 +420,7 @@ static int dapSetTransMode(Adapter self, enum transferMode mode) {
       // 更新当前模式
       INTERFACE_CONST_INIT(enum transferMode, cmdapObj->adaperAPI.currTransMode, ADPT_MODE_JTAG);
       // 更新当前TAP状态机
-      INTERFACE_CONST_INIT(enum JTAG_TAP_State, cmdapObj->jtagSkillObj.currState, JTAG_TAP_RESET);
+      INTERFACE_CONST_INIT(enum JTAG_TAP_State, cmdapObj->jtagSkillAPI.currState, JTAG_TAP_RESET);
       return ADPT_SUCCESS;
     }
   default:
@@ -676,10 +676,10 @@ MAKE_PACKT:
  * 1 .. 3000000 = time in µs (max 3s)
  * 返回值 TRUE；
  */
-static int dapSwjPins(Adapter self, uint8_t pinMask, uint8_t pinDataOut, uint8_t *pinDataIn,
+static int dapSwjPins(JtagSkill self, uint8_t pinMask, uint8_t pinDataOut, uint8_t *pinDataIn,
                       unsigned int pinWait) {
   assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, jtagSkillAPI);
   uint8_t DAP_PinPack[7] = {CMDAP_ID_DAP_SWJ_Pins};
   uint32_t wait_us = CAST(uint32_t, pinWait);
   // 构造包数据
@@ -975,18 +975,18 @@ static int dapReset(Adapter self, enum targetResetType type) {
   switch (type) {
   case ADPT_RESET_SYSTEM: // 系统复位,assert nSRST
     pinMask |= SWJ_PIN_nRESET;
-    if (dapSwjPins(self, pinMask, pinData, &pinData, 100000) != ADPT_SUCCESS) { // 死区时间100ms
+    if (dapSwjPins((JtagSkill)&cmdapObj->jtagSkillAPI, pinMask, pinData, &pinData, 100000) != ADPT_SUCCESS) { // 死区时间100ms
       log_error("Assert reset pin failed!");
       return ADPT_FAILED;
     }
     // 取消复位
     pinData = 0xFF;
-    if (dapSwjPins(self, pinMask, pinData, &pinData, 0) != ADPT_SUCCESS) {
+    if (dapSwjPins((JtagSkill)&cmdapObj->jtagSkillAPI, pinMask, pinData, &pinData, 0) != ADPT_SUCCESS) {
       log_error("Deassert reset pin failed!");
       return ADPT_FAILED;
     }
     // 更新TAP状态机
-    INTERFACE_CONST_INIT(enum JTAG_TAP_State, cmdapObj->jtagSkillObj.currState, JTAG_TAP_RESET);
+    INTERFACE_CONST_INIT(enum JTAG_TAP_State, cmdapObj->jtagSkillAPI.currState, JTAG_TAP_RESET);
     return ADPT_SUCCESS;
   case ADPT_RESET_DEBUG:
     if (self->currTransMode == ADPT_MODE_JTAG) {
@@ -1003,7 +1003,7 @@ static int dapReset(Adapter self, enum targetResetType type) {
       return ADPT_ERR_UNSUPPORT;
     }
     // 更新TAP状态机
-    INTERFACE_CONST_INIT(enum JTAG_TAP_State, cmdapObj->jtagSkillObj.currState, JTAG_TAP_RESET);
+    INTERFACE_CONST_INIT(enum JTAG_TAP_State, cmdapObj->jtagSkillAPI.currState, JTAG_TAP_RESET);
     return ADPT_SUCCESS;
   }
   return ADPT_ERR_UNSUPPORT;
@@ -1125,11 +1125,11 @@ static int parseIDLEWait(uint8_t *buff, int wait, int *seqCnt) {
 /**
  * 解析执行JTAG指令队列
  */
-static int executeJtagCmd(Adapter self) {
+static int executeJtagCmd(JtagSkill self) {
   assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, jtagSkillAPI);
 
-  enum JTAG_TAP_State tempState = cmdapObj->jtagSkillObj.currState; // 临时JTAG状态机状态
+  enum JTAG_TAP_State tempState = cmdapObj->jtagSkillAPI.currState; // 临时JTAG状态机状态
   int seqCnt = 0;                                                   // CMSIS-DAP的Sequence个数，具体看CMSIS-DAP手册
   int writeBuffLen = 0;                                             // 生成指令缓冲区的长度
   int readBuffLen = 0;                                              // 需要读的字节个数
@@ -1208,7 +1208,7 @@ static int executeJtagCmd(Adapter self) {
     return ADPT_ERR_INTERNAL_ERROR;
   }
 
-  tempState = cmdapObj->jtagSkillObj.currState; // 重置临时JTAG状态机状态
+  tempState = cmdapObj->jtagSkillAPI.currState; // 重置临时JTAG状态机状态
   // 第二次遍历，生成指令对应的数据
   list_for_each_entry(cmd, &cmdapObj->JtagInsQueue, list_entry) {
     switch (cmd->type) {
@@ -1233,7 +1233,7 @@ static int executeJtagCmd(Adapter self) {
   }
 
   // 执行指令
-  if (CmdapJtagSequence(self, seqCnt, writeBuff, readBuff) != ADPT_SUCCESS) {
+  if (CmdapJtagSequence((Adapter)&cmdapObj->adaperAPI, seqCnt, writeBuff, readBuff) != ADPT_SUCCESS) {
     log_warn("Execute JTAG Instruction Failed.");
     free(writeBuff);
     free(readBuff);
@@ -1268,7 +1268,7 @@ static int executeJtagCmd(Adapter self) {
     free(cmd);
   }
   // 更新当前TAP状态机
-  INTERFACE_CONST_INIT(enum JTAG_TAP_State, cmdapObj->jtagSkillObj.currState, tempState);
+  INTERFACE_CONST_INIT(enum JTAG_TAP_State, cmdapObj->jtagSkillAPI.currState, tempState);
 
   // 释放资源
   free(writeBuff);
@@ -1295,9 +1295,9 @@ static struct JTAG_Command *newJtagCommand(struct cmsis_dap *cmdapObj) {
  * bitCount：需要传输的位个数
  * dataPtr:传输的数据
  */
-static int addJtagExchangeData(Adapter self, uint8_t *dataPtr, unsigned int bitCount) {
+static int addJtagExchangeData(JtagSkill self, uint8_t *dataPtr, unsigned int bitCount) {
   assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, jtagSkillAPI);
   // 新建指令
   struct JTAG_Command *command = newJtagCommand(cmdapObj);
   if (command == NULL) {
@@ -1312,9 +1312,9 @@ static int addJtagExchangeData(Adapter self, uint8_t *dataPtr, unsigned int bitC
 /**
  * JTAG Idle
  */
-static int addJtagIdle(Adapter self, unsigned int clkCnt) {
+static int addJtagIdle(JtagSkill self, unsigned int clkCnt) {
   assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, jtagSkillAPI);
   // 新建指令
   struct JTAG_Command *command = newJtagCommand(cmdapObj);
   if (command == NULL) {
@@ -1328,9 +1328,9 @@ static int addJtagIdle(Adapter self, unsigned int clkCnt) {
 /**
  * JTAG to state
  */
-static int addJtagToState(Adapter self, enum JTAG_TAP_State toState) {
+static int addJtagToState(JtagSkill self, enum JTAG_TAP_State toState) {
   assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, jtagSkillAPI);
   // 新建指令
   struct JTAG_Command *command = newJtagCommand(cmdapObj);
   if (command == NULL) {
@@ -1344,9 +1344,9 @@ static int addJtagToState(Adapter self, enum JTAG_TAP_State toState) {
 /**
  * JTAG Clean pending
  */
-static int cleanJtagInsQueue(Adapter self) {
+static int cleanJtagInsQueue(JtagSkill self) {
   assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, jtagSkillAPI);
 
   struct JTAG_Command *cmd, *cmd_t;
   list_for_each_entry_safe(cmd, cmd_t, &cmdapObj->JtagInsQueue, list_entry) {
@@ -1360,9 +1360,9 @@ static int cleanJtagInsQueue(Adapter self) {
  * 解析执行DAP指令队列
  * 注意：对于读操作，成功之后才写入内存地址，如果读取失败，则值保持不变，不要清零
  */
-static int executeDapCmd(Adapter self) {
+static int executeDapCmd(DapSkill self) {
   assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, dapSkillAPI);
 
   struct DAP_Command *cmd, *cmd_t;
   int readCnt, writeCnt, seqCnt;
@@ -1468,7 +1468,7 @@ REEXEC:;
   switch (thisType) {
   case DAP_INS_RW_REG_SINGLE:
     // 执行指令 DAP_Transfer
-    if (CmdapTransfer(self, cmdapObj->tapIndex, seqCnt, writeBuff, readBuff, &okSeqCnt) != ADPT_SUCCESS) {
+    if (CmdapTransfer((Adapter)&cmdapObj->adaperAPI, cmdapObj->tapIndex, seqCnt, writeBuff, readBuff, &okSeqCnt) != ADPT_SUCCESS) {
       log_error(
           "DAP_Transfer:Some DAP Instruction Execute Failed. Success:%d, "
           "All:%d.",
@@ -1479,7 +1479,7 @@ REEXEC:;
 
   case DAP_INS_RW_REG_MULTI:
     // transfer block
-    if (CmdapTransferBlock(self, cmdapObj->tapIndex, seqCnt, writeBuff, readBuff, &okSeqCnt) != ADPT_SUCCESS) {
+    if (CmdapTransferBlock((Adapter)&cmdapObj->adaperAPI, cmdapObj->tapIndex, seqCnt, writeBuff, readBuff, &okSeqCnt) != ADPT_SUCCESS) {
       log_error(
           "DAP_TransferBlock:Some DAP Instruction Execute Failed. "
           "Success:%d, All:%d.",
@@ -1533,9 +1533,9 @@ static struct DAP_Command *newDapCommand(struct cmsis_dap *cmdapObj) {
 }
 
 /* 增加单次读寄存器指令 */
-static int addDapSingleRead(Adapter self, enum dapRegType type, int reg, uint32_t *data) {
+static int addDapSingleRead(DapSkill self, enum dapRegType type, int reg, uint32_t *data) {
   assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, dapSkillAPI);
 
   // 新建指令
   struct DAP_Command *command = newDapCommand(cmdapObj);
@@ -1544,7 +1544,7 @@ static int addDapSingleRead(Adapter self, enum dapRegType type, int reg, uint32_
   }
   command->type = DAP_INS_RW_REG_SINGLE;
   command->instr.singleReg.request = (reg & 0xC) | 0x2;
-  if (type == ADPT_DAP_AP_REG) {
+  if (type == SKILL_DAP_AP_REG) {
     command->instr.singleReg.request |= 0x1;
   }
   command->instr.singleReg.data.read = data;
@@ -1552,9 +1552,9 @@ static int addDapSingleRead(Adapter self, enum dapRegType type, int reg, uint32_
 }
 
 /* 增加单次写寄存器指令 */
-static int addDapSingleWrite(Adapter self, enum dapRegType type, int reg, uint32_t data) {
+static int addDapSingleWrite(DapSkill self, enum dapRegType type, int reg, uint32_t data) {
   assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, dapSkillAPI);
 
   // 新建指令
   struct DAP_Command *command = newDapCommand(cmdapObj);
@@ -1563,7 +1563,7 @@ static int addDapSingleWrite(Adapter self, enum dapRegType type, int reg, uint32
   }
   command->type = DAP_INS_RW_REG_SINGLE;
   command->instr.singleReg.request = (reg & 0xC);
-  if (type == ADPT_DAP_AP_REG) {
+  if (type == SKILL_DAP_AP_REG) {
     command->instr.singleReg.request |= 0x1;
   }
   command->instr.singleReg.data.write = data;
@@ -1571,9 +1571,9 @@ static int addDapSingleWrite(Adapter self, enum dapRegType type, int reg, uint32
 }
 
 /* 增加多次读寄存器指令 */
-static int addDapMultiRead(Adapter self, enum dapRegType type, int reg, int count, uint32_t *data) {
+static int addDapMultiRead(DapSkill self, enum dapRegType type, int reg, int count, uint32_t *data) {
   assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, dapSkillAPI);
   if (count <= 0) {
     log_error("Count must be greater than 0.");
     return ADPT_ERR_BAD_PARAMETER;
@@ -1585,7 +1585,7 @@ static int addDapMultiRead(Adapter self, enum dapRegType type, int reg, int coun
   }
   command->type = DAP_INS_RW_REG_MULTI;
   command->instr.multiReg.request = (reg & 0xC) | 0x2;
-  if (type == ADPT_DAP_AP_REG) {
+  if (type == SKILL_DAP_AP_REG) {
     command->instr.multiReg.request |= 0x1;
   }
   command->instr.multiReg.data = data;
@@ -1594,10 +1594,10 @@ static int addDapMultiRead(Adapter self, enum dapRegType type, int reg, int coun
 }
 
 /* 增加多次写寄存器指令 */
-static int addDapMultiWrite(Adapter self, enum dapRegType type, int reg, int count,
+static int addDapMultiWrite(DapSkill self, enum dapRegType type, int reg, int count,
                             uint32_t *data) {
   assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, dapSkillAPI);
 
   if (count <= 0) {
     log_error("Count must be greater than 0.");
@@ -1610,7 +1610,7 @@ static int addDapMultiWrite(Adapter self, enum dapRegType type, int reg, int cou
   }
   command->type = DAP_INS_RW_REG_MULTI;
   command->instr.multiReg.request = (reg & 0xC);
-  if (type == ADPT_DAP_AP_REG) {
+  if (type == SKILL_DAP_AP_REG) {
     command->instr.multiReg.request |= 0x1;
   }
   command->instr.multiReg.data = data;
@@ -1619,9 +1619,9 @@ static int addDapMultiWrite(Adapter self, enum dapRegType type, int reg, int cou
 }
 
 /* 清空DAP指令队列 */
-static int cleanDapInsQueue(Adapter self) {
+static int cleanDapInsQueue(DapSkill self) {
   assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, dapSkillAPI);
 
   struct DAP_Command *cmd, *cmd_t;
   list_for_each_entry_safe(cmd, cmd_t, &cmdapObj->DapInsQueue, list_entry) {
@@ -1687,27 +1687,27 @@ Adapter CreateCmsisDap(void) {
   obj->adaperAPI.Reset = dapReset;
   obj->adaperAPI.SetTransferMode = dapSetTransMode;
 
-  INIT_LIST_HEAD(&obj->jtagSkillObj.header.skills);
-  list_add(&obj->jtagSkillObj.header.skills, &obj->adaperAPI.skills);
+  INIT_LIST_HEAD(&obj->jtagSkillAPI.header.skills);
+  list_add(&obj->jtagSkillAPI.header.skills, &obj->adaperAPI.skills);
 
-  obj->jtagSkillObj.header.type = ADPT_SKILL_JTAG;
-  obj->jtagSkillObj.JtagPins = dapSwjPins;
-  obj->jtagSkillObj.JtagExchangeData = addJtagExchangeData;
-  obj->jtagSkillObj.JtagIdle = addJtagIdle;
-  obj->jtagSkillObj.JtagToState = addJtagToState;
-  obj->jtagSkillObj.JtagCommit = executeJtagCmd;
-  obj->jtagSkillObj.JtagCleanPending = cleanJtagInsQueue;
+  obj->jtagSkillAPI.header.type = ADPT_SKILL_JTAG;
+  obj->jtagSkillAPI.JtagPins = dapSwjPins;
+  obj->jtagSkillAPI.JtagExchangeData = addJtagExchangeData;
+  obj->jtagSkillAPI.JtagIdle = addJtagIdle;
+  obj->jtagSkillAPI.JtagToState = addJtagToState;
+  obj->jtagSkillAPI.JtagCommit = executeJtagCmd;
+  obj->jtagSkillAPI.JtagCleanPending = cleanJtagInsQueue;
 
-  INIT_LIST_HEAD(&obj->dapSkillObj.header.skills);
-  list_add(&obj->dapSkillObj.header.skills, &obj->adaperAPI.skills);
+  INIT_LIST_HEAD(&obj->dapSkillAPI.header.skills);
+  list_add(&obj->dapSkillAPI.header.skills, &obj->adaperAPI.skills);
 
-  obj->dapSkillObj.header.type = ADPT_SKILL_DAP;
-  obj->dapSkillObj.DapSingleRead = addDapSingleRead;
-  obj->dapSkillObj.DapSingleWrite = addDapSingleWrite;
-  obj->dapSkillObj.DapMultiRead = addDapMultiRead;
-  obj->dapSkillObj.DapMultiWrite = addDapMultiWrite;
-  obj->dapSkillObj.DapCommit = executeDapCmd;
-  obj->dapSkillObj.DapCleanPending = cleanDapInsQueue;
+  obj->dapSkillAPI.header.type = ADPT_SKILL_DAP;
+  obj->dapSkillAPI.DapSingleRead = addDapSingleRead;
+  obj->dapSkillAPI.DapSingleWrite = addDapSingleWrite;
+  obj->dapSkillAPI.DapMultiRead = addDapMultiRead;
+  obj->dapSkillAPI.DapMultiWrite = addDapMultiWrite;
+  obj->dapSkillAPI.DapCommit = executeDapCmd;
+  obj->dapSkillAPI.DapCleanPending = cleanDapInsQueue;
 
   obj->connected = FALSE;
 

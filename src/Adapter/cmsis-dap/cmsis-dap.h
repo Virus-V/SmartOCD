@@ -218,8 +218,8 @@ struct cmsis_dap {
   BOOL inited;              // 是否已经初始化
   BOOL connected;           // USB设备是否已连接
 
-  struct jtagSkill jtagSkillObj; // jtag能力集对象
-  struct dapSkill dapSkillObj;   // dap能力集对象
+  struct jtagSkill jtagSkillAPI; // jtag能力集接口
+  struct dapSkill dapSkillAPI;   // dap能力集接口
   int Version;                   // CMSIS-DAP 版本
   int MaxPcaketCount;            // 缓冲区最多容纳包的个数
   int PacketSize;                // 包最大长度
