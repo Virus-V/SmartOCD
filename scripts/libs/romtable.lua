@@ -93,7 +93,7 @@ local dap_infos = {
 	{ 0x3eb, 0x202, "Denver ETM",                 "(Denver Embedded Trace)", },
 	{ 0x3eb, 0x302, "Denver Debug",               "(Debug Unit)", },
 	{ 0x3eb, 0x402, "Denver PMU",                 "(Performance Monitor Unit)", },
-	{ 0x1000, 0x120, "TI SDTI",                    "(System Debug Trace Interface)", }, 
+	{ 0x1000, 0x120, "TI SDTI",                    "(System Debug Trace Interface)", },
 	{ 0x1000, 0x343, "TI DAPCTL",                  "", },
 }
 
@@ -105,17 +105,17 @@ function ComponentInfo(memAccessPort, addr)
     if (cid & 0xFFFF0FFF) ~= 0xB105000D then
         -- 无效的CID
         print("Invaild CID:" .. string.format("0x%08X", cid))
-        return 
+        return
     end
     print(string.format( "* Component CID:0x%08X, PID:0x%010X.", cid, pid))
-    
+
     -- 获得当前Component的类型
     local compon_type = (cid >> 12) & 0xF
     local part_num = pid & 0xFFF
     local designer_id = ((pid >> 32) & 0xF) << 8 | ((pid >> 12) & 0xFF)
     -- TODO 判断designer_id是否是JEP106，designer_id & 0x80 == 0x80
     -- 打印组件详细信息
-    for idx,info in ipairs(dap_infos) do 
+    for idx,info in ipairs(dap_infos) do
         if info[1] == designer_id and info[2] == part_num then
             print("- " .. info[3] .. " " .. info[4])
             break
@@ -124,9 +124,9 @@ function ComponentInfo(memAccessPort, addr)
     if compon_type == 0x1 then    -- ROM Table
         local mem_type = memAccessPort:Memory32(base_addr + 0xFCC)
         if mem_type & 0x1 == 0x1 then
-            print("- MEMTYPE system memory present on bus.")
+            print("ROMTable - MEMTYPE system memory present on bus.")
         else
-            print("- MEMTYPE system memory not present: dedicated debug bus.")
+            print("ROMTable - MEMTYPE system memory not present: dedicated debug bus.")
         end
     elseif compon_type == 0x9 then -- CoreSight component
         -- 读DEVARCH,DEVID,DEVTYPE
@@ -167,7 +167,7 @@ function ComponentInfo(memAccessPort, addr)
                 sub_type = "DSP"
             elseif minor == 3 then
                 sub_type = "Engine/Coprocessor"
-            elseif minor == 4 then 
+            elseif minor == 4 then
                 sub_type = "Bus"
             elseif minor == 6 then
                 sub_type = "Software"
@@ -181,11 +181,11 @@ function ComponentInfo(memAccessPort, addr)
             elseif minor == 3 then
                 sub_type = "Power requestor"
             end
-        elseif dev_type & 0x0F == 5 then 
+        elseif dev_type & 0x0F == 5 then
             major_type = "Debug Logic"
             if minor == 1 then
                 sub_type = "Processor"
-            elseif minor == 2 then 
+            elseif minor == 2 then
                 sub_type = "DSP"
             elseif minor == 3 then
                 sub_type = "Engine/Coprocessor"
@@ -198,7 +198,7 @@ function ComponentInfo(memAccessPort, addr)
             major_type = "Perfomance Monitor"
             if minor == 1 then
                 sub_type = "Processor"
-            elseif minor == 2 then 
+            elseif minor == 2 then
                 sub_type = "DSP"
             elseif minor == 3 then
                 sub_type = "Engine/Coprocessor"
