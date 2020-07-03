@@ -555,7 +555,7 @@ static int cmdapJtagSequence(struct cmsis_dap *cmdapObj, int sequenceCount, uint
   assert(cmdapObj != NULL);
   assert(cmdapObj->PacketSize != 0 && cmdapObj->MaxPcaketCount != 0);
   // 判断当前是否是JTAG模式
-  if (self->currTransMode != ADPT_MODE_JTAG) {
+  if (cmdapObj->adaperAPI.currTransMode != ADPT_MODE_JTAG) {
     log_error("Current transfer mode is not JTAG.");
     return ADPT_FAILED;
   }

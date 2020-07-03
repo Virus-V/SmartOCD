@@ -27,27 +27,29 @@
  * 上电,初始化寄存器
  */
 static int dapInit(struct ADIv5_Dap *dap) {
+  assert(dap != NULL);
+#if 0
   // 调试部分复位
-  dap->adapter->Reset(dap->adapter, ADPT_RESET_DEBUG);
-  if (dap->adapter->currTransMode == ADPT_MODE_SWD) {
+  dap->skillObj->Reset(dap->skillObj, ADPT_RESET_DEBUG);
+  if (dap->skillObj->currTransMode == ADPT_MODE_SWD) {
     uint32_t dpidr = 0;
     // SWD模式下第一个读取的寄存器必须要是DPIDR，这样才能读取其他的寄存器
     // 否则其他寄存器无法读取
-    dap->adapter->DapSingleRead(dap->adapter, ADPT_DAP_DP_REG, DP_REG_DPIDR, &dpidr);
+    dap->skillObj->DapSingleRead(dap->skillObj, SKILL_DAP_DP_REG, DP_REG_DPIDR, &dpidr);
     // 清空STICKER ERROR 信息
-    dap->adapter->DapSingleWrite(dap->adapter, ADPT_DAP_DP_REG, DP_REG_ABORT, 0x1e);
-    if (dap->adapter->DapCommit(dap->adapter) != ADPT_SUCCESS) {
+    dap->skillObj->DapSingleWrite(dap->skillObj, SKILL_DAP_DP_REG, DP_REG_ABORT, 0x1e);
+    if (dap->skillObj->DapCommit(dap->skillObj) != ADPT_SUCCESS) {
       // 清理指令队列
-      dap->adapter->DapCleanPending(dap->adapter);
+      dap->skillObj->DapCleanPending(dap->skillObj);
       log_error("Init DAP failed!");
       return ADI_ERR_INTERNAL_ERROR;
     }
     log_info("DAP DPIDR:0x%08X.", dpidr);
-  } else if (dap->adapter->currTransMode == ADPT_MODE_JTAG) {
-    dap->adapter->JtagToState(dap->adapter, JTAG_TAP_IDLE);
-    if (dap->adapter->JtagCommit(dap->adapter) != ADPT_SUCCESS) {
+  } else if (dap->skillObj->currTransMode == ADPT_MODE_JTAG) {
+    dap->skillObj->JtagToState(dap->skillObj, JTAG_TAP_IDLE);
+    if (dap->skillObj->JtagCommit(dap->skillObj) != ADPT_SUCCESS) {
       // 清理指令队列
-      dap->adapter->DapCleanPending(dap->adapter);
+      dap->skillObj->DapCleanPending(dap->skillObj);
       log_error("Change TAP to IDLE state failed!");
       return ADI_ERR_INTERNAL_ERROR;
     }
@@ -55,26 +57,27 @@ static int dapInit(struct ADIv5_Dap *dap) {
     log_error("Unknow transfer type!");
     return ADI_FAILED;
   }
+#endif
 
   uint32_t ctrl_stat = 0;
   // 清零SELECT寄存器
-  dap->adapter->DapSingleWrite(dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, 0);
+  dap->skillObj->DapSingleWrite(dap->skillObj, SKILL_DAP_DP_REG, DP_REG_SELECT, 0);
   // 写0x20到CTRL，并读取
-  dap->adapter->DapSingleWrite(dap->adapter, ADPT_DAP_DP_REG, DP_REG_CTRL_STAT, 0x20);
-  // dap->adapter->DapSingleRead(dap->adapter, ADPT_DAP_DP_REG, DP_REG_CTRL_STAT, &ctrl_stat);
+  dap->skillObj->DapSingleWrite(dap->skillObj, SKILL_DAP_DP_REG, DP_REG_CTRL_STAT, 0x20);
+  // dap->skillObj->DapSingleRead(dap->skillObj, SKILL_DAP_DP_REG, DP_REG_CTRL_STAT, &ctrl_stat);
   // 写上电请求
-  dap->adapter->DapSingleWrite(dap->adapter, ADPT_DAP_DP_REG, DP_REG_CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ);
-  if (dap->adapter->DapCommit(dap->adapter) != ADPT_SUCCESS) {
+  dap->skillObj->DapSingleWrite(dap->skillObj, SKILL_DAP_DP_REG, DP_REG_CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ);
+  if (dap->skillObj->DapCommit(dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    dap->adapter->DapCleanPending(dap->adapter);
+    dap->skillObj->DapCleanPending(dap->skillObj);
     log_error("Init DAP register failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
   do {
-    dap->adapter->DapSingleRead(dap->adapter, ADPT_DAP_DP_REG, DP_REG_CTRL_STAT, &ctrl_stat);
-    if (dap->adapter->DapCommit(dap->adapter) != ADPT_SUCCESS) {
+    dap->skillObj->DapSingleRead(dap->skillObj, SKILL_DAP_DP_REG, DP_REG_CTRL_STAT, &ctrl_stat);
+    if (dap->skillObj->DapCommit(dap->skillObj) != ADPT_SUCCESS) {
       // 清理指令队列
-      dap->adapter->DapCleanPending(dap->adapter);
+      dap->skillObj->DapCleanPending(dap->skillObj);
       log_error("Read DP CTRL/STAT register failed!");
       return ADI_ERR_INTERNAL_ERROR;
     }
@@ -113,24 +116,24 @@ static int apRead8(AccessPort self, uint64_t addr, uint8_t *data) {
   cswTmp.regInfo.Size = AP_CSW_SIZE8; // Byte
   // 是否需要更新SELECT寄存器?
   if (ap->dap->select.regData != selectTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
   }
   // 是否需要更新CSW寄存器？
   if (ap->type.memory.csw.regData != cswTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
   }
   // 写入TAR
-  ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+  ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
   if (ap->type.memory.config.largeAddress) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
   }
   uint32_t data_tmp = 0;
   // 读DRW寄存器
-  ap->dap->adapter->DapSingleRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, &data_tmp);
+  ap->dap->skillObj->DapSingleRead(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_DRW, &data_tmp);
   // 执行指令队列
-  if (ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS) {
+  if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -177,24 +180,24 @@ static int apRead16(AccessPort self, uint64_t addr, uint16_t *data) {
   cswTmp.regInfo.Size = AP_CSW_SIZE16; // Half Word
   // 是否需要更新SELECT寄存器?
   if (ap->dap->select.regData != selectTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
   }
   // 是否需要更新CSW寄存器？
   if (ap->type.memory.csw.regData != cswTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
   }
   // 写入TAR
-  ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+  ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
   if (ap->type.memory.config.largeAddress) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
   }
   uint32_t data_tmp = 0;
   // 读DRW寄存器
-  ap->dap->adapter->DapSingleRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, &data_tmp);
+  ap->dap->skillObj->DapSingleRead(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_DRW, &data_tmp);
   // 执行指令队列
-  if (ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS) {
+  if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -237,23 +240,23 @@ static int apRead32(AccessPort self, uint64_t addr, uint32_t *data) {
   cswTmp.regInfo.Size = AP_CSW_SIZE32;      // Word
   // 是否需要更新SELECT寄存器?
   if (ap->dap->select.regData != selectTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
   }
   // 是否需要更新CSW寄存器？
   if (ap->type.memory.csw.regData != cswTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
   }
   // 写入TAR
-  ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+  ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
   if (ap->type.memory.config.largeAddress) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
   }
   // 读DRW寄存器, 根据byte lane获得数据
-  ap->dap->adapter->DapSingleRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data);
+  ap->dap->skillObj->DapSingleRead(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_DRW, data);
   // 执行指令队列
-  if (ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS) {
+  if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -298,26 +301,26 @@ static int apRead64(AccessPort self, uint64_t addr, uint64_t *data) {
   cswTmp.regInfo.Size = AP_CSW_SIZE64; // Double Word
   // 是否需要更新SELECT寄存器?
   if (ap->dap->select.regData != selectTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
   }
   // 是否需要更新CSW寄存器？
   if (ap->type.memory.csw.regData != cswTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
   }
   // 写入TAR
-  ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+  ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
   if (ap->type.memory.config.largeAddress) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
   }
   // 读DRW寄存器
   uint32_t data_tmp[2]; // 定义缓冲区
   // 读取数据，第一次读取的是低位，接下来读取高位，必须两次读取后才能完成本次AP Memory access
-  ap->dap->adapter->DapSingleRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data_tmp);
-  ap->dap->adapter->DapSingleRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data_tmp + 1);
+  ap->dap->skillObj->DapSingleRead(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_DRW, data_tmp);
+  ap->dap->skillObj->DapSingleRead(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_DRW, data_tmp + 1);
   // 执行指令队列
-  if (ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS) {
+  if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -357,24 +360,24 @@ static int apWrite8(AccessPort self, uint64_t addr, uint8_t data) {
   cswTmp.regInfo.Size = AP_CSW_SIZE8; // Byte
   // 是否需要更新SELECT寄存器?
   if (ap->dap->select.regData != selectTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
   }
   // 是否需要更新CSW寄存器？
   if (ap->type.memory.csw.regData != cswTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
   }
   // 写入TAR
-  ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+  ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
   if (ap->type.memory.config.largeAddress) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
   }
   // 写DRW寄存器
   uint32_t data_tmp = data << ((addr & 3) << 3); // 放到Byte Lane确定的位置
-  ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data_tmp);
+  ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_DRW, data_tmp);
   // 执行指令队列
-  if (ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS) {
+  if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -418,24 +421,24 @@ static int apWrite16(AccessPort self, uint64_t addr, uint16_t data) {
   cswTmp.regInfo.Size = AP_CSW_SIZE16; // Half Word
   // 是否需要更新SELECT寄存器?
   if (ap->dap->select.regData != selectTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
   }
   // 是否需要更新CSW寄存器？
   if (ap->type.memory.csw.regData != cswTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
   }
   // 写入TAR
-  ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+  ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
   if (ap->type.memory.config.largeAddress) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
   }
   // 写DRW寄存器
   uint32_t data_tmp = data << ((addr & 3) << 3); // 放到Byte Lane确定的位置
-  ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data_tmp);
+  ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_DRW, data_tmp);
   // 执行指令队列
-  if (ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS) {
+  if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -475,23 +478,23 @@ static int apWrite32(AccessPort self, uint64_t addr, uint32_t data) {
   cswTmp.regInfo.Size = AP_CSW_SIZE32;      // Word
   // 是否需要更新SELECT寄存器?
   if (ap->dap->select.regData != selectTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
   }
   // 是否需要更新CSW寄存器？
   if (ap->type.memory.csw.regData != cswTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
   }
   // 写入TAR
-  ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+  ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
   if (ap->type.memory.config.largeAddress) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
   }
   // 写DRW寄存器
-  ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data);
+  ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_DRW, data);
   // 执行指令队列
-  if (ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS) {
+  if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -535,24 +538,24 @@ static int apWrite64(AccessPort self, uint64_t addr, uint64_t data) {
   cswTmp.regInfo.Size = AP_CSW_SIZE64; // Double Word
   // 是否需要更新SELECT寄存器?
   if (ap->dap->select.regData != selectTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
   }
   // 是否需要更新CSW寄存器？
   if (ap->type.memory.csw.regData != cswTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
   }
   // 写入TAR
-  ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+  ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
   if (ap->type.memory.config.largeAddress) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
   }
   // 写DRW寄存器，先写低位，再写高位，最后一个高位写完后才初始化Memory access
-  ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, data & 0xFFFFFFFFu);
-  ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, (data >> 32) & 0xFFFFFFFFu);
+  ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_DRW, data & 0xFFFFFFFFu);
+  ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_DRW, (data >> 32) & 0xFFFFFFFFu);
   // 执行指令队列
-  if (ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS) {
+  if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -640,11 +643,11 @@ static int apBlockRead(AccessPort self, uint64_t addr, enum addrIncreaseMode mod
   }
   // 是否需要更新SELECT寄存器?
   if (ap->dap->select.regData != selectTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
   }
   // 是否需要更新CSW寄存器？
   if (ap->type.memory.csw.regData != cswTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
   }
 
   // 处理地址自增模式下超过1kb边界的情况，超过1kb的边界了需要拆分，每次地址自增控制在1kb以内
@@ -653,14 +656,14 @@ static int apBlockRead(AccessPort self, uint64_t addr, enum addrIncreaseMode mod
   unsigned int thisTimeTransCnt, dataPos = 0; // 指向data_out的偏移
 
   if (cswTmp.regInfo.AddrInc == AP_CSW_SADDRINC) {
-    addrEnd =
-        addr + (count << cswTmp.regInfo.Size); // 每次写DRW，发起一次memory access，之后自增TAR
+    // 每次写DRW，发起一次memory access，之后自增TAR
+    addrEnd = addr + (count << cswTmp.regInfo.Size); 
     while (addrCurr < addrEnd) {
       addrNextBoundary = ((addrCurr >> 10) + 1) << 10; // 找到下一个1kb边界
       // 写入TAR
-      ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addrCurr & 0xFFFFFFFFu);
+      ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_LSB, addrCurr & 0xFFFFFFFFu);
       if (ap->type.memory.config.largeAddress) {
-        ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addrCurr >> 32) & 0xFFFFFFFFu);
+        ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_MSB, (addrCurr >> 32) & 0xFFFFFFFFu);
       }
       // log_debug("SINGLE:CurrAddr:0x%08X;next boundary:0x%08X.", addrCurr, addrNextBoundary);
       // 如果下一个边界大于结束地址
@@ -673,7 +676,7 @@ static int apBlockRead(AccessPort self, uint64_t addr, enum addrIncreaseMode mod
       }
       // log_debug("SINGLE:dataPos:%d;thisTimeTransCnt:%d.", dataPos, thisTimeTransCnt);
       // 读取block
-      ap->dap->adapter->DapMultiRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, thisTimeTransCnt, data_out + dataPos);
+      ap->dap->skillObj->DapMultiRead(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_DRW, thisTimeTransCnt, data_out + dataPos);
       dataPos += thisTimeTransCnt;
     }
   } else if (cswTmp.regInfo.AddrInc == AP_CSW_PADDRINC) {
@@ -681,9 +684,9 @@ static int apBlockRead(AccessPort self, uint64_t addr, enum addrIncreaseMode mod
     while (addrCurr < addrEnd) {
       addrNextBoundary = ((addrCurr >> 10) + 1) << 10; // 找到下一个1kb边界
       // 写入TAR
-      ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addrCurr & 0xFFFFFFFFu);
+      ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_LSB, addrCurr & 0xFFFFFFFFu);
       if (ap->type.memory.config.largeAddress) {
-        ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addrCurr >> 32) & 0xFFFFFFFFu);
+        ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_MSB, (addrCurr >> 32) & 0xFFFFFFFFu);
       }
       // log_debug("PACKED:CurrAddr:0x%08X;next boundary:0x%08X.", addrCurr, addrNextBoundary);
       // 如果下一个边界大于结束地址
@@ -696,21 +699,21 @@ static int apBlockRead(AccessPort self, uint64_t addr, enum addrIncreaseMode mod
       }
       // log_debug("PACKED:dataPos:%d;thisTimeTransCnt:%d.", dataPos, thisTimeTransCnt);
       // 读取block
-      ap->dap->adapter->DapMultiRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, thisTimeTransCnt, data_out + dataPos);
+      ap->dap->skillObj->DapMultiRead(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_DRW, thisTimeTransCnt, data_out + dataPos);
       dataPos += thisTimeTransCnt;
     }
   } else { // 地址不增 XXX 没测试
     // 写入TAR
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
     if (ap->type.memory.config.largeAddress) {
-      ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+      ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
     }
-    ap->dap->adapter->DapMultiRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, count, data_out);
+    ap->dap->skillObj->DapMultiRead(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_DRW, count, data_out);
   }
   // 执行指令队列
-  if (ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS) {
+  if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -798,11 +801,11 @@ static int apBlockWrite(AccessPort self, uint64_t addr, enum addrIncreaseMode mo
   }
   // 是否需要更新SELECT寄存器?
   if (ap->dap->select.regData != selectTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
   }
   // 是否需要更新CSW寄存器？
   if (ap->type.memory.csw.regData != cswTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, cswTmp.regData);
   }
 
   // 处理地址自增模式下超过1kb边界的情况，超过1kb的边界了需要拆分，每次地址自增控制在1kb以内
@@ -815,9 +818,9 @@ static int apBlockWrite(AccessPort self, uint64_t addr, enum addrIncreaseMode mo
     while (addrCurr < addrEnd) {
       addrNextBoundary = ((addrCurr >> 10) + 1) << 10; // 找到下一个1kb边界
       // 写入TAR
-      ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addrCurr & 0xFFFFFFFFu);
+      ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_LSB, addrCurr & 0xFFFFFFFFu);
       if (ap->type.memory.config.largeAddress) {
-        ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addrCurr >> 32) & 0xFFFFFFFFu);
+        ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_MSB, (addrCurr >> 32) & 0xFFFFFFFFu);
       }
       log_debug("SINGLE:CurrAddr:0x%08X;next boundary:0x%08X.", addrCurr, addrNextBoundary);
       // 如果下一个边界大于结束地址
@@ -830,7 +833,7 @@ static int apBlockWrite(AccessPort self, uint64_t addr, enum addrIncreaseMode mo
       }
       // log_debug("SINGLE:dataPos:%d;thisTimeTransCnt:%d.", dataPos, thisTimeTransCnt);
       // 读取block
-      ap->dap->adapter->DapMultiWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, thisTimeTransCnt, data_out + dataPos);
+      ap->dap->skillObj->DapMultiWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_DRW, thisTimeTransCnt, data_out + dataPos);
       dataPos += thisTimeTransCnt;
     }
   } else if (cswTmp.regInfo.AddrInc == AP_CSW_PADDRINC) {
@@ -838,9 +841,9 @@ static int apBlockWrite(AccessPort self, uint64_t addr, enum addrIncreaseMode mo
     while (addrCurr < addrEnd) {
       addrNextBoundary = ((addrCurr >> 10) + 1) << 10; // 找到下一个1kb边界
       // 写入TAR
-      ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addrCurr & 0xFFFFFFFFu);
+      ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_LSB, addrCurr & 0xFFFFFFFFu);
       if (ap->type.memory.config.largeAddress) {
-        ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addrCurr >> 32) & 0xFFFFFFFFu);
+        ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_MSB, (addrCurr >> 32) & 0xFFFFFFFFu);
       }
       // log_debug("PACKED:CurrAddr:0x%08X;next boundary:0x%08X.", addrCurr, addrNextBoundary);
       // 如果下一个边界大于结束地址
@@ -853,21 +856,21 @@ static int apBlockWrite(AccessPort self, uint64_t addr, enum addrIncreaseMode mo
       }
       // log_debug("PACKED:dataPos:%d;thisTimeTransCnt:%d.", dataPos, thisTimeTransCnt);
       // 读取block
-      ap->dap->adapter->DapMultiWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, thisTimeTransCnt, data_out + dataPos);
+      ap->dap->skillObj->DapMultiWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_DRW, thisTimeTransCnt, data_out + dataPos);
       dataPos += thisTimeTransCnt;
     }
-  } else { // 地址不增 XXX 没测试
+  } else { // 地址不增 XXX 没有测试过这里的代码
     // 写入TAR
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_LSB, addr & 0xFFFFFFFFu);
     if (ap->type.memory.config.largeAddress) {
-      ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
+      ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_TAR_MSB, (addr >> 32) & 0xFFFFFFFFu);
     }
-    ap->dap->adapter->DapMultiWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_DRW, count, data_out);
+    ap->dap->skillObj->DapMultiWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_DRW, count, data_out);
   }
   // 执行指令队列
-  if (ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS) {
+  if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -891,14 +894,14 @@ static int apReadCSW(AccessPort self, uint32_t *data) {
   selectTmp.regInfo.AP_BankSel = 0x0;
   // 是否需要更新SELECT寄存器?
   if (ap->dap->select.regData != selectTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
   }
   // 读CSW
-  ap->dap->adapter->DapSingleRead(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, &ap->type.memory.csw.regData);
+  ap->dap->skillObj->DapSingleRead(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, &ap->type.memory.csw.regData);
   // 执行指令队列
-  if (ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS) {
+  if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -922,14 +925,14 @@ static int apWriteCSW(AccessPort self, uint32_t data) {
   selectTmp.regInfo.AP_BankSel = 0x0;
   // 是否需要更新SELECT寄存器?
   if (ap->dap->select.regData != selectTmp.regData) {
-    ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
+    ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_DP_REG, DP_REG_SELECT, selectTmp.regData);
   }
   // 写CSW
-  ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, data);
+  ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, data);
   // 执行指令队列
-  if (ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS) {
+  if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -946,11 +949,11 @@ static int apAbort(AccessPort self) {
   assert(self != NULL);
   struct ADIv5_AccessPort *ap = container_of(self, struct ADIv5_AccessPort, apApi);
   // 写DP Abort
-  ap->dap->adapter->DapSingleWrite(ap->dap->adapter, ADPT_DAP_DP_REG, DP_REG_ABORT, 0x1);
+  ap->dap->skillObj->DapSingleWrite(ap->dap->skillObj, SKILL_DAP_DP_REG, DP_REG_ABORT, 0x1);
   // 执行指令队列
-  if (ap->dap->adapter->DapCommit(ap->dap->adapter) != ADPT_SUCCESS) {
+  if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -967,12 +970,12 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap) {
   if (ap->apApi.type == AccessPort_Memory) {
     uint32_t temp = 0, temp_2 = 0;
     // 读CFG寄存器,并初始化相关标志位
-    dapObj->adapter->DapSingleRead(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_CFG, &temp);
+    dapObj->skillObj->DapSingleRead(dapObj->skillObj, SKILL_DAP_AP_REG, AP_REG_CFG, &temp);
     // 读ROM_LSB寄存器
-    dapObj->adapter->DapSingleRead(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_ROM_LSB, &temp_2);
-    if (dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS) {
+    dapObj->skillObj->DapSingleRead(dapObj->skillObj, SKILL_DAP_AP_REG, AP_REG_ROM_LSB, &temp_2);
+    if (dapObj->skillObj->DapCommit(dapObj->skillObj) != ADPT_SUCCESS) {
       // 清理指令队列
-      ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+      ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
       log_error("Read AP register failed!");
       return ADI_ERR_INTERNAL_ERROR;
     }
@@ -981,10 +984,10 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap) {
     ap->type.memory.config.bigEndian = !!(temp & AP_CFG_BIG_ENDIAN);
     // 读ROM_MSB寄存器
     if (ap->type.memory.config.largeAddress) {
-      dapObj->adapter->DapSingleRead(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_ROM_MSB, &temp);
-      if (dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS) {
+      dapObj->skillObj->DapSingleRead(dapObj->skillObj, SKILL_DAP_AP_REG, AP_REG_ROM_MSB, &temp);
+      if (dapObj->skillObj->DapCommit(dapObj->skillObj) != ADPT_SUCCESS) {
         // 清理指令队列
-        ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+        ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
         log_error("Read AP register failed!");
         return ADI_ERR_INTERNAL_ERROR;
       }
@@ -995,11 +998,11 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap) {
 
     // 读CSW寄存器
     dapObj->select.regInfo.AP_BankSel = 0x0;
-    dapObj->adapter->DapSingleWrite(dapObj->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, dapObj->select.regData);
-    dapObj->adapter->DapSingleRead(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, &ap->type.memory.csw.regData);
-    if (dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS) {
+    dapObj->skillObj->DapSingleWrite(dapObj->skillObj, SKILL_DAP_DP_REG, DP_REG_SELECT, dapObj->select.regData);
+    dapObj->skillObj->DapSingleRead(dapObj->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, &ap->type.memory.csw.regData);
+    if (dapObj->skillObj->DapCommit(dapObj->skillObj) != ADPT_SUCCESS) {
       // 清理指令队列
-      ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+      ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
       log_error("Read/Write AP register failed!");
       return ADI_ERR_INTERNAL_ERROR;
     }
@@ -1013,11 +1016,11 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap) {
     // 测试Packed和Less word transfer
     ap->type.memory.csw.regInfo.AddrInc = AP_CSW_PADDRINC;
     ap->type.memory.csw.regInfo.Size = AP_CSW_SIZE8;
-    dapObj->adapter->DapSingleWrite(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, ap->type.memory.csw.regData); // 写
-    dapObj->adapter->DapSingleRead(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, &ap->type.memory.csw.regData); // 读
-    if (dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS) {
+    dapObj->skillObj->DapSingleWrite(dapObj->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, ap->type.memory.csw.regData); // 写
+    dapObj->skillObj->DapSingleRead(dapObj->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, &ap->type.memory.csw.regData); // 读
+    if (dapObj->skillObj->DapCommit(dapObj->skillObj) != ADPT_SUCCESS) {
       // 清理指令队列
-      ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+      ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
       log_error("Read/Write AP register failed!");
       return ADI_ERR_INTERNAL_ERROR;
     }
@@ -1038,10 +1041,10 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap) {
     }
 
     ap->type.memory.csw.regData = temp;                                                                         // 恢复CSW记录的数据
-    dapObj->adapter->DapSingleWrite(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_CSW, ap->type.memory.csw.regData); // 写
-    if (dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS) {
+    dapObj->skillObj->DapSingleWrite(dapObj->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, ap->type.memory.csw.regData); // 写
+    if (dapObj->skillObj->DapCommit(dapObj->skillObj) != ADPT_SUCCESS) {
       // 清理指令队列
-      ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+      ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
       log_error("Read/Write AP register failed!");
       return ADI_ERR_INTERNAL_ERROR;
     }
@@ -1124,12 +1127,12 @@ static int findAP(DAP self, enum AccessPortType type, enum busType bus, AccessPo
   for (ap_t->index = 0; ap_t->index < 256; ap_t->index++) {
     // 写SELECT
     dapObj->select.regInfo.AP_Sel = ap_t->index;
-    dapObj->adapter->DapSingleWrite(dapObj->adapter, ADPT_DAP_DP_REG, DP_REG_SELECT, dapObj->select.regData);
+    dapObj->skillObj->DapSingleWrite(dapObj->skillObj, SKILL_DAP_DP_REG, DP_REG_SELECT, dapObj->select.regData);
     // 读 APIDR
-    dapObj->adapter->DapSingleRead(dapObj->adapter, ADPT_DAP_AP_REG, AP_REG_IDR, &ap_t->idr.regData);
-    if (dapObj->adapter->DapCommit(dapObj->adapter) != ADPT_SUCCESS) {
+    dapObj->skillObj->DapSingleRead(dapObj->skillObj, SKILL_DAP_AP_REG, AP_REG_IDR, &ap_t->idr.regData);
+    if (dapObj->skillObj->DapCommit(dapObj->skillObj) != ADPT_SUCCESS) {
       // 清理指令队列
-      ap->dap->adapter->DapCleanPending(ap->dap->adapter);
+      ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
       log_error("Read AP IDR register failed!");
       free(ap_t);
       return ADI_ERR_INTERNAL_ERROR;
@@ -1163,15 +1166,15 @@ static int findAP(DAP self, enum AccessPortType type, enum busType bus, AccessPo
 }
 
 // 创建DAP对象
-DAP ADIv5_CreateDap(Adapter adapter) {
-  assert(adapter != NULL);
+DAP ADIv5_CreateDap(DapSkill skillObj) {
+  assert(skillObj != NULL);
   struct ADIv5_Dap *dap = calloc(1, sizeof(struct ADIv5_Dap));
   if (!dap) {
     log_error("Failed to create DAP object!");
     return NULL;
   }
   INIT_LIST_HEAD(&dap->apList);
-  dap->adapter = adapter;
+  dap->skillObj = skillObj;
   dap->dapApi.FindAccessPort = findAP;
   // 初始化DAP对象
   if (dapInit(dap) != ADI_SUCCESS) {

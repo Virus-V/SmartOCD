@@ -4,10 +4,19 @@
 adiv5 = require("ADIv5")
 dofile("scripts/adapters/cmsis_dap.lua")    -- 获得CMSIS-DAP对象
 -- 切换到SWD模式
-cmObj:TransferMode(adapter.SWD)
+cmObj:TransferMode(adapter.MODE_SWD)
 print("Change transfer mode to SWD")
+
+dapSkill = cmObj:GetSkill(adapter.SKILL_DAP);
+
+cmObj = nil
+
+-- 读取DP IDR
+local dpidr = dapSkill:DapSingleRead(adapter.REG_DP, 0)
+print(string.format("DPIDR: 0x%X", dpidr)) -- 0x2BA01477
+
 -- 创建ADIv5 DAP对象
-dap = adiv5.Create(cmObj)   -- 接收Adapter类型的参数
+dap = adiv5.Create(dapSkill)   -- 接收Adapter类型的参数
 apAHB = dap:FindAccessPort(adiv5.AP_Memory, adiv5.Bus_AMBA_AHB)
 -- 读ROM Table
 print(string.format("ROM Table: 0x%X", apAHB:RomTable()))

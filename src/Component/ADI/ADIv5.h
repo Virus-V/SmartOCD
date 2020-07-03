@@ -20,7 +20,8 @@
 #define SRC_ARCH_ARM_ADI_ADIV5_H_
 
 #include "smartocd.h"
-#include "Adapter/adapter.h"
+
+#include "Adapter/adapter_dap.h"
 
 #ifdef _IMPORTED_ARM_ADI_DEFINES_
 #error "Already imported ADI defines!!"
@@ -96,7 +97,7 @@ typedef struct accessPort *AccessPort;
  * 	adapter:Adapter对象
  */
 DAP ADIv5_CreateDap(
-		IN Adapter adapter	// Adapter对象
+		IN DapSkill skillObj // Adapter对象
 );
 
 /**
