@@ -18,12 +18,271 @@
 
 #include "Adapter/cmsis-dap/cmsis-dap.h"
 
-#include <stdint.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "Component/ADI/ADIv5.h"
 #include "Library/log/log.h"
+
+// DAP Transfer Request
+#define CMDAP_TRANSFER_APnDP (1U << 0)
+#define CMDAP_TRANSFER_RnW (1U << 1)
+#define CMDAP_TRANSFER_A2 (1U << 2)
+#define CMDAP_TRANSFER_A3 (1U << 3)
+
+// CMSIS-DAP Command IDs
+// V1.0
+#define CMDAP_ID_DAP_Info 0x00U
+#define CMDAP_ID_DAP_HostStatus 0x01U
+#define CMDAP_ID_DAP_Connect 0x02U
+#define CMDAP_ID_DAP_Disconnect 0x03U
+#define CMDAP_ID_DAP_TransferConfigure 0x04U
+#define CMDAP_ID_DAP_Transfer 0x05U
+#define CMDAP_ID_DAP_TransferBlock 0x06U
+#define CMDAP_ID_DAP_TransferAbort 0x07U
+#define CMDAP_ID_DAP_WriteABORT 0x08U
+#define CMDAP_ID_DAP_Delay 0x09U
+#define CMDAP_ID_DAP_ResetTarget 0x0AU
+#define CMDAP_ID_DAP_SWJ_Pins 0x10U
+#define CMDAP_ID_DAP_SWJ_Clock 0x11U
+#define CMDAP_ID_DAP_SWJ_Sequence 0x12U
+#define CMDAP_ID_DAP_SWD_Configure 0x13U
+#define CMDAP_ID_DAP_JTAG_Sequence 0x14U
+#define CMDAP_ID_DAP_JTAG_Configure 0x15U
+#define CMDAP_ID_DAP_JTAG_IDCODE 0x16U
+// V1.1
+#define CMDAP_ID_DAP_SWO_Transport 0x17U
+#define CMDAP_ID_DAP_SWO_Mode 0x18U
+#define CMDAP_ID_DAP_SWO_Baudrate 0x19U
+#define CMDAP_ID_DAP_SWO_Control 0x1AU
+#define CMDAP_ID_DAP_SWO_Status 0x1BU
+#define CMDAP_ID_DAP_SWO_Data 0x1CU
+
+#define CMDAP_ID_DAP_QueueCommands 0x7EU
+#define CMDAP_ID_DAP_ExecuteCommands 0x7FU
+
+// DAP Vendor Command IDs
+#define CMDAP_ID_DAP_Vendor0 0x80U
+#define CMDAP_ID_DAP_Vendor1 0x81U
+#define CMDAP_ID_DAP_Vendor2 0x82U
+#define CMDAP_ID_DAP_Vendor3 0x83U
+#define CMDAP_ID_DAP_Vendor4 0x84U
+#define CMDAP_ID_DAP_Vendor5 0x85U
+#define CMDAP_ID_DAP_Vendor6 0x86U
+#define CMDAP_ID_DAP_Vendor7 0x87U
+#define CMDAP_ID_DAP_Vendor8 0x88U
+#define CMDAP_ID_DAP_Vendor9 0x89U
+#define CMDAP_ID_DAP_Vendor10 0x8AU
+#define CMDAP_ID_DAP_Vendor11 0x8BU
+#define CMDAP_ID_DAP_Vendor12 0x8CU
+#define CMDAP_ID_DAP_Vendor13 0x8DU
+#define CMDAP_ID_DAP_Vendor14 0x8EU
+#define CMDAP_ID_DAP_Vendor15 0x8FU
+#define CMDAP_ID_DAP_Vendor16 0x90U
+#define CMDAP_ID_DAP_Vendor17 0x91U
+#define CMDAP_ID_DAP_Vendor18 0x92U
+#define CMDAP_ID_DAP_Vendor19 0x93U
+#define CMDAP_ID_DAP_Vendor20 0x94U
+#define CMDAP_ID_DAP_Vendor21 0x95U
+#define CMDAP_ID_DAP_Vendor22 0x96U
+#define CMDAP_ID_DAP_Vendor23 0x97U
+#define CMDAP_ID_DAP_Vendor24 0x98U
+#define CMDAP_ID_DAP_Vendor25 0x99U
+#define CMDAP_ID_DAP_Vendor26 0x9AU
+#define CMDAP_ID_DAP_Vendor27 0x9BU
+#define CMDAP_ID_DAP_Vendor28 0x9CU
+#define CMDAP_ID_DAP_Vendor29 0x9DU
+#define CMDAP_ID_DAP_Vendor30 0x9EU
+#define CMDAP_ID_DAP_Vendor31 0x9FU
+
+#define CMDAP_ID_DAP_Invalid 0xFFU
+
+// DAP Status Code
+#define CMDAP_OK 0U
+#define CMDAP_ERROR 0xFFU
+
+// DAP ID
+#define CMDAP_ID_VENDOR 1U
+#define CMDAP_ID_PRODUCT 2U
+#define CMDAP_ID_SER_NUM 3U
+#define CMDAP_ID_FW_VER 4U
+#define CMDAP_ID_DEVICE_VENDOR 5U
+#define CMDAP_ID_DEVICE_NAME 6U
+#define CMDAP_ID_CAPABILITIES 0xF0U
+#define CMDAP_ID_SWO_BUFFER_SIZE 0xFDU // V1.1
+#define CMDAP_ID_PACKET_COUNT 0xFEU
+#define CMDAP_ID_PACKET_SIZE 0xFFU
+
+// DAP Host Status
+#define CMDAP_DEBUGGER_CONNECTED 0U
+#define CMDAP_TARGET_RUNNING 1U
+
+// DAP Port
+#define CMDAP_PORT_AUTODETECT 0U // Autodetect Port
+#define CMDAP_PORT_DISABLED 0U   // Port Disabled (I/O pins in High-Z)
+#define CMDAP_PORT_SWD 1U        // SWD Port (SWCLK, SWDIO) + nRESET
+#define CMDAP_PORT_JTAG 2U       // JTAG Port (TCK, TMS, TDI, TDO, nTRST) + nRESET
+
+// DAP Transfer Response
+#define CMDAP_TRANSFER_OK (1U << 0)
+#define CMDAP_TRANSFER_WAIT (1U << 1)
+#define CMDAP_TRANSFER_FAULT (1U << 2)
+#define CMDAP_TRANSFER_ERROR (1U << 3)
+#define CMDAP_TRANSFER_MISMATCH (1U << 4)
+
+// DAP SWO Trace Mode	V1.1
+#define DAP_SWO_OFF 0U
+#define DAP_SWO_UART 1U
+#define DAP_SWO_MANCHESTER 2U
+
+// DAP SWO Trace Status	V1.1
+#define CMDAP_SWO_CAPTURE_ACTIVE (1U << 0)
+#define CMDAP_SWO_CAPTURE_PAUSED (1U << 1)
+#define CMDAP_SWO_STREAM_ERROR (1U << 6)
+#define CMDAP_SWO_BUFFER_OVERRUN (1U << 7)
+
+// JTAG底层指令类型
+enum JTAG_InstrType {
+  JTAG_INS_STATUS_MOVE,   // 状态机改变状态
+  JTAG_INS_EXCHANGE_DATA, // 交换TDI-TDO数据
+  JTAG_INS_IDLE_WAIT,     // 进入IDLE等待几个时钟周期
+};
+
+// JTAG指令对象
+struct JTAG_Command {
+  enum JTAG_InstrType type;    // JTAG指令类型
+  struct list_head list_entry; // JTAG指令链表对象
+  // 指令结构共用体
+  union {
+    struct {
+      enum JTAG_TAP_State toState;
+    } statusMove;
+    struct {
+      uint8_t *data;         // 需要交换的数据地址
+      unsigned int bitCount; // 交换的二进制位个数
+    } exchangeData;
+    struct {
+      unsigned int clkCount; // 时钟个数
+    } idleWait;
+  } instr;
+};
+
+// DAP指令类型
+enum DAP_InstrType {
+  DAP_INS_RW_REG_SINGLE, // 单次读写nP寄存器
+  DAP_INS_RW_REG_MULTI,  // 多次读写寄存器
+};
+
+// DAP指令对象
+struct DAP_Command {
+  enum DAP_InstrType type;     // DAP指令类型
+  struct list_head list_entry; // DAP指令链表对象
+  // 指令结构共用体
+  union {
+    struct {
+      /**
+       * Bit 0: APnDP: 0 = Debug Port (DP), 1 = Access Port (AP).
+       * Bit 1: RnW: 0 = Write Register, 1 = Read Register.
+       * Bit 2: A2 Register Address bit 2.
+       * Bit 3: A3 Register Address bit 3.
+       */
+      uint8_t request;
+      // 指令的数据
+      union {
+        uint32_t write; // 写单个寄存器
+        uint32_t *read;
+      } data;
+    } singleReg; // 单次读写寄存器
+    struct {
+      /**
+       * Bit 0: APnDP: 0 = Debug Port (DP), 1 = Access Port (AP).
+       * Bit 1: RnW: 0 = Write Register, 1 = Read Register.
+       * Bit 2: A2 Register Address bit 2.
+       * Bit 3: A3 Register Address bit 3.
+       */
+      uint8_t request;
+      // 指令的数据
+      uint32_t *data;
+      int count; // 读写次数
+    } multiReg;  // 多次读写寄存器
+  } instr;
+};
+
+/* CMSIS-DAP对象 */
+struct cmsis_dap {
+  uint32_t signature;       // 代表类型
+  USB usbObj;               // USB连接对象
+  struct adapter adaperAPI; // Adapter接口对象
+  BOOL inited;              // 是否已经初始化
+  BOOL connected;           // USB设备是否已连接
+
+  struct jtagSkill jtagSkillAPI; // jtag能力集接口
+  struct dapSkill dapSkillAPI;   // dap能力集接口
+  int Version;                   // CMSIS-DAP 版本
+  int MaxPcaketCount;            // 缓冲区最多容纳包的个数
+  int PacketSize;                // 包最大长度
+  uint8_t *respBuffer;           // 应答缓冲区
+  uint32_t capablityFlag;        // 该仿真器支持的功能
+
+  struct list_head JtagInsQueue; // JTAG指令队列，元素类型：struct JTAG_Command
+  struct list_head DapInsQueue;  // DAP指令队列，元素类型struct DAP_Command
+  unsigned int tapCount;         // TAP个数
+  unsigned int tapIndex;         // 要操作的TAP在扫描链中的索引,
+                                 // 在DAP Transfer相关函数中会用到
+  // TODO 实现更高版本仿真器支持 SWO、
+};
+
+/*
+Available transfer protocols to target:
+    Info0 - Bit 0: 1 = SWD Serial Wire Debug communication is implemented (0 =
+SWD Commands not implemented). Info0 - Bit 1: 1 = JTAG communication is
+implemented (0 = JTAG Commands not implemented).
+
+Serial Wire Trace (SWO) support:
+    Info0 - Bit 2: 1 = SWO UART - UART Serial Wire Output is implemented (0 =
+not implemented). Info0 - Bit 3: 1 = SWO Manchester - Manchester Serial Wire
+Output is implemented (0 = not implemented).
+
+Command extensions for transfer protocol:
+    Info0 - Bit 4: 1 = Atomic Commands - Atomic Commands support is implemented
+(0 = Atomic Commands not implemented).
+
+Time synchronisation via Test Domain Timer:
+    Info0 - Bit 5: 1 = Test Domain Timer - debug unit support for Test Domain
+Timer is implemented (0 = not implemented).
+
+SWO Streaming Trace support:
+    Info0 - Bit 6: 1 = SWO Streaming Trace is implemented (0 = not implemented).
+ */
+// CMSIS功能标志位
+#define CMDAP_CAP_SWD 0
+#define CMDAP_CAP_JTAG 1
+#define CMDAP_CAP_SWO_UART 2
+#define CMDAP_CAP_SWO_MANCHESTER 3
+#define CMDAP_CAP_ATOMIC 4
+#define CMDAP_CAP_SWD_SEQUENCE 5
+#define CMDAP_CAP_TEST_DOMAIN_TIMER 6
+#define CMDAP_CAP_TRACE_DATA_MANAGE 7
+
+/**
+ * 在一串数据中获得第n个二进制位，n从0开始
+ * lsb
+ * data:数据存放的位置指针
+ * n:第几位，最低位是第0位
+ */
+#define GET_Nth_BIT(data, n) ((*(CAST(uint8_t *, (data)) + ((n) >> 3)) >> ((n)&0x7)) & 0x1)
+/**
+ * 设置data的第n个二进制位
+ * data:数据存放的位置
+ * n：要修改哪一位，从0开始
+ * val：要设置的位，0或者1，只使用最低位
+ */
+#define SET_Nth_BIT(data, n, val)                               \
+  do {                                                          \
+    uint8_t tmp_data = *(CAST(uint8_t *, (data)) + ((n) >> 3)); \
+    tmp_data &= ~(1 << ((n)&0x7));                              \
+    tmp_data |= ((val)&0x1) << ((n)&0x7);                       \
+    *(CAST(uint8_t *, (data)) + ((n) >> 3)) = tmp_data;         \
+  } while (0);
 
 /**
  * 由多少个比特位构造出多少个字节，包括控制字
@@ -40,8 +299,23 @@
     byteCnt += tmp ? ((tmp + 7) >> 3) + 1 : 0; \
   })
 
-// 调试用
-// int misc_PrintBulk(char *data, int length, int rowLen);
+#define OFFSET_ADAPTER offsetof(struct cmsis_dap, adaperAPI)
+#define OFFSET_JTAG_SKILL offsetof(struct cmsis_dap, jtagSkillAPI)
+#define OFFSET_DAP_SKILL offsetof(struct cmsis_dap, dapSkillAPI)
+#define CMDAP_OBJ_FORM_ADAPTER(x) get_cmsis_dap_obj((void *)(x), OFFSET_ADAPTER)
+#define CMDAP_OBJ_FORM_JTAG_SKILL(x) get_cmsis_dap_obj((void *)(x), OFFSET_JTAG_SKILL)
+#define CMDAP_OBJ_FORM_DAP_SKILL(x) get_cmsis_dap_obj((void *)(x), OFFSET_DAP_SKILL)
+
+// 检查Adapter类型，并返回对应的结构
+static struct cmsis_dap *get_cmsis_dap_obj(void *self, size_t offset) {
+  assert(self != NULL);
+  struct cmsis_dap * obj = (struct cmsis_dap *)((char *)self - offset);
+  if (obj->signature != SIGNATURE_32('C', 'D', 'A', 'P')) {
+    log_fatal("Adapter object is not CMSIS-DAP!");
+    return NULL; // never reach here, to surpress warnings
+  }
+  return obj;
+}
 
 static int dapInit(struct cmsis_dap *cmdapObj);
 
@@ -108,8 +382,7 @@ static int dapWrite(struct cmsis_dap *cmdapObj, uint8_t *data, int len, int *tra
  */
 int ConnectCmsisDap(Adapter self, const uint16_t *vids, const uint16_t *pids,
                     const char *serialNum) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_ADAPTER(self);
 
   int idx = 0;
   //如果当前没有连接,则连接CMSIS-DAP设备
@@ -155,8 +428,7 @@ _TOINIT:
  * 发送断开指令
  */
 int DisconnectCmsisDap(Adapter self) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_ADAPTER(self);
   uint8_t command[1] = {CMDAP_ID_DAP_Disconnect};
   DAP_EXCHANGE_DATA(cmdapObj, command, 1);
   // 检查返回值
@@ -339,8 +611,7 @@ static int dapInit(struct cmsis_dap *cmdapObj) {
  * line reset
  */
 static int CmdapSwdLineReset(Adapter self) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_ADAPTER(self);
   if (self->currTransMode != ADPT_MODE_SWD) {
     log_error("This operate only available SWD transfer mode.");
     return ADPT_FAILED;
@@ -362,8 +633,7 @@ static int CmdapSwdLineReset(Adapter self) {
 
 // 选择和切换传输协议
 static int dapSetTransMode(Adapter self, enum transferMode mode) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_ADAPTER(self);
   int idx;
   uint8_t command[2] = {CMDAP_ID_DAP_Connect};
 
@@ -439,8 +709,7 @@ static int dapSetTransMode(Adapter self, enum transferMode mode) {
  */
 int CmdapTransferConfigure(Adapter self, uint8_t idleCycle, uint16_t waitRetry,
                            uint16_t matchRetry) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_ADAPTER(self);
 
   uint8_t DAPTransfer[6] = {CMDAP_ID_DAP_TransferConfigure};
   DAPTransfer[1] = idleCycle; // Number of extra idle cycles after each transfer.
@@ -465,8 +734,7 @@ int CmdapTransferConfigure(Adapter self, uint8_t idleCycle, uint16_t waitRetry,
  * 参数：status 状态
  */
 static int dapHostStatus(Adapter self, enum adapterStatus status) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_ADAPTER(self);
 
   uint8_t DAP_HostStatusPack[] = {CMDAP_ID_DAP_HostStatus, 0, 0};
   switch (status) {
@@ -519,8 +787,7 @@ static double formatFreq(double freq, const char **unit) {
  * 参数 clockHz 时钟频率，单位是 Hz
  */
 static int dapSwjClock(Adapter self, unsigned int freq) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_ADAPTER(self);
   uint8_t clockHzPack[5] = {CMDAP_ID_DAP_SWJ_Clock};
   uint32_t clockHz = CAST(uint32_t, freq);
 
@@ -677,8 +944,7 @@ MAKE_PACKT:
  */
 static int dapSwjPins(JtagSkill self, uint8_t pinMask, uint8_t pinDataOut, uint8_t *pinDataIn,
                       unsigned int pinWait) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, jtagSkillAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_JTAG_SKILL(self);
   uint8_t DAP_PinPack[7] = {CMDAP_ID_DAP_SWJ_Pins};
   uint32_t wait_us = CAST(uint32_t, pinWait);
   // 构造包数据
@@ -699,8 +965,7 @@ static int dapSwjPins(JtagSkill self, uint8_t pinMask, uint8_t pinDataOut, uint8
  * irData：每个TAP的IR寄存器长度
  */
 int CmdapJtagConfig(Adapter self, uint8_t count, uint8_t *irData) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_ADAPTER(self);
 
   if (count > 8) {
     log_warn("TAP Too lot.");
@@ -966,12 +1231,11 @@ END:
  * 注意：有的电路没有连接nTRST，所以TAP状态机复位尽量使用软复位
  */
 static int dapReset(Adapter self, enum targetResetType type) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_ADAPTER(self);
   uint8_t pinData = 0, pinMask = 0; // 状态机复位，
   switch (type) {
   case ADPT_RESET_SYSTEM: // 系统复位,assert nSRST
-    pinMask |= SWJ_PIN_nRESET;
+    pinMask |= JTAG_PIN_nRESET;
     if (dapSwjPins((JtagSkill)&cmdapObj->jtagSkillAPI, pinMask, pinData, &pinData, 100000) != ADPT_SUCCESS) { // 死区时间100ms
       log_error("Assert reset pin failed!");
       return ADPT_FAILED;
@@ -1010,8 +1274,7 @@ static int dapReset(Adapter self, enum targetResetType type) {
  * 配置SWD
  */
 int CmdapSwdConfig(Adapter self, uint8_t cfg) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_ADAPTER(self);
   uint8_t DAP_SWDCFGPack[2] = {CMDAP_ID_DAP_SWD_Configure};
   // 构造包数据
   DAP_SWDCFGPack[1] = cfg;
@@ -1123,8 +1386,7 @@ static int parseIDLEWait(uint8_t *buff, int wait, int *seqCnt) {
  * 解析执行JTAG指令队列
  */
 static int executeJtagCmd(JtagSkill self) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, jtagSkillAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_JTAG_SKILL(self);
 
   enum JTAG_TAP_State tempState = cmdapObj->jtagSkillAPI.currState; // 临时JTAG状态机状态
   int seqCnt = 0;                                                   // CMSIS-DAP的Sequence个数，具体看CMSIS-DAP手册
@@ -1293,8 +1555,7 @@ static struct JTAG_Command *newJtagCommand(struct cmsis_dap *cmdapObj) {
  * dataPtr:传输的数据
  */
 static int addJtagExchangeData(JtagSkill self, uint8_t *dataPtr, unsigned int bitCount) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, jtagSkillAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_JTAG_SKILL(self);
   // 新建指令
   struct JTAG_Command *command = newJtagCommand(cmdapObj);
   if (command == NULL) {
@@ -1310,8 +1571,7 @@ static int addJtagExchangeData(JtagSkill self, uint8_t *dataPtr, unsigned int bi
  * JTAG Idle
  */
 static int addJtagIdle(JtagSkill self, unsigned int clkCnt) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, jtagSkillAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_JTAG_SKILL(self);
   // 新建指令
   struct JTAG_Command *command = newJtagCommand(cmdapObj);
   if (command == NULL) {
@@ -1326,8 +1586,7 @@ static int addJtagIdle(JtagSkill self, unsigned int clkCnt) {
  * JTAG to state
  */
 static int addJtagToState(JtagSkill self, enum JTAG_TAP_State toState) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, jtagSkillAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_JTAG_SKILL(self);
   // 新建指令
   struct JTAG_Command *command = newJtagCommand(cmdapObj);
   if (command == NULL) {
@@ -1342,8 +1601,7 @@ static int addJtagToState(JtagSkill self, enum JTAG_TAP_State toState) {
  * JTAG Clean pending
  */
 static int cleanJtagInsQueue(JtagSkill self) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, jtagSkillAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_JTAG_SKILL(self);
 
   struct JTAG_Command *cmd, *cmd_t;
   list_for_each_entry_safe(cmd, cmd_t, &cmdapObj->JtagInsQueue, list_entry) {
@@ -1358,8 +1616,7 @@ static int cleanJtagInsQueue(JtagSkill self) {
  * 注意：对于读操作，成功之后才写入内存地址，如果读取失败，则值保持不变，不要清零
  */
 static int executeDapCmd(DapSkill self) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, dapSkillAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_DAP_SKILL(self);
 
   struct DAP_Command *cmd, *cmd_t;
   int readCnt, writeCnt, seqCnt;
@@ -1531,8 +1788,7 @@ static struct DAP_Command *newDapCommand(struct cmsis_dap *cmdapObj) {
 
 /* 增加单次读寄存器指令 */
 static int addDapSingleRead(DapSkill self, enum dapRegType type, int reg, uint32_t *data) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, dapSkillAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_DAP_SKILL(self);
 
   // 新建指令
   struct DAP_Command *command = newDapCommand(cmdapObj);
@@ -1550,8 +1806,7 @@ static int addDapSingleRead(DapSkill self, enum dapRegType type, int reg, uint32
 
 /* 增加单次写寄存器指令 */
 static int addDapSingleWrite(DapSkill self, enum dapRegType type, int reg, uint32_t data) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, dapSkillAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_DAP_SKILL(self);
 
   // 新建指令
   struct DAP_Command *command = newDapCommand(cmdapObj);
@@ -1569,8 +1824,7 @@ static int addDapSingleWrite(DapSkill self, enum dapRegType type, int reg, uint3
 
 /* 增加多次读寄存器指令 */
 static int addDapMultiRead(DapSkill self, enum dapRegType type, int reg, int count, uint32_t *data) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, dapSkillAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_DAP_SKILL(self);
   if (count <= 0) {
     log_error("Count must be greater than 0.");
     return ADPT_ERR_BAD_PARAMETER;
@@ -1593,8 +1847,7 @@ static int addDapMultiRead(DapSkill self, enum dapRegType type, int reg, int cou
 /* 增加多次写寄存器指令 */
 static int addDapMultiWrite(DapSkill self, enum dapRegType type, int reg, int count,
                             uint32_t *data) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, dapSkillAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_DAP_SKILL(self);
 
   if (count <= 0) {
     log_error("Count must be greater than 0.");
@@ -1617,8 +1870,7 @@ static int addDapMultiWrite(DapSkill self, enum dapRegType type, int reg, int co
 
 /* 清空DAP指令队列 */
 static int cleanDapInsQueue(DapSkill self) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, dapSkillAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_DAP_SKILL(self);
 
   struct DAP_Command *cmd, *cmd_t;
   list_for_each_entry_safe(cmd, cmd_t, &cmdapObj->DapInsQueue, list_entry) {
@@ -1634,8 +1886,7 @@ static int cleanDapInsQueue(DapSkill self) {
  * register of the Target Device.
  */
 int CmdapWriteAbort(Adapter self, uint32_t data) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_ADAPTER(self);
 
   uint8_t DAP_AbortPacket[6] = {CMDAP_ID_DAP_WriteABORT};
   DAP_AbortPacket[1] = cmdapObj->tapIndex;
@@ -1653,8 +1904,6 @@ int CmdapWriteAbort(Adapter self, uint32_t data) {
 
 /**
  * 创建新的CMSIS-DAP仿真器对象
- * 参数:
- * 	usbObj:USB对象
  */
 Adapter CreateCmsisDap(void) {
   struct cmsis_dap *obj = calloc(1, sizeof(struct cmsis_dap));
@@ -1678,6 +1927,7 @@ Adapter CreateCmsisDap(void) {
 
   // 设置参数
   obj->usbObj = usbObj;
+  obj->signature = SIGNATURE_32('C', 'D', 'A', 'P');
   // 设置接口参数
   obj->adaperAPI.SetStatus = dapHostStatus;
   obj->adaperAPI.SetFrequent = dapSwjClock;
@@ -1693,7 +1943,7 @@ Adapter CreateCmsisDap(void) {
   obj->jtagSkillAPI.JtagIdle = addJtagIdle;
   obj->jtagSkillAPI.JtagToState = addJtagToState;
   obj->jtagSkillAPI.JtagCommit = executeJtagCmd;
-  obj->jtagSkillAPI.JtagCleanPending = cleanJtagInsQueue;
+  obj->jtagSkillAPI.JtagCancel = cleanJtagInsQueue;
 
   INIT_LIST_HEAD(&obj->dapSkillAPI.header.skills);
   list_add(&obj->dapSkillAPI.header.skills, &obj->adaperAPI.skills);
@@ -1704,7 +1954,7 @@ Adapter CreateCmsisDap(void) {
   obj->dapSkillAPI.DapMultiRead = addDapMultiRead;
   obj->dapSkillAPI.DapMultiWrite = addDapMultiWrite;
   obj->dapSkillAPI.DapCommit = executeDapCmd;
-  obj->dapSkillAPI.DapCleanPending = cleanDapInsQueue;
+  obj->dapSkillAPI.DapCancel = cleanDapInsQueue;
 
   obj->connected = FALSE;
 
@@ -1713,8 +1963,7 @@ Adapter CreateCmsisDap(void) {
 
 // 释放CMSIS-DAP对象
 void DestroyCmsisDap(Adapter *self) {
-  assert(*self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(*self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_ADAPTER(*self);
 
   // 关闭USB对象
   if (cmdapObj->connected == TRUE) {
@@ -1739,8 +1988,7 @@ void DestroyCmsisDap(Adapter *self) {
  * 设置DAP模式下,TAP在扫描链中的索引位置
  */
 int CmdapSetTapIndex(Adapter self, unsigned int index) {
-  assert(self != NULL);
-  struct cmsis_dap *cmdapObj = container_of(self, struct cmsis_dap, adaperAPI);
+  struct cmsis_dap *cmdapObj = CMDAP_OBJ_FORM_ADAPTER(self);
   if (index >= cmdapObj->tapCount) {
     log_error("The index of the TAP is greater than the value of tapCount.");
     return ADPT_ERR_BAD_PARAMETER;

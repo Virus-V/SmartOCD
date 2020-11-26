@@ -42,7 +42,7 @@ static int luaApi_adapter_dap_single_read(lua_State *L) {
   // 执行队列
   if (skillObj->DapCommit(skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    skillObj->DapCleanPending(skillObj);
+    skillObj->DapCancel(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
 
@@ -70,7 +70,7 @@ static int luaApi_adapter_dap_single_write(lua_State *L) {
   // 执行队列
   if (skillObj->DapCommit(skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    skillObj->DapCleanPending(skillObj);
+    skillObj->DapCancel(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
 
@@ -107,7 +107,7 @@ static int luaApi_adapter_dap_multi_read(lua_State *L) {
   if (skillObj->DapCommit(skillObj) != ADPT_SUCCESS) {
     free(buff);
     // 清理指令队列
-    skillObj->DapCleanPending(skillObj);
+    skillObj->DapCancel(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
   lua_pushlstring(L, (char *)buff, count * sizeof(uint32_t));
@@ -141,7 +141,7 @@ static int luaApi_adapter_dap_multi_write(lua_State *L) {
   // 执行队列
   if (skillObj->DapCommit(skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    skillObj->DapCleanPending(skillObj);
+    skillObj->DapCancel(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
 

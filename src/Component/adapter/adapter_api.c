@@ -33,12 +33,12 @@ static const luaApi_regConst lib_adapter_const[] = {
     {"SKILL_JTAG", ADPT_SKILL_JTAG},
 
     // JTAG引脚bit mask
-    {"PIN_SWCLK_TCK", SWJ_PIN_SWCLK_TCK},
-    {"PIN_SWDIO_TMS", SWJ_PIN_SWDIO_TMS},
-    {"PIN_TDI", SWJ_PIN_TDI},
-    {"PIN_TDO", SWJ_PIN_TDO},
-    {"PIN_nTRST", SWJ_PIN_nTRST},
-    {"PIN_nRESET", SWJ_PIN_nRESET},
+    {"PIN_SWCLK_TCK", JTAG_PIN_SWCLK_TCK},
+    {"PIN_SWDIO_TMS", JTAG_PIN_SWDIO_TMS},
+    {"PIN_TDI", JTAG_PIN_TDI},
+    {"PIN_TDO", JTAG_PIN_TDO},
+    {"PIN_nTRST", JTAG_PIN_nTRST},
+    {"PIN_nRESET", JTAG_PIN_nRESET},
 
     // 复位类型
     {"RESET_SYSTEM", ADPT_RESET_SYSTEM},

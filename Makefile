@@ -9,42 +9,19 @@
 
 
 ROOT_DIR := $(shell pwd)
-# 版本号
-VERSION := 0.2.0
 COMPILE_TIME := $(shell date +%FT%T%z)
 
-# 额外库文件
-EXTRA_LIBS = usb-1.0 m dl
+# export all variable above
+export
 
-# 定义当前版本和构建时间
-DEFINES += VERSION=\"$(VERSION)\" COMPILE_TIME=\"$(COMPILE_TIME)\"
-
-# Optimization level [0,1,2,3,s]
-OPT = 0
-#DEBUG =
-DEBUG = -ggdb
-
-include config.mk
-
-# parse config
-# ...
-
-CFLAGS = $(DEBUG)
-#开发过程中使用-Werror，所有警告都当做错误来终止编译
-CFLAGS += -O$(OPT) -Werror
-CFLAGS += -I$(ROOT_DIR)/src
-CFLAGS += $(addprefix -D,$(DEFINES))
-# 所有库
-LDFLAGS += $(addprefix -l,$(EXTRA_LIBS))
-
-export ROOT_DIR CFLAGS LDFLAGS
+include common.mk
 
 all:
 	$(MAKE) -C src $@
 
 %_test:
-	#$(MAKE) -C src modules
-	#$(MAKE) -C test $@
+	$(MAKE) -C src modules
+	$(MAKE) -C test $@
 
 clean:
 	$(MAKE) -C src clean

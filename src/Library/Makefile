@@ -8,7 +8,6 @@
 #
 
 # 构建Library
-CURR_DIR = $(shell pwd)
 
 DIR_SRC_FILES = $(wildcard $(CURR_DIR)/jtag/*.c)	\
 	$(wildcard $(CURR_DIR)/linenoise/*.c)	\
@@ -18,6 +17,8 @@ DIR_SRC_FILES = $(wildcard $(CURR_DIR)/jtag/*.c)	\
 	$(wildcard $(CURR_DIR)/misc/*.c)
 
 DIR_OBJ_FILES = ${patsubst %.c,%.o,$(DIR_SRC_FILES)}
+
+include $(ROOT_DIR)/common.mk
 
 all: $(CURR_DIR)/libLibrary.a
 
@@ -39,4 +40,3 @@ clean:
 
 .PHONY: all clean lua
 
-include $(ROOT_DIR)/utils.mk

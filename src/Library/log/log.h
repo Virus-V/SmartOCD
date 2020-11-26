@@ -21,14 +21,24 @@
 
 typedef void (*log_LockFn)(void *udata, int lock);
 
-enum { LOG_TRACE = 0, LOG_DEBUG, LOG_INFO, LOG_WARN, LOG_ERROR, LOG_FATAL };
+enum { LOG_TRACE = 0,
+       LOG_DEBUG,
+       LOG_INFO,
+       LOG_WARN,
+       LOG_ERROR,
+       LOG_FATAL,
+};
 
 #define log_trace(...) log_log(LOG_TRACE, __FILENAME__, __LINE__, __VA_ARGS__)
 #define log_debug(...) log_log(LOG_DEBUG, __FILENAME__, __LINE__, __VA_ARGS__)
-#define log_info(...)  log_log(LOG_INFO,  __FILENAME__, __LINE__, __VA_ARGS__)
-#define log_warn(...)  log_log(LOG_WARN,  __FILENAME__, __LINE__, __VA_ARGS__)
+#define log_info(...) log_log(LOG_INFO, __FILENAME__, __LINE__, __VA_ARGS__)
+#define log_warn(...) log_log(LOG_WARN, __FILENAME__, __LINE__, __VA_ARGS__)
 #define log_error(...) log_log(LOG_ERROR, __FILENAME__, __LINE__, __VA_ARGS__)
-#define log_fatal(...) log_log(LOG_FATAL, __FILENAME__, __LINE__, __VA_ARGS__)
+#define log_fatal(...)                                       \
+  do {                                                       \
+    log_log(LOG_FATAL, __FILENAME__, __LINE__, __VA_ARGS__); \
+    abort();                                                 \
+  } while (0);
 
 void log_set_udata(void *udata);
 void log_set_lock(log_LockFn fn);

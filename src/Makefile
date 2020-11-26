@@ -7,9 +7,10 @@
 # Email: virusv@live.com
 #
 
-CURR_DIR = $(shell pwd)
 # SmartOCD入口以及初始化
 DIR_OBJ_FILES = $(CURR_DIR)/smartocd.o
+
+include $(ROOT_DIR)/common.mk
 
 MODULE_PATH = Library Component Adapter
 MODULE_LIST = $(foreach var,$(MODULE_PATH),$(CURR_DIR)/$(var)/lib$(var).a)
@@ -20,7 +21,15 @@ all: $(DIR_OBJ_FILES) $(MODULE_LIST)
 	$(CC) $(DIR_OBJ_FILES) -Wl,--whole-archive $(MODULE_LIST) -Wl,--no-whole-archive -o smartocd $(LDFLAGS)
 	@echo "Build Complete!"
 
-modules: $(MODULE_LIST)
+$(MODULE_LIST): modules
+
+modules:
+	@echo "Build modules..."
+	$(foreach var,$(MODULE_PATH),\
+		echo "building $(var) module.."; \
+		$(MAKE) -C $(var) all;	\
+	)
+	@echo "Modules build finished..."
 
 clean:
 	$(RM) $(DIR_OBJ_FILES)
@@ -29,15 +38,5 @@ clean:
 		$(MAKE) -C $(var) clean;	\
 	)
 
-# 构建module
-$(MODULE_LIST):
-	@echo "Build modules..."
-	$(foreach var,$(MODULE_PATH),\
-		echo "building $(var) module.."; \
-		$(MAKE) -C $(var);	\
-	)
-	@echo "Modules build finished..."
-
 .PHONY: all clean $(MODULE_LIST) modules
 
-include $(ROOT_DIR)/utils.mk

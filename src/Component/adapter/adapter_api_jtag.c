@@ -42,7 +42,7 @@ static int luaApi_adapter_jtag_status_change(lua_State *L) {
   // 执行队列
   if (skillObj->JtagCommit(skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    skillObj->JtagCleanPending(skillObj);
+    skillObj->JtagCancel(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
   return 0;
@@ -86,7 +86,7 @@ static int luaApi_adapter_jtag_exchange_data(lua_State *L) {
   if (skillObj->JtagCommit(skillObj) != ADPT_SUCCESS) {
     free(data);
     // 清理指令队列
-    skillObj->JtagCleanPending(skillObj);
+    skillObj->JtagCancel(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
 
@@ -113,7 +113,7 @@ static int luaApi_adapter_jtag_idle_wait(lua_State *L) {
   // 执行队列
   if (skillObj->JtagCommit(skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    skillObj->JtagCleanPending(skillObj);
+    skillObj->JtagCancel(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
   return 0;

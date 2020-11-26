@@ -26,14 +26,15 @@
  * Adapter 接口状态码
  */
 enum {
-  ADPT_SUCCESS = 0,         // 成功
-  ADPT_FAILED,              // 失败
-  ADPT_ERR_TRANSPORT_ERROR, // 底层传输错误
-  ADPT_ERR_PROTOCOL_ERROR,  // 传输协议错误
-  ADPT_ERR_NO_DEVICE,       // 找不到设备
-  ADPT_ERR_UNSUPPORT,       // 不支持的操作
-  ADPT_ERR_INTERNAL_ERROR,  // 内部错误,不是由于Adapter功能部分造成的失败
-  ADPT_ERR_BAD_PARAMETER,   // 无效的参数
+  ADPT_SUCCESS = 0,          // 成功
+  ADPT_FAILED,               // 失败
+  ADPT_ERR_TRANSPORT_ERROR,  // 底层传输错误
+  ADPT_ERR_PROTOCOL_ERROR,   // 传输协议错误
+  ADPT_ERR_NO_DEVICE,        // 找不到设备
+  ADPT_ERR_UNSUPPORT,        // 不支持的操作
+  ADPT_ERR_INTERNAL_ERROR,   // 内部错误,不是由于Adapter功能部分造成的失败
+  ADPT_ERR_BAD_PARAMETER,    // 无效的参数
+  ADPT_ERR_DEVICE_NOT_MATCH, // 设备类型不匹配
 };
 
 /* 仿真器对象 */

@@ -40,7 +40,7 @@ static int dapInit(struct ADIv5_Dap *dap) {
     dap->skillObj->DapSingleWrite(dap->skillObj, SKILL_DAP_DP_REG, DP_REG_ABORT, 0x1e);
     if (dap->skillObj->DapCommit(dap->skillObj) != ADPT_SUCCESS) {
       // 清理指令队列
-      dap->skillObj->DapCleanPending(dap->skillObj);
+      dap->skillObj->DapCancel(dap->skillObj);
       log_error("Init DAP failed!");
       return ADI_ERR_INTERNAL_ERROR;
     }
@@ -49,7 +49,7 @@ static int dapInit(struct ADIv5_Dap *dap) {
     dap->skillObj->JtagToState(dap->skillObj, JTAG_TAP_IDLE);
     if (dap->skillObj->JtagCommit(dap->skillObj) != ADPT_SUCCESS) {
       // 清理指令队列
-      dap->skillObj->DapCleanPending(dap->skillObj);
+      dap->skillObj->DapCancel(dap->skillObj);
       log_error("Change TAP to IDLE state failed!");
       return ADI_ERR_INTERNAL_ERROR;
     }
@@ -69,7 +69,7 @@ static int dapInit(struct ADIv5_Dap *dap) {
   dap->skillObj->DapSingleWrite(dap->skillObj, SKILL_DAP_DP_REG, DP_REG_CTRL_STAT, DP_CTRL_CSYSPWRUPREQ | DP_CTRL_CDBGPWRUPREQ);
   if (dap->skillObj->DapCommit(dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    dap->skillObj->DapCleanPending(dap->skillObj);
+    dap->skillObj->DapCancel(dap->skillObj);
     log_error("Init DAP register failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -77,7 +77,7 @@ static int dapInit(struct ADIv5_Dap *dap) {
     dap->skillObj->DapSingleRead(dap->skillObj, SKILL_DAP_DP_REG, DP_REG_CTRL_STAT, &ctrl_stat);
     if (dap->skillObj->DapCommit(dap->skillObj) != ADPT_SUCCESS) {
       // 清理指令队列
-      dap->skillObj->DapCleanPending(dap->skillObj);
+      dap->skillObj->DapCancel(dap->skillObj);
       log_error("Read DP CTRL/STAT register failed!");
       return ADI_ERR_INTERNAL_ERROR;
     }
@@ -133,7 +133,7 @@ static int apRead8(AccessPort self, uint64_t addr, uint8_t *data) {
   // 执行指令队列
   if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+    ap->dap->skillObj->DapCancel(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -197,7 +197,7 @@ static int apRead16(AccessPort self, uint64_t addr, uint16_t *data) {
   // 执行指令队列
   if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+    ap->dap->skillObj->DapCancel(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -256,7 +256,7 @@ static int apRead32(AccessPort self, uint64_t addr, uint32_t *data) {
   // 执行指令队列
   if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+    ap->dap->skillObj->DapCancel(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -320,7 +320,7 @@ static int apRead64(AccessPort self, uint64_t addr, uint64_t *data) {
   // 执行指令队列
   if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+    ap->dap->skillObj->DapCancel(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -377,7 +377,7 @@ static int apWrite8(AccessPort self, uint64_t addr, uint8_t data) {
   // 执行指令队列
   if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+    ap->dap->skillObj->DapCancel(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -438,7 +438,7 @@ static int apWrite16(AccessPort self, uint64_t addr, uint16_t data) {
   // 执行指令队列
   if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+    ap->dap->skillObj->DapCancel(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -494,7 +494,7 @@ static int apWrite32(AccessPort self, uint64_t addr, uint32_t data) {
   // 执行指令队列
   if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+    ap->dap->skillObj->DapCancel(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -555,7 +555,7 @@ static int apWrite64(AccessPort self, uint64_t addr, uint64_t data) {
   // 执行指令队列
   if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+    ap->dap->skillObj->DapCancel(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -713,7 +713,7 @@ static int apBlockRead(AccessPort self, uint64_t addr, enum addrIncreaseMode mod
   // 执行指令队列
   if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+    ap->dap->skillObj->DapCancel(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -870,7 +870,7 @@ static int apBlockWrite(AccessPort self, uint64_t addr, enum addrIncreaseMode mo
   // 执行指令队列
   if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+    ap->dap->skillObj->DapCancel(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -901,7 +901,7 @@ static int apReadCSW(AccessPort self, uint32_t *data) {
   // 执行指令队列
   if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+    ap->dap->skillObj->DapCancel(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -932,7 +932,7 @@ static int apWriteCSW(AccessPort self, uint32_t data) {
   // 执行指令队列
   if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+    ap->dap->skillObj->DapCancel(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -953,7 +953,7 @@ static int apAbort(AccessPort self) {
   // 执行指令队列
   if (ap->dap->skillObj->DapCommit(ap->dap->skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+    ap->dap->skillObj->DapCancel(ap->dap->skillObj);
     log_error("Execute DAP command failed!");
     return ADI_ERR_INTERNAL_ERROR;
   }
@@ -975,7 +975,7 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap) {
     dapObj->skillObj->DapSingleRead(dapObj->skillObj, SKILL_DAP_AP_REG, AP_REG_ROM_LSB, &temp_2);
     if (dapObj->skillObj->DapCommit(dapObj->skillObj) != ADPT_SUCCESS) {
       // 清理指令队列
-      ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+      ap->dap->skillObj->DapCancel(ap->dap->skillObj);
       log_error("Read AP register failed!");
       return ADI_ERR_INTERNAL_ERROR;
     }
@@ -987,7 +987,7 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap) {
       dapObj->skillObj->DapSingleRead(dapObj->skillObj, SKILL_DAP_AP_REG, AP_REG_ROM_MSB, &temp);
       if (dapObj->skillObj->DapCommit(dapObj->skillObj) != ADPT_SUCCESS) {
         // 清理指令队列
-        ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+        ap->dap->skillObj->DapCancel(ap->dap->skillObj);
         log_error("Read AP register failed!");
         return ADI_ERR_INTERNAL_ERROR;
       }
@@ -1002,7 +1002,7 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap) {
     dapObj->skillObj->DapSingleRead(dapObj->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, &ap->type.memory.csw.regData);
     if (dapObj->skillObj->DapCommit(dapObj->skillObj) != ADPT_SUCCESS) {
       // 清理指令队列
-      ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+      ap->dap->skillObj->DapCancel(ap->dap->skillObj);
       log_error("Read/Write AP register failed!");
       return ADI_ERR_INTERNAL_ERROR;
     }
@@ -1020,7 +1020,7 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap) {
     dapObj->skillObj->DapSingleRead(dapObj->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, &ap->type.memory.csw.regData); // 读
     if (dapObj->skillObj->DapCommit(dapObj->skillObj) != ADPT_SUCCESS) {
       // 清理指令队列
-      ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+      ap->dap->skillObj->DapCancel(ap->dap->skillObj);
       log_error("Read/Write AP register failed!");
       return ADI_ERR_INTERNAL_ERROR;
     }
@@ -1044,7 +1044,7 @@ static int fillApConfig(struct ADIv5_Dap *dapObj, struct ADIv5_AccessPort *ap) {
     dapObj->skillObj->DapSingleWrite(dapObj->skillObj, SKILL_DAP_AP_REG, AP_REG_CSW, ap->type.memory.csw.regData); // 写
     if (dapObj->skillObj->DapCommit(dapObj->skillObj) != ADPT_SUCCESS) {
       // 清理指令队列
-      ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+      ap->dap->skillObj->DapCancel(ap->dap->skillObj);
       log_error("Read/Write AP register failed!");
       return ADI_ERR_INTERNAL_ERROR;
     }
@@ -1132,7 +1132,7 @@ static int findAP(DAP self, enum AccessPortType type, enum busType bus, AccessPo
     dapObj->skillObj->DapSingleRead(dapObj->skillObj, SKILL_DAP_AP_REG, AP_REG_IDR, &ap_t->idr.regData);
     if (dapObj->skillObj->DapCommit(dapObj->skillObj) != ADPT_SUCCESS) {
       // 清理指令队列
-      ap->dap->skillObj->DapCleanPending(ap->dap->skillObj);
+      ap->dap->skillObj->DapCancel(ap->dap->skillObj);
       log_error("Read AP IDR register failed!");
       free(ap_t);
       return ADI_ERR_INTERNAL_ERROR;

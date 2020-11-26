@@ -57,9 +57,8 @@ smartocd
 smartocd_history.txt
 smartocd.log
 leak_check.log
-test/adapter_test
-test/dap_test
 .vscode
 src/Library/lua/src/lua
 src/Library/lua/src/luac
 tags
+test/*_test

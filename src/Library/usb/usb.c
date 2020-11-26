@@ -142,11 +142,15 @@ void USB_Close(USB self) {
   struct _usb_private *usbObj = container_of(self, struct _usb_private, usbInterface);
   assert(usbObj->devHandle != NULL);
 
+  /* 释放interface */
+  if (usbObj->clamedIFNum != -1) {
+    libusb_release_interface(usbObj->devHandle, usbObj->clamedIFNum);
+    usbObj->clamedIFNum = -1;
+  }
   /* Close device */
   libusb_close(usbObj->devHandle);
   usbObj->devHandle = NULL;
   // 清除配置
-  usbObj->clamedIFNum = -1;
   usbObj->currConfVal = -1;
   // 禁止写入
   usbObj->usbInterface.Read = usbObj->usbInterface.Write = unsupportRW;

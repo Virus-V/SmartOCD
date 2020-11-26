@@ -8,9 +8,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "smartocd.h"
-#include "misc/misc.h"
+#include "Library/misc/misc.h"
 
 char* itoa(int num, char *str, int radix) {
 	/*索引表*/
@@ -59,7 +60,7 @@ char* itoa(int num, char *str, int radix) {
 }while(0);
 
 
-int main(){
+int test_main(int argc, const char *argv[]){
 	uint8_t sdad[5];
 	memset(sdad, 0, 5);
 	for(int i=0;i<40;i++){

@@ -43,7 +43,7 @@ typedef const struct dapSkill *DapSkill;
  * 返回:
  */
 typedef int (*SKILL_DAP_SINGLE_READ)(IN DapSkill self, IN enum dapRegType type, IN int reg,
-                                    OUT uint32_t *data);
+                                     OUT uint32_t *data);
 
 /**
  * DapSingleWrite - 单次写:AP或者DP,寄存器地址
@@ -56,7 +56,7 @@ typedef int (*SKILL_DAP_SINGLE_READ)(IN DapSkill self, IN enum dapRegType type, 
  * 返回:
  */
 typedef int (*SKILL_DAP_SINGLE_WRITE)(IN DapSkill self, IN enum dapRegType type, IN int reg,
-                                     IN uint32_t data);
+                                      IN uint32_t data);
 
 /**
  * DapMultiRead - 多次读:AP或者DP,寄存器地址
@@ -70,7 +70,7 @@ typedef int (*SKILL_DAP_SINGLE_WRITE)(IN DapSkill self, IN enum dapRegType type,
  * 返回:
  */
 typedef int (*SKILL_DAP_MULTI_READ)(IN DapSkill self, IN enum dapRegType type, IN int reg,
-                                   IN int count, OUT uint32_t *data);
+                                    IN int count, OUT uint32_t *data);
 
 /**
  * DapMultiWrite - 多次写:AP或者DP,寄存器地址
@@ -84,7 +84,7 @@ typedef int (*SKILL_DAP_MULTI_READ)(IN DapSkill self, IN enum dapRegType type, I
  * 返回:
  */
 typedef int (*SKILL_DAP_MULTI_WRITE)(IN DapSkill self, IN enum dapRegType type, IN int reg,
-                                    IN int count, IN uint32_t *data);
+                                     IN int count, IN uint32_t *data);
 
 /**
  * DapCommit - 提交Pending的动作
@@ -98,7 +98,7 @@ typedef int (*SKILL_DAP_MULTI_WRITE)(IN DapSkill self, IN enum dapRegType type, 
 typedef int (*SKILL_DAP_COMMIT)(IN DapSkill self);
 
 /**
- * DapCleanPending - 清除pending的动作
+ * DapCancel - 清除pending的动作
  * 参数:
  * 	self:DapSkill对象自身
  * 返回:
@@ -106,18 +106,18 @@ typedef int (*SKILL_DAP_COMMIT)(IN DapSkill self);
  * 	ADPT_FAILED:失败
  * 	或者其他错误
  */
-typedef int (*SKILL_DAP_CLEAN_PENDING)(IN DapSkill self);
+typedef int (*SKILL_DAP_CANCEL)(IN DapSkill self);
 
 /* DAP 能力集 */
 struct dapSkill {
   struct skill header;
 
-  SKILL_DAP_SINGLE_READ DapSingleRead;     // 单次读:AP或者DP,寄存器编号
-  SKILL_DAP_SINGLE_WRITE DapSingleWrite;   // 单次写:AP或者DP,寄存器编号
-  SKILL_DAP_MULTI_READ DapMultiRead;       // 连续读
-  SKILL_DAP_MULTI_WRITE DapMultiWrite;     // 连续写
-  SKILL_DAP_COMMIT DapCommit;              // 提交Pending动作
-  SKILL_DAP_CLEAN_PENDING DapCleanPending; // 清除Pending的动作
+  SKILL_DAP_SINGLE_READ DapSingleRead;   // 单次读:AP或者DP,寄存器编号
+  SKILL_DAP_SINGLE_WRITE DapSingleWrite; // 单次写:AP或者DP,寄存器编号
+  SKILL_DAP_MULTI_READ DapMultiRead;     // 连续读
+  SKILL_DAP_MULTI_WRITE DapMultiWrite;   // 连续写
+  SKILL_DAP_COMMIT DapCommit;            // 提交Pending动作
+  SKILL_DAP_CANCEL DapCancel;            // 清除Pending的动作
 };
 
 /* 获得Adapter DAP能力接口 */

@@ -395,9 +395,6 @@ EXIT:
   return 1;
 }
 
-// 致命错误恢复点
-jmp_buf fatalException;
-
 // 打印logo和版本
 static void printVersion() {
   char *logo[] = {"   _____                      __  ____  __________ ",
@@ -426,13 +423,7 @@ int main(int argc, char **argv) {
 
   // 设置初始日志级别
   log_set_level(LOG_INFO);
-  switch (setjmp(fatalException)) {
-  default:
-    log_fatal("Fatal Error! Abort!");
-    return 1;
-  case 0:
-    break;
-  }
+
   // 打印logo和版本
   printVersion();
 

@@ -8,9 +8,12 @@
 #
 
 # 构建Adapter
-CURR_DIR = $(shell pwd)
-DIR_OBJ_FILES = $(CURR_DIR)/cmsis-dap/cmsis-dap.o	\
-								$(CURR_DIR)/adapter.o
+
+DIR_OBJ_FILES = $(CURR_DIR)/adapter.o \
+								$(CURR_DIR)/cmsis-dap/cmsis-dap.o	\
+								$(CURR_DIR)/ftdi/ftdi.o	\
+								
+include $(ROOT_DIR)/common.mk
 
 all: $(CURR_DIR)/libAdapter.a
 
@@ -23,4 +26,3 @@ clean:
 
 .PHONY: all clean
 
-include $(ROOT_DIR)/utils.mk

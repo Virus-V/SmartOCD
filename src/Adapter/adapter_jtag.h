@@ -25,19 +25,19 @@
 #include "Library/jtag/jtag.h"
 
 // SW和JTAG引脚映射,用于指定SKILL_JTAG_PINS服务的pinSelect参数
-#define SWJ_PIN_SWCLK_TCK_POS 0 // SWCLK/TCK引脚在pinMask参数的对应位置
-#define SWJ_PIN_SWDIO_TMS_POS 1 // SWDIO/TMS引脚在pinMask参数的对应位置
-#define SWJ_PIN_TDI_POS 2       // TDI引脚在pinMask参数的对应位置
-#define SWJ_PIN_TDO_POS 3       // TDO引脚在pinMask参数的对应位置
-#define SWJ_PIN_nTRST_POS 5     // nTRST引脚在pinMask参数的对应位置
-#define SWJ_PIN_nRESET_POS 7    // nRESET引脚在pinMask参数的对应位置
+#define JTAG_PIN_SWCLK_TCK_POS 0 // SWCLK/TCK引脚在pinMask参数的对应位置
+#define JTAG_PIN_SWDIO_TMS_POS 1 // SWDIO/TMS引脚在pinMask参数的对应位置
+#define JTAG_PIN_TDI_POS 2       // TDI引脚在pinMask参数的对应位置
+#define JTAG_PIN_TDO_POS 3       // TDO引脚在pinMask参数的对应位置
+#define JTAG_PIN_nTRST_POS 5     // nTRST引脚在pinMask参数的对应位置
+#define JTAG_PIN_nRESET_POS 7    // nRESET引脚在pinMask参数的对应位置
 
-#define SWJ_PIN_SWCLK_TCK 0x1 << SWJ_PIN_SWCLK_TCK_POS // SWCLK/TCK
-#define SWJ_PIN_SWDIO_TMS 0x1 << SWJ_PIN_SWDIO_TMS_POS // SWDIO/TMS
-#define SWJ_PIN_TDI 0x1 << SWJ_PIN_TDI_POS             // TDI
-#define SWJ_PIN_TDO 0x1 << SWJ_PIN_TDO_POS             // TDO
-#define SWJ_PIN_nTRST 0x1 << SWJ_PIN_nTRST_POS         // nTRST
-#define SWJ_PIN_nRESET 0x1 << SWJ_PIN_nRESET_POS       // nRESET
+#define JTAG_PIN_SWCLK_TCK 0x1 << JTAG_PIN_SWCLK_TCK_POS // SWCLK/TCK
+#define JTAG_PIN_SWDIO_TMS 0x1 << JTAG_PIN_SWDIO_TMS_POS // SWDIO/TMS
+#define JTAG_PIN_TDI 0x1 << JTAG_PIN_TDI_POS             // TDI
+#define JTAG_PIN_TDO 0x1 << JTAG_PIN_TDO_POS             // TDO
+#define JTAG_PIN_nTRST 0x1 << JTAG_PIN_nTRST_POS         // nTRST
+#define JTAG_PIN_nRESET 0x1 << JTAG_PIN_nRESET_POS       // nRESET
 
 /* JTAG 能力集对象 */
 typedef const struct jtagSkill *JtagSkill;
@@ -106,7 +106,7 @@ typedef int (*SKILL_JTAG_TO_STATE)(IN JtagSkill self, IN enum JTAG_TAP_State toS
 typedef int (*SKILL_JTAG_COMMIT)(IN JtagSkill self);
 
 /**
- * JtagCleanPending - 清除pending的动作
+ * JtagCancel - 清除pending的动作
  * 参数:
  * 	self:JtagSkill对象自身
  * 返回:
@@ -114,7 +114,7 @@ typedef int (*SKILL_JTAG_COMMIT)(IN JtagSkill self);
  * 	ADPT_FAILED:失败
  * 	或者其他错误
  */
-typedef int (*SKILL_JTAG_CLEAN_PENDING)(IN JtagSkill self);
+typedef int (*SKILL_JTAG_CANCEL)(IN JtagSkill self);
 
 /* JTAG 传输接口 */
 struct jtagSkill {
@@ -127,7 +127,7 @@ struct jtagSkill {
   SKILL_JTAG_IDLE JtagIdle;                  // 在Idle状态等待几个周期
   SKILL_JTAG_TO_STATE JtagToState;           // 切换到JTAG状态机的某个状态
   SKILL_JTAG_COMMIT JtagCommit;              // 提交Pending的动作
-  SKILL_JTAG_CLEAN_PENDING JtagCleanPending; // 清除pending的动作
+  SKILL_JTAG_CANCEL JtagCancel;              // 清除pending的动作
 };
 
 /* 获得JTAG 能力接口 */

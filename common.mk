@@ -1,4 +1,6 @@
-CFLAGS += -I$(shell pwd)
+CURR_DIR = $(shell pwd)
+
+include $(ROOT_DIR)/config.mk
 
 -include ${patsubst %.o,%.d,$(DIR_OBJ_FILES)}
 

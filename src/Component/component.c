@@ -178,7 +178,6 @@ void component_init(lua_State *L) {
     ret = (*curr->init)(L, curr->opaque);
     if (ret != 0) {
       log_fatal("Regist %s failed!", curr->name);
-      FATAL_ABORT(1);
     }
   }
 }

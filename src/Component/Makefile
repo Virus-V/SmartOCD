@@ -8,13 +8,14 @@
 #
 
 # 构建Component
-CURR_DIR = $(shell pwd)
 
 DIR_SRC_FILES = $(wildcard $(CURR_DIR)/*.c)	\
 	$(wildcard $(CURR_DIR)/adapter/*.c)	\
 	$(wildcard $(CURR_DIR)/ADI/*.c)
 
 DIR_OBJ_FILES = ${patsubst %.c,%.o,$(DIR_SRC_FILES)}
+
+include $(ROOT_DIR)/common.mk
 
 all: $(CURR_DIR)/libComponent.a
 
@@ -27,4 +28,3 @@ clean:
 
 .PHONY: all clean
 
-include $(ROOT_DIR)/utils.mk
