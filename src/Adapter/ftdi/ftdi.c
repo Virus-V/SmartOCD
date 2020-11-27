@@ -27,7 +27,7 @@ struct ftdi {
   struct ftdi_context ctx;   // FTDI库相关对象
   struct adapter adapterAPI; // Adapter接口对象
   BOOL connected;            // 设备是否已连接
-  int inferface;             // 当前选择的FTDI channel/interface
+  int interface;             // 当前选择的FTDI channel/interface
 
   struct jtagSkill jtagSkillAPI; // jtag能力集接口
   struct list_head JtagInsQueue; // JTAG指令队列，元素类型：struct JTAG_Command
