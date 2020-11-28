@@ -1,5 +1,5 @@
 /**
- * src/p.h
+ * src/Component/RISC-V/riscv_api.c
  * Copyright (c) 2020 Virus.V <virusv@live.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -15,24 +15,4 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#ifndef _P_H__
-#define _P_H__
-
-#define RED         "\x1B[31m" 
-#define GREEN       "\x1B[32m"
-#define YELLOW      "\x1B[33m"
-#define BLUE        "\x1B[34m"
-#define MAGENTA     "\x1B[35m"
-#define CYAN        "\x1B[36m"
-#define WHITE       "\x1B[37m"
-
-#define RESET       "\x1B[0m"
-
-#define FUNC_COLOR RED
-#define TRACE_COLOR GREEN
-
-#define P (fprintf(stderr, "[" FUNC_COLOR "%s" RESET " " TRACE_COLOR "%s:%d" RESET "] => ", __func__, __FILE__, __LINE__), printf)
-
-#endif 
 

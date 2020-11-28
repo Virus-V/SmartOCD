@@ -236,3 +236,76 @@ CTEST2(ftdi_playground, jtaglib_test) {
   ASSERT_EQUAL(4, ret);
   log_info("idcode: %02x%02x%02x%02x.", rbuf[3], rbuf[2], rbuf[1], rbuf[0]);
 }
+
+CTEST2(ftdi_playground, read_dtmcs) {
+  int ret;
+  unsigned char wbuf[32] = {0};
+  unsigned char rbuf[32] = {0};
+  TMS_SeqInfo seq;
+
+  // 复位TMS 5个1, 到RESET/IDLE状态	
+	wbuf[0] = MPSSE_WRITE_TMS | MPSSE_LSB | MPSSE_BITMODE | MPSSE_WRITE_NEG;
+	wbuf[1] = 0x4; 
+	wbuf[2] = 0x1f;
+	ret = ftdi_write_data(&data->ctx, wbuf, 3);
+  ASSERT_EQUAL(3, ret);
+
+  seq = JtagGetTmsSequence(JTAG_TAP_RESET, JTAG_TAP_IRSHIFT);
+  log_info("RESET->IRSHIFT:seq:%x, cnt:%x", seq >> 8, seq & 0xFF);
+  
+  wbuf[0] = MPSSE_WRITE_TMS | MPSSE_LSB | MPSSE_BITMODE | MPSSE_WRITE_NEG;
+	wbuf[1] = (seq & 0xFF) - 1;
+	wbuf[2] = (seq >> 8) & 0xFF; 
+	ret = ftdi_write_data(&data->ctx, wbuf, 3);
+  ASSERT_EQUAL(3, ret);
+
+  // write 0x10 to IR, 5 bits
+  wbuf[0] = MPSSE_LSB | MPSSE_WRITE_NEG | MPSSE_DO_WRITE | MPSSE_DO_READ | MPSSE_BITMODE;
+  wbuf[1] = 0x3; // 发送前四个，全0
+  wbuf[2] = 0x0;
+  ret = ftdi_write_data(&data->ctx, wbuf, 3);
+  ASSERT_EQUAL(3, ret);
+  
+  seq = JtagGetTmsSequence(JTAG_TAP_IRSHIFT, JTAG_TAP_IREXIT1);
+  log_info("IR-SHIFT->IR-EXIT1:seq:%x, cnt:%x", seq >> 8, seq & 0xFF);
+  wbuf[0] = MPSSE_WRITE_TMS | MPSSE_LSB | MPSSE_BITMODE | MPSSE_WRITE_NEG | MPSSE_DO_READ; // 0x6b
+	wbuf[1] = (seq & 0xFF) - 1;
+	wbuf[2] = ((seq >> 8) & 0xFF) | 0x80; // 将bit7置位，在Clock到来之前输出到TDI，
+	ret = ftdi_write_data(&data->ctx, wbuf, 3);
+  ASSERT_EQUAL(3, ret);
+  
+  usleep(5*1000);
+  ret = ftdi_read_data(&data->ctx, rbuf, 32);
+  ASSERT_EQUAL(2, ret);
+  // 低位依次出来，从高位进入，
+  // 输出4个，所以读出来的数据是高4位
+  // 输出1个，读出来的数据在最高位
+  ASSERT_EQUAL(0x1, ((rbuf[0] >> 4) & 0xF) | ((rbuf[1] >> 3) & 0x10));
+
+  // to DR SHIFT
+  seq = JtagGetTmsSequence(JTAG_TAP_IREXIT1, JTAG_TAP_DRSHIFT);
+  log_info("IR-EXIT1->DR-SHIFT:seq:%x, cnt:%x", seq >> 8, seq & 0xFF);
+  
+  wbuf[0] = MPSSE_WRITE_TMS | MPSSE_LSB | MPSSE_BITMODE | MPSSE_WRITE_NEG;
+	wbuf[1] = (seq & 0xFF) - 1;
+	wbuf[2] = (seq >> 8) & 0xFF; 
+	ret = ftdi_write_data(&data->ctx, wbuf, 3);
+  ASSERT_EQUAL(3, ret);
+  
+  // 读取 dtmcs
+  // shift DR out 32bit
+  wbuf[0] = MPSSE_LSB | MPSSE_WRITE_NEG | MPSSE_DO_WRITE | MPSSE_DO_READ;
+  wbuf[1] = 0x3;
+  wbuf[2] = 0;
+  wbuf[3] = 0;
+  wbuf[4] = 0;
+  wbuf[5] = 0;
+  wbuf[6] = 0;
+  ret = ftdi_write_data(&data->ctx, wbuf, 7);
+  ASSERT_EQUAL(7, ret);
+  
+  usleep(5*1000);
+  ret = ftdi_read_data(&data->ctx, rbuf, 32);
+  ASSERT_EQUAL(4, ret);
+  log_info("dtmcs: %02x%02x%02x%02x.", rbuf[3], rbuf[2], rbuf[1], rbuf[0]);
+}
