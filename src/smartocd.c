@@ -42,8 +42,8 @@ static const struct option long_option[] = {
 static void printHelp(char *progName) {
   printf(
       "Usage: smartocd [options]\n\nOptions:\n"
-      "\t-d level, --debuglevel level : Debug information output level; 0-6, 0 "
-      "not output.\n"
+      "\t-d level, --debuglevel level : Debug information output level;\n"
+      "\t\t0:TRACE, 5:FATAL\n"
       "\t-f script, --file script : Pre-executed script, this parameter can be "
       "more than one.\n"
       "\t-e, --exit : End of the script does not enter the interactive mode.\n"
@@ -356,11 +356,9 @@ static int smartocd_init(lua_State *L) {
       // log_debug("script name:%s", optarg);
       handleScript(L, optarg);
       break;
-    case 'd': // 日志输出等级 -1 不输出任何日志， 转换失败则会返回0
+    case 'd': // 日志输出等级
       logLevel = atoi(optarg);
-      if (logLevel > 0) {
-        log_set_level(logLevel - 1);
-      }
+      log_set_level(logLevel);
       break;
     case 'e': // 执行脚本后不进入交互模式，直接退出
       exitFlag = 1;
@@ -420,9 +418,6 @@ static void printVersion() {
 int main(int argc, char **argv) {
   int status, result;
   int opt, logLevel = LOG_INFO;
-
-  // 设置初始日志级别
-  log_set_level(LOG_INFO);
 
   // 打印logo和版本
   printVersion();
