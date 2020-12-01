@@ -48,11 +48,12 @@ void DestroyFtdi(IN Adapter *self);
  * 参数:
  * 	vids: Vendor ID 列表
  * 	pids: Product ID 列表
- * 	serialNum:设备序列号
+ * 	serialNum:设备序列号,可以为NULL
+ * 	channel:FTDI的channel
  * 返回:
  */
 int ConnectFtdi(IN Adapter self, IN const uint16_t *vids, IN const uint16_t *pids,
-                IN const char *serialNum);
+                IN const char *serialNum, IN int channel);
 
 /**
  * DisconnectFtdi - 断开FTDI设备
@@ -60,12 +61,14 @@ int ConnectFtdi(IN Adapter self, IN const uint16_t *vids, IN const uint16_t *pid
  */
 int DisconnectFtdi(IN Adapter self);
 
+#if 0
 /**
- * FtdiSetInterface - 选择FTDI的接口
+ * FtdiSetLayout - 选择channel的状态
  * 参数：
- *  interfaceNum：FTDI的接口
+ *  out：默认输出电平
  *  mode：工作模式
  */
-int FtdiSetInterface(IN Adapter self, IN int interfaceNum, IN int mode);
+int FtdiSetLayout(IN Adapter self, IN int out, IN int mode);
+#endif
 
 #endif /* SRC_ADAPTER_FTDI_FTDI_H_ */

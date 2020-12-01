@@ -19,6 +19,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <errno.h>
 
 #include "smartocd.h"
 
@@ -45,17 +47,18 @@ uint32_t misc_BitReverse(uint32_t n) {
 int misc_PrintBulk(char *data, int length, int rowLen) {
   // 计算要打印多少行
   int lineCnt, placeCnt, tmp;  // 数据总行数，行数的数字位数（用来计算前导0）
-  int currRow, printedCnt = 0;  // 当前输出的行和列
+  int currRow, printedCnt = 0; // 当前输出的行和列
   // 如果参数不对则直接返回
-  if (length == 0 || rowLen == 0) return 0;
+  if (length == 0 || rowLen == 0)
+    return 0;
 
-  lineCnt = (length / rowLen) + 1;  // 计算行数
+  lineCnt = (length / rowLen) + 1; // 计算行数
   for (tmp = length - (length % rowLen), placeCnt = 1; tmp >= 16; placeCnt++) {
     tmp /= 16;
   }
   // 输出一行数据：前导位置信息：数据...
   for (currRow = 0; currRow < lineCnt && length > 0; currRow++) {
-    int currPlaceCnt;  // 已输出的数据数字位数和已输出的数据
+    int currPlaceCnt; // 已输出的数据数字位数和已输出的数据
     // 计算位数
     for (tmp = printedCnt, currPlaceCnt = 1; tmp >= 16; currPlaceCnt++) {
       tmp /= 16;
@@ -93,4 +96,23 @@ int misc_PrintBulk(char *data, int length, int rowLen) {
     printf("\n");
   }
   return currRow;
+}
+
+int msleep(long msec) {
+  struct timespec ts;
+  int res;
+
+  if (msec < 0) {
+    errno = EINVAL;
+    return -1;
+  }
+
+  ts.tv_sec = msec / 1000;
+  ts.tv_nsec = (msec % 1000) * 1000000;
+
+  do {
+    res = nanosleep(&ts, &ts);
+  } while (res && errno == EINTR);
+
+  return res;
 }

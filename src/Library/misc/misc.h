@@ -21,5 +21,6 @@
 
 uint32_t misc_BitReverse(uint32_t n);
 int misc_PrintBulk(char *data, int length, int rowLen);
+int msleep(long msec);
 
 #endif /* SRC_MISC_MISC_H_ */

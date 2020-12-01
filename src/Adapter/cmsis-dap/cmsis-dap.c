@@ -874,7 +874,7 @@ MAKE_PACKT:
     inputIdx += tdiByte + 1; // 跳到下一个sequence info
     seqCount++;
     if (seqCount == 255) { // 判断是否到达最大序列数目
-      // BUG: 达到255后没有增加seqIdx，而inputIdx增加了，导致内存访问越界
+      // FIXBUG: 达到255后没有增加seqIdx，而inputIdx增加了，导致内存访问越界
       seqIdx++;
       break;
     }

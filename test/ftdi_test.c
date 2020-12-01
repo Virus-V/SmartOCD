@@ -48,7 +48,7 @@ CTEST2(ftdi, connect_test) {
   int ret, i;
 
   for(i =0; i<5; i++) {
-    ret = ConnectFtdi(data->ftdiObj, vids, pids, NULL);
+    ret = ConnectFtdi(data->ftdiObj, vids, pids, NULL, 2);
     ASSERT_EQUAL(ADPT_SUCCESS, ret);
 
     ret = DisconnectFtdi(data->ftdiObj);
@@ -56,6 +56,68 @@ CTEST2(ftdi, connect_test) {
   }
 }
 
+// 指令队列测试
+CTEST2(ftdi, jtag_queue_test) {
+  int ret, i;
+  JtagSkill jtagObj;
+  uint32_t idcode_ir = 0, dtmcs_ir = 0;
+  uint32_t idcode = 0, dtmcs = 0;
+  uint8_t test_data[65536];
+  memset(test_data, 0xa5, sizeof(test_data));
+
+  // 连接channel B
+  ret = ConnectFtdi(data->ftdiObj, vids, pids, NULL, 2);
+  ASSERT_EQUAL(ADPT_SUCCESS, ret);
+  jtagObj = (JtagSkill)Adapter_GetSkill(data->ftdiObj, ADPT_SKILL_JTAG);
+  ASSERT_NOT_NULL(jtagObj);
+  
+  for (i = 0; i < 5000; i++) {
+    // 状态更新到IRSHIFT，更新IR
+    ret = jtagObj->JtagToState(jtagObj, JTAG_TAP_IRSHIFT);
+    ASSERT_EQUAL(ADPT_SUCCESS, ret);
+    
+    idcode_ir = 0x01;  // IDCODE
+    ret = jtagObj->JtagExchangeData(jtagObj, (uint8_t *)&idcode_ir, 5);
+    ASSERT_EQUAL(ADPT_SUCCESS, ret);
+
+    // 状态到DRSHIFT，读取IDCODE
+    ret = jtagObj->JtagToState(jtagObj, JTAG_TAP_DRSHIFT);
+    ASSERT_EQUAL(ADPT_SUCCESS, ret);
+
+    ret = jtagObj->JtagExchangeData(jtagObj, (uint8_t *)&idcode, 32);
+    ASSERT_EQUAL(ADPT_SUCCESS, ret);
+
+    // 状态更新到IRSHIFT，更新IR
+    ret = jtagObj->JtagToState(jtagObj, JTAG_TAP_IRSHIFT);
+    ASSERT_EQUAL(ADPT_SUCCESS, ret);
+    
+    dtmcs_ir = 0x10;  // dtmcs
+    ret = jtagObj->JtagExchangeData(jtagObj, (uint8_t *)&dtmcs_ir, 5);
+    ASSERT_EQUAL(ADPT_SUCCESS, ret);
+
+    // 状态到DRSHIFT，读取dtmcs
+    ret = jtagObj->JtagToState(jtagObj, JTAG_TAP_DRSHIFT);
+    ASSERT_EQUAL(ADPT_SUCCESS, ret);
+
+    ret = jtagObj->JtagExchangeData(jtagObj, (uint8_t *)&dtmcs, 32);
+    ASSERT_EQUAL(ADPT_SUCCESS, ret);
+   
+#if 1
+    ret = jtagObj->JtagToState(jtagObj, JTAG_TAP_IDLE);
+    ASSERT_EQUAL(ADPT_SUCCESS, ret);
+
+    ret = jtagObj->JtagIdle(jtagObj, 64);
+    ASSERT_EQUAL(ADPT_SUCCESS, ret);
+#endif 
+
+    ret = jtagObj->JtagCommit(jtagObj);
+    ASSERT_EQUAL(ADPT_SUCCESS, ret);
+    log_info("idcode:%x, dtmcs:%x, idcode_ir:%x, dtmcs_ir:%x.", idcode, dtmcs, idcode_ir, dtmcs_ir);
+    ASSERT_EQUAL(0x20000c05, idcode);
+  }
+  ret = DisconnectFtdi(data->ftdiObj);
+  ASSERT_EQUAL(ADPT_SUCCESS, ret);
+}
 // 裸ftdi库接口测试
 CTEST_DATA(ftdi_playground) {
     struct ftdi_context ctx;
@@ -309,3 +371,4 @@ CTEST2(ftdi_playground, read_dtmcs) {
   ASSERT_EQUAL(4, ret);
   log_info("dtmcs: %02x%02x%02x%02x.", rbuf[3], rbuf[2], rbuf[1], rbuf[0]);
 }
+

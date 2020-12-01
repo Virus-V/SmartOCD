@@ -63,6 +63,7 @@ typedef int (*SKILL_JTAG_PINS)(IN JtagSkill self, IN uint8_t pinMask, IN uint8_t
 /**
  * JtagExchangeData - 交换TDI和TDO的数据
  * 会将该动作加入Pending队列,不会立即执行
+ * 按字节依次LSB方式发出
  * 参数:
  * 	self:JtagSkill对象自身
  * 	data:数据缓冲区,必须可读可写
