@@ -43,6 +43,14 @@ enum componentPriority {
 void component_regist(struct componentEntry *c);
 void component_init(lua_State *L);
 
+/*
+ * 注册组件
+ * name：组件名
+ * init：组件初始化函数
+ * opaque：函数参数
+ * com：组件类型
+ * pri：组件初始化优先级
+ */
 #define COMPONENT_INIT(name, init, opaque, com, pri)                                                       \
   static struct componentEntry _component_item_##name = {                                                  \
       #name, init, opaque, (com) + (pri), {&_component_item_##name.entry, &_component_item_##name.entry}}; \
