@@ -663,6 +663,7 @@ Adapter CreateFtdi(void) {
 
   ftdi_init(&obj->ctx);
 
+  log_trace("Create FTDI object: %p.", obj);
   return (Adapter)&obj->adapterAPI;
 }
 

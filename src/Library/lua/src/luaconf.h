@@ -753,9 +753,12 @@
 ** without modifying the main part of the file.
 */
 
-
-
-
+// Set smartocd vm lock
+typedef struct lua_State lua_State;
+extern void core_LockVM(lua_State *);
+extern void core_UnlockVM(lua_State *);
+#define lua_lock(L) core_LockVM(L)
+#define lua_unlock(L)	core_UnlockVM(L)
 
 #endif
 

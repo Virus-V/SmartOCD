@@ -31,7 +31,7 @@ $(CURR_DIR)/libLibrary.a: lua $(DIR_OBJ_FILES)
 	$(RM) -rf obj.$$$$	\
 
 lua:
-	$(MAKE) -C $(CURR_DIR)/lua linux
+	$(MAKE) -C $(CURR_DIR)/lua linux ALL=a
 
 clean:
 	$(RM) $(DIR_OBJ_FILES)

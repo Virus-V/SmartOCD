@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h> // usleep
+#include <pthread.h>
 
 #include "Component/component.h"
 #include "Library/linenoise/linenoise.h"
@@ -410,6 +411,18 @@ static void printVersion() {
       " * Complile time: %s\n"
       " * Github: https://github.com/Virus-V/SmartOCD\n\n",
       VERSION, COMPILE_TIME);
+}
+
+// Lua 虚拟机锁
+static pthread_mutex_t vmlock = PTHREAD_MUTEX_INITIALIZER;
+void core_LockVM(lua_State *L) {
+  (void)L;
+  pthread_mutex_lock(&vmlock);
+}
+
+void core_UnlockVM(lua_State *L) {
+  (void)L;
+  pthread_mutex_unlock(&vmlock);
 }
 
 /**
