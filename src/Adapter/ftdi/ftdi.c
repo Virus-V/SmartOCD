@@ -146,6 +146,15 @@ _TOINIT:
     return ADPT_ERR_INTERNAL_ERROR;
   }
 
+  wbuf[0] = SET_BITS_LOW;
+  wbuf[1] = 0x08; // TCK/SK, TDI/DU low, TMS/CS high
+  wbuf[2] = 0x0b; // TCK/SK, TDI/DU, TMS/CS output, TDO/D1 and GPIO L1 -> L3 input
+  ret = ftdi_write_data(&ftdiObj->ctx, wbuf, 3);
+  if (ret != 3) {
+    log_error("FTDI send command error. error code:%d.", ret);
+    return ADPT_ERR_INTERNAL_ERROR;
+  }
+
   // TAP复位
   wbuf[0] = MPSSE_WRITE_TMS | MPSSE_LSB | MPSSE_BITMODE | MPSSE_WRITE_NEG;
   wbuf[1] = 0x4;
@@ -580,8 +589,8 @@ static int ftdiJtagCommit(IN JtagSkill self) {
     }
   } while(0);
   
-  misc_PrintBulk(writeBuff, writeBuffLen, 32);
-  misc_PrintBulk(readBuff, readBuffLen, 32);
+  // misc_PrintBulk(writeBuff, writeBuffLen, 32);
+  // misc_PrintBulk(readBuff, readBuffLen, 32);
 
   // 第三次遍历：同步数据，并删除执行成功的指令
   list_for_each_entry_safe(cmd, cmd_t, &ftdiObj->JtagInsQueue, list_entry) {

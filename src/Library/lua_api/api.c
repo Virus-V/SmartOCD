@@ -18,6 +18,7 @@
 
 #include "api.h"
 #include <string.h>
+#include <pthread.h>
 
 #include "Library/log/log.h"
 #include "smartocd.h"
@@ -118,5 +119,17 @@ void *LuaApi_check_object_type(lua_State *L, int ud, const char *type) {
     }
   }
   return NULL;
+}
+
+// Lua 虚拟机锁
+static pthread_mutex_t vmlock = PTHREAD_MUTEX_INITIALIZER;
+void core_LockVM(lua_State *L) {
+  (void)L;
+  pthread_mutex_lock(&vmlock);
+}
+
+void core_UnlockVM(lua_State *L) {
+  (void)L;
+  pthread_mutex_unlock(&vmlock);
 }
 
