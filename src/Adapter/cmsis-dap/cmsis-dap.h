@@ -21,11 +21,8 @@
 
 #include "smartocd.h"
 
-#include "Adapter/adapter_private.h"
-
 #include "Adapter/adapter_dap.h"
 #include "Adapter/adapter_jtag.h"
-#include "Library/usb/usb.h"
 
 /**
  * 创建CMSIS-DAP对象

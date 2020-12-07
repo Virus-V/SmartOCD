@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "Adapter/adapter_private.h"
+#include "Adapter/adapter.h"
 #include "Library/misc/list.h"
 #include "smartocd.h"
 

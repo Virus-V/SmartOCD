@@ -21,6 +21,8 @@
 #include <string.h>
 
 #include "Component/ADI/ADIv5.h"
+#include "Library/misc/list.h"
+#include "Library/usb/usb.h"
 #include "Library/log/log.h"
 
 // DAP Transfer Request
@@ -1938,23 +1940,23 @@ Adapter CreateCmsisDap(void) {
   list_add(&obj->jtagSkillAPI.header.skills, &obj->adaperAPI.skills);
 
   obj->jtagSkillAPI.header.type = ADPT_SKILL_JTAG;
-  obj->jtagSkillAPI.JtagPins = dapSwjPins;
-  obj->jtagSkillAPI.JtagExchangeData = addJtagExchangeData;
-  obj->jtagSkillAPI.JtagIdle = addJtagIdle;
-  obj->jtagSkillAPI.JtagToState = addJtagToState;
-  obj->jtagSkillAPI.JtagCommit = executeJtagCmd;
-  obj->jtagSkillAPI.JtagCancel = cleanJtagInsQueue;
+  obj->jtagSkillAPI.Pins = dapSwjPins;
+  obj->jtagSkillAPI.ExchangeData = addJtagExchangeData;
+  obj->jtagSkillAPI.Idle = addJtagIdle;
+  obj->jtagSkillAPI.ToState = addJtagToState;
+  obj->jtagSkillAPI.Commit = executeJtagCmd;
+  obj->jtagSkillAPI.Cancel = cleanJtagInsQueue;
 
   INIT_LIST_HEAD(&obj->dapSkillAPI.header.skills);
   list_add(&obj->dapSkillAPI.header.skills, &obj->adaperAPI.skills);
 
   obj->dapSkillAPI.header.type = ADPT_SKILL_DAP;
-  obj->dapSkillAPI.DapSingleRead = addDapSingleRead;
-  obj->dapSkillAPI.DapSingleWrite = addDapSingleWrite;
-  obj->dapSkillAPI.DapMultiRead = addDapMultiRead;
-  obj->dapSkillAPI.DapMultiWrite = addDapMultiWrite;
-  obj->dapSkillAPI.DapCommit = executeDapCmd;
-  obj->dapSkillAPI.DapCancel = cleanDapInsQueue;
+  obj->dapSkillAPI.SingleRead = addDapSingleRead;
+  obj->dapSkillAPI.SingleWrite = addDapSingleWrite;
+  obj->dapSkillAPI.MultiRead = addDapMultiRead;
+  obj->dapSkillAPI.MultiWrite = addDapMultiWrite;
+  obj->dapSkillAPI.Commit = executeDapCmd;
+  obj->dapSkillAPI.Cancel = cleanDapInsQueue;
 
   obj->connected = FALSE;
 

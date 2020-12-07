@@ -26,7 +26,6 @@
 
 #include "smartocd.h"
 
-#include "Adapter/adapter_private.h"
 #include "Adapter/adapter_jtag.h"
 
 /**

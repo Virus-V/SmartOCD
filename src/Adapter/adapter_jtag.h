@@ -123,12 +123,12 @@ struct jtagSkill {
 
   const enum JTAG_TAP_State currState; // JTAG 当前状态
 
-  SKILL_JTAG_PINS JtagPins;                  // 读写仿真器的JTAG引脚
-  SKILL_JTAG_EXCHANGE_DATA JtagExchangeData; // 交换TDI和TDO的数据
-  SKILL_JTAG_IDLE JtagIdle;                  // 在Idle状态等待几个周期
-  SKILL_JTAG_TO_STATE JtagToState;           // 切换到JTAG状态机的某个状态
-  SKILL_JTAG_COMMIT JtagCommit;              // 提交Pending的动作
-  SKILL_JTAG_CANCEL JtagCancel;              // 清除pending的动作
+  SKILL_JTAG_PINS Pins;                  // 读写仿真器的JTAG引脚
+  SKILL_JTAG_EXCHANGE_DATA ExchangeData; // 交换TDI和TDO的数据
+  SKILL_JTAG_IDLE Idle;                  // 在Idle状态等待几个周期
+  SKILL_JTAG_TO_STATE ToState;           // 切换到JTAG状态机的某个状态
+  SKILL_JTAG_COMMIT Commit;              // 提交Pending的动作
+  SKILL_JTAG_CANCEL Cancel;              // 清除pending的动作
 };
 
 /* 获得JTAG 能力接口 */

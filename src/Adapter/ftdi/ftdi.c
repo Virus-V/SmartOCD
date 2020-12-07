@@ -18,8 +18,10 @@
 #include "smartocd.h"
 
 #include "Adapter/ftdi/ftdi.h"
-#include "Library/log/log.h"
+
+#include "Library/misc/list.h"
 #include "Library/misc/misc.h"
+#include "Library/log/log.h"
 
 #include <libftdi1/ftdi.h>
 
@@ -661,12 +663,12 @@ Adapter CreateFtdi(void) {
   list_add(&obj->jtagSkillAPI.header.skills, &obj->adapterAPI.skills);
 
   obj->jtagSkillAPI.header.type = ADPT_SKILL_JTAG;
-  obj->jtagSkillAPI.JtagPins = ftdiJtagPins;
-  obj->jtagSkillAPI.JtagExchangeData = ftdiJtagExchangeData;
-  obj->jtagSkillAPI.JtagIdle = ftdiJtagIdle;
-  obj->jtagSkillAPI.JtagToState = ftdiJtagToState;
-  obj->jtagSkillAPI.JtagCommit = ftdiJtagCommit;
-  obj->jtagSkillAPI.JtagCancel = ftdiJtagCancel;
+  obj->jtagSkillAPI.Pins = ftdiJtagPins;
+  obj->jtagSkillAPI.ExchangeData = ftdiJtagExchangeData;
+  obj->jtagSkillAPI.Idle = ftdiJtagIdle;
+  obj->jtagSkillAPI.ToState = ftdiJtagToState;
+  obj->jtagSkillAPI.Commit = ftdiJtagCommit;
+  obj->jtagSkillAPI.Cancel = ftdiJtagCancel;
 
   obj->connected = FALSE;
 

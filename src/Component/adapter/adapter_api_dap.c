@@ -35,14 +35,14 @@ static int luaApi_adapter_dap_single_read(lua_State *L) {
   int type = (int)luaL_checkinteger(L, 2);
   int reg = (int)luaL_checkinteger(L, 3);
 
-  if (skillObj->DapSingleRead(skillObj, type, reg, &data) != ADPT_SUCCESS) {
+  if (skillObj->SingleRead(skillObj, type, reg, &data) != ADPT_SUCCESS) {
     return luaL_error(L, "Insert to instruction queue failed!");
   }
 
   // 执行队列
-  if (skillObj->DapCommit(skillObj) != ADPT_SUCCESS) {
+  if (skillObj->Commit(skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    skillObj->DapCancel(skillObj);
+    skillObj->Cancel(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
 
@@ -63,14 +63,14 @@ static int luaApi_adapter_dap_single_write(lua_State *L) {
   int reg = (int)luaL_checkinteger(L, 3);
   uint32_t data = (uint32_t)luaL_checkinteger(L, 4);
   
-  if (skillObj->DapSingleWrite(skillObj, type, reg, data) != ADPT_SUCCESS) {
+  if (skillObj->SingleWrite(skillObj, type, reg, data) != ADPT_SUCCESS) {
     return luaL_error(L, "Insert to instruction queue failed!");
   }
 
   // 执行队列
-  if (skillObj->DapCommit(skillObj) != ADPT_SUCCESS) {
+  if (skillObj->Commit(skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    skillObj->DapCancel(skillObj);
+    skillObj->Cancel(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
 
@@ -98,16 +98,16 @@ static int luaApi_adapter_dap_multi_read(lua_State *L) {
     return luaL_error(L, "Multi-read buff alloc Failed!");
   }
   
-  if (skillObj->DapMultiRead(skillObj, type, reg, count, buff) != ADPT_SUCCESS) {
+  if (skillObj->MultiRead(skillObj, type, reg, count, buff) != ADPT_SUCCESS) {
     free(buff);
     return luaL_error(L, "Insert to instruction queue failed!");
   }
   
   // 执行队列
-  if (skillObj->DapCommit(skillObj) != ADPT_SUCCESS) {
+  if (skillObj->Commit(skillObj) != ADPT_SUCCESS) {
     free(buff);
     // 清理指令队列
-    skillObj->DapCancel(skillObj);
+    skillObj->Cancel(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
   lua_pushlstring(L, (char *)buff, count * sizeof(uint32_t));
@@ -134,14 +134,14 @@ static int luaApi_adapter_dap_multi_write(lua_State *L) {
     return luaL_error(L, "The length of the data to be written is not a multiple of the word.");
   }
 
-  if (skillObj->DapMultiWrite(skillObj, type, reg, transCnt >> 2, buff) != ADPT_SUCCESS) {
+  if (skillObj->MultiWrite(skillObj, type, reg, transCnt >> 2, buff) != ADPT_SUCCESS) {
     return luaL_error(L, "Insert to instruction queue failed!");
   }
 
   // 执行队列
-  if (skillObj->DapCommit(skillObj) != ADPT_SUCCESS) {
+  if (skillObj->Commit(skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    skillObj->DapCancel(skillObj);
+    skillObj->Cancel(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
 
@@ -150,10 +150,10 @@ static int luaApi_adapter_dap_multi_write(lua_State *L) {
 
 static const luaL_Reg lib_dap_skill_oo[] = {
     // DAP相关接口
-    {"DapSingleRead", luaApi_adapter_dap_single_read},
-    {"DapSingleWrite", luaApi_adapter_dap_single_write},
-    {"DapMultiRead", luaApi_adapter_dap_multi_read},
-    {"DapMultiWrite", luaApi_adapter_dap_multi_write},
+    {"SingleRead", luaApi_adapter_dap_single_read},
+    {"SingleWrite", luaApi_adapter_dap_single_write},
+    {"MultiRead", luaApi_adapter_dap_multi_read},
+    {"MultiWrite", luaApi_adapter_dap_multi_write},
     {NULL, NULL}};
 
 /* 注册DAP能力集对象元表 */

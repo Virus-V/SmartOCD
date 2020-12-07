@@ -35,14 +35,14 @@ static int luaApi_adapter_jtag_status_change(lua_State *L) {
     return luaL_error(L, "JTAG state machine new state is illegal!");
   }
 
-  if (skillObj->JtagToState(skillObj, state) != ADPT_SUCCESS) {
+  if (skillObj->ToState(skillObj, state) != ADPT_SUCCESS) {
     return luaL_error(L, "Insert to instruction queue failed!");
   }
 
   // 执行队列
-  if (skillObj->JtagCommit(skillObj) != ADPT_SUCCESS) {
+  if (skillObj->Commit(skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    skillObj->JtagCancel(skillObj);
+    skillObj->Cancel(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
   return 0;
@@ -77,16 +77,16 @@ static int luaApi_adapter_jtag_exchange_data(lua_State *L) {
   // 拷贝数据
   memcpy(data, tdi_data, str_len * sizeof(uint8_t));
   // 插入JTAG指令
-  if (skillObj->JtagExchangeData(skillObj, data, bitCnt) != ADPT_SUCCESS) {
+  if (skillObj->ExchangeData(skillObj, data, bitCnt) != ADPT_SUCCESS) {
     free(data);
     return luaL_error(L, "Insert to instruction queue failed!");
   }
 
   // 执行队列
-  if (skillObj->JtagCommit(skillObj) != ADPT_SUCCESS) {
+  if (skillObj->Commit(skillObj) != ADPT_SUCCESS) {
     free(data);
     // 清理指令队列
-    skillObj->JtagCancel(skillObj);
+    skillObj->Cancel(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
 
@@ -106,14 +106,14 @@ static int luaApi_adapter_jtag_idle_wait(lua_State *L) {
   JtagSkill skillObj = *CAST(JtagSkill *, luaL_checkudata(L, 1, SKILL_JTAG_LUA_OBJECT_TYPE));
   unsigned int cycles = (unsigned int)luaL_checkinteger(L, 2);
 
-  if (skillObj->JtagIdle(skillObj, cycles) != ADPT_SUCCESS) {
+  if (skillObj->Idle(skillObj, cycles) != ADPT_SUCCESS) {
     return luaL_error(L, "Insert to instruction queue failed!");
   }
 
   // 执行队列
-  if (skillObj->JtagCommit(skillObj) != ADPT_SUCCESS) {
+  if (skillObj->Commit(skillObj) != ADPT_SUCCESS) {
     // 清理指令队列
-    skillObj->JtagCancel(skillObj);
+    skillObj->Cancel(skillObj);
     return luaL_error(L, "Execute the instruction queue failed!");
   }
   return 0;
@@ -134,7 +134,7 @@ static int luaApi_adapter_jtag_pins(lua_State *L) {
   uint8_t pin_data = (uint8_t)luaL_checkinteger(L, 3);
   unsigned int pin_wait = (unsigned int)luaL_checkinteger(L, 4);
 
-  if (skillObj->JtagPins(skillObj, pin_mask, pin_data, &pin_data, pin_wait) != ADPT_SUCCESS) {
+  if (skillObj->Pins(skillObj, pin_mask, pin_data, &pin_data, pin_wait) != ADPT_SUCCESS) {
     return luaL_error(L, "Read/Write JTAG pins failed!");
   }
   lua_pushinteger(L, pin_data);
@@ -143,10 +143,10 @@ static int luaApi_adapter_jtag_pins(lua_State *L) {
 
 static const luaL_Reg lib_jtag_skill_oo[] = {
     // JTAG相关接口
-    {"JtagExchangeData", luaApi_adapter_jtag_exchange_data},
-    {"JtagIdle", luaApi_adapter_jtag_idle_wait},
-    {"JtagToState", luaApi_adapter_jtag_status_change},
-    {"JtagPins", luaApi_adapter_jtag_pins},
+    {"ExchangeData", luaApi_adapter_jtag_exchange_data},
+    {"Idle", luaApi_adapter_jtag_idle_wait},
+    {"ToState", luaApi_adapter_jtag_status_change},
+    {"Pins", luaApi_adapter_jtag_pins},
 
     {NULL, NULL}};
 

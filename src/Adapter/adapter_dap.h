@@ -112,12 +112,12 @@ typedef int (*SKILL_DAP_CANCEL)(IN DapSkill self);
 struct dapSkill {
   struct skill header;
 
-  SKILL_DAP_SINGLE_READ DapSingleRead;   // 单次读:AP或者DP,寄存器编号
-  SKILL_DAP_SINGLE_WRITE DapSingleWrite; // 单次写:AP或者DP,寄存器编号
-  SKILL_DAP_MULTI_READ DapMultiRead;     // 连续读
-  SKILL_DAP_MULTI_WRITE DapMultiWrite;   // 连续写
-  SKILL_DAP_COMMIT DapCommit;            // 提交Pending动作
-  SKILL_DAP_CANCEL DapCancel;            // 清除Pending的动作
+  SKILL_DAP_SINGLE_READ SingleRead;   // 单次读:AP或者DP,寄存器编号
+  SKILL_DAP_SINGLE_WRITE SingleWrite; // 单次写:AP或者DP,寄存器编号
+  SKILL_DAP_MULTI_READ MultiRead;     // 连续读
+  SKILL_DAP_MULTI_WRITE MultiWrite;   // 连续写
+  SKILL_DAP_COMMIT Commit;            // 提交Pending动作
+  SKILL_DAP_CANCEL Cancel;            // 清除Pending的动作
 };
 
 /* 获得Adapter DAP能力接口 */
