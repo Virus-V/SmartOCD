@@ -62,3 +62,7 @@ src/Library/lua/src/lua
 src/Library/lua/src/luac
 tags
 test/*_test
+
+# log file
+*.log
+
