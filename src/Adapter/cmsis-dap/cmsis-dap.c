@@ -548,7 +548,7 @@ static int dapInit(struct cmsis_dap *cmdapObj) {
   // 获得CMSIS-DAP固件版本
   command[1] = CMDAP_ID_FW_VER;
   DAP_EXCHANGE_DATA(cmdapObj, command, 2);
-  cmdapObj->Version = (int)(atof(cmdapObj->respBuffer + 2) * 100); // XXX 改成了整数
+  cmdapObj->Version = (int)(atof((const char *)(cmdapObj->respBuffer + 2)) * 100); // XXX 改成了整数
   log_info("CMSIS-DAP FW Version is %s.", cmdapObj->respBuffer + 2);
 
   // 获得CMSIS-DAP的最大包长度和最大包个数
@@ -655,7 +655,7 @@ static int dapSetTransMode(Adapter self, enum transferMode mode) {
   switch (mode) {
   case ADPT_MODE_SWD:
     // 检查是否支持SWD模式
-    if (cmdapObj->capablityFlag & (0x1 << CMDAP_CAP_SWD) == 0) {
+    if ((cmdapObj->capablityFlag & (0x1 << CMDAP_CAP_SWD)) == 0) {
       log_error("This device not support SWD mode.");
       return ADPT_ERR_UNSUPPORT;
     }
@@ -675,7 +675,7 @@ static int dapSetTransMode(Adapter self, enum transferMode mode) {
     }
   case ADPT_MODE_JTAG:
     // 检查是否支持JTAG模式
-    if (cmdapObj->capablityFlag & (0x1 << CMDAP_CAP_JTAG) == 0) {
+    if ((cmdapObj->capablityFlag & (0x1 << CMDAP_CAP_JTAG)) == 0) {
       log_error("This device not support JTAG mode.");
       return ADPT_ERR_UNSUPPORT;
     }

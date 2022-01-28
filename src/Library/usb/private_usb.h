@@ -19,8 +19,12 @@
 #ifndef SRC_USB_SRC_USB_PRIVATE_H_
 #define SRC_USB_SRC_USB_PRIVATE_H_
 
-// libusb-1.0
+#if defined(__FreeBSD__)
+#include <libusb.h>
+#elif defined(__linux__)
 #include <libusb-1.0/libusb.h>
+#endif
+
 // USB库的头文件
 #include "usb.h"
 

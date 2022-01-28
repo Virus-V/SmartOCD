@@ -91,7 +91,7 @@ static int luaApi_adapter_jtag_exchange_data(lua_State *L) {
   }
 
   // 执行成功，构造lua字符串
-  lua_pushlstring(L, data, str_len);
+  lua_pushlstring(L, (const char *)data, str_len);
   free(data); // 释放缓冲
 
   return 1;

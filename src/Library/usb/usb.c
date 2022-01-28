@@ -58,7 +58,7 @@ static int usbStrDescriptorMatch(libusb_device_handle *devHandle, uint8_t descIn
   // 截断字符串
   descString[256] = 0;
 
-  if (!strncmp(snString, descString, sizeof(descString)) == 0) {
+  if (strncmp(snString, descString, sizeof(descString)) != 0) {
     log_warn(
         "The device serial number '%s' is different from the specified serial "
         "number '%s'.",
