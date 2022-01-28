@@ -36,8 +36,49 @@ end
 -- 0x10 -> IR
 jtag:ToState(adapter.TAP_IR_SHIFT)
 jtag:ExchangeData(string.pack("I4", 0x10), 0x5)
+
 -- raw_dtmcs <- DR
 jtag:ToState(adapter.TAP_DR_SHIFT)
 local raw_dtmcs = jtag:ExchangeData(string.pack("I4", 0x0), 32)
 local dtmcs = string.unpack("I4", raw_dtmcs)
-print(string.format("DTMCS:0x%08X", dtmcs))
+print(string.format("DTM Control and Status: 0x%08X", dtmcs))
+print(string.format(" dtmcs.version: %d", dtmcs & 0xf))
+print(string.format(" dtmcs.abit: %d", (dtmcs >> 4) & 0x3f))
+print(string.format(" dtmcs.dmistat: %d", (dtmcs >> 10) & 0x3))
+print(string.format(" dtmcs.idle: %d", (dtmcs >> 12) & 0x7))
+
+-- 如果dtmstat不是No Error状态，复位 DTM
+if (((dtmcs >> 10) & 0x3) ~= 0) then
+  jtag:ToState(adapter.TAP_DR_SHIFT)
+  jtag:ExchangeData(string.pack("I4", 0x1 << 16), 32)
+end
+
+local abit = (dtmcs >> 4) & 0x3f
+local idle = (dtmcs >> 12) & 0x7
+
+-- 读取DMI
+-- 0x11 -> IR
+jtag:ToState(adapter.TAP_IR_SHIFT)
+jtag:ExchangeData(string.pack("I4", 0x11), 0x5)
+
+-- read hartinfo register
+jtag:ToState(adapter.TAP_DR_SHIFT)
+jtag:ExchangeData(string.pack("I8", 0x12 << 34 | 0x1), abit + 34)
+jtag:ToState(adapter.TAP_IDLE)
+jtag:Idle(idle) -- wait a while
+jtag:ToState(adapter.TAP_DR_SHIFT)
+local raw_register = jtag:ExchangeData(string.pack("I8", 0), abit + 34)
+local register = string.unpack("I8", raw_register)
+print(string.format("hartinfo: 0x%08X", (register >> 2) & 0xFFFFFFFF))
+
+-- read dmstatus register
+jtag:ToState(adapter.TAP_DR_SHIFT)
+jtag:ExchangeData(string.pack("I8", 0x11 << 34 | 0x1), abit + 34)
+jtag:ToState(adapter.TAP_IDLE)
+jtag:Idle(idle) -- wait a while
+jtag:ToState(adapter.TAP_DR_SHIFT)
+local raw_register = jtag:ExchangeData(string.pack("I8", 0), abit + 34)
+local register = string.unpack("I8", raw_register)
+print(string.format("dmstatus: 0x%08X", (register >> 2) & 0xFFFFFFFF))
+
+
