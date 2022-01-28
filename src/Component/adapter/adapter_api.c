@@ -104,7 +104,7 @@ static int luaApi_adapter_status(lua_State *L) {
  * 第一个参数：AdapterObject指针
  * 第二个参数：整数，频率 Hz
  */
-static int luaApi_adapter_frequent(lua_State *L) {
+static int luaApi_adapter_frequency(lua_State *L) {
   void *udata = LuaApi_check_object_type(L, 1, ADAPTER_LUA_OBJECT_TYPE);
   if (udata == NULL) {
     return luaL_error(L, "Not a vailed Adapter object!");
@@ -112,11 +112,11 @@ static int luaApi_adapter_frequent(lua_State *L) {
   Adapter adapterObj = *CAST(Adapter *, udata);
 
   if (lua_gettop(L) == 1) {
-    lua_pushinteger(L, adapterObj->currFrequent);
+    lua_pushinteger(L, adapterObj->currFrequency);
     return 1;
   } else {
     int clockHz = (int)luaL_checkinteger(L, 2);
-    if (adapterObj->SetFrequent(adapterObj, clockHz) != ADPT_SUCCESS) {
+    if (adapterObj->SetFrequency(adapterObj, clockHz) != ADPT_SUCCESS) {
       return luaL_error(L, "Set adapter clock failed!");
     }
     return 0;
@@ -218,7 +218,7 @@ static int luaApi_adapter_reset(lua_State *L) {
 static const luaL_Reg lib_adapter_oo[] = {
     // 基本函数
     {"Status", luaApi_adapter_status},
-    {"Frequent", luaApi_adapter_frequent},
+    {"Frequency", luaApi_adapter_frequency},
     {"TransferMode", luaApi_adapter_transmission_mode},
     {"GetSkill", luaApi_adapter_get_skill},
     {"Reset", luaApi_adapter_reset},

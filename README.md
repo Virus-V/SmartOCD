@@ -92,7 +92,7 @@ cmObj:TransferConfig(5, 5, 5)
 -- SWD参数
 cmObj:SwdConfig(0)
 -- 设置传输频率
-cmObj:SetFrequent(5000000)	-- 500KHz
+cmObj:SetFrequency(5000000)	-- 500KHz
 print("CMSIS-DAP: Current frequent is 5MHz")
 -- 选择SWD传输模式
 local transMode = cmObj:TransferMode()
@@ -408,7 +408,7 @@ TAP状态：
   cmdapObj:SetStatus(adapter.STATUS_DISCONNECT)
   ```
   ----
-- SetFrequent(*self, clock*)  
+- SetFrequency(*self, clock*)  
   作用：设置仿真器JTAG/SWD同步时钟频率  
   参数：  
   1. Adapter对象
@@ -418,7 +418,7 @@ TAP状态：
   示例：
   ```lua
   -- 设置仿真器通信时钟速率
-  cmdapObj:SetFrequent(500000)	-- 500KHz
+  cmdapObj:SetFrequency(500000)	-- 500KHz
   ```
   ----
 - TransferMode(*self [, setType]*)  

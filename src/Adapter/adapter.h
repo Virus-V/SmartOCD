@@ -62,7 +62,7 @@ enum adapterStatus {
 typedef int (*ADPT_SET_STATUS)(IN Adapter self, IN enum adapterStatus status);
 
 /**
- * SetFrequent - 设置仿真器的工作频率
+ * SetFrequency - 设置仿真器的工作频率
  * 参数:
  * 	self:Adapter对象自身
  * 	clock:工作频率(Hz)
@@ -71,7 +71,7 @@ typedef int (*ADPT_SET_STATUS)(IN Adapter self, IN enum adapterStatus status);
  * 	ADPT_FAILED:失败
  * 	或者其他错误
  */
-typedef int (*ADPT_SET_FREQUENT)(IN Adapter self, IN unsigned int freq);
+typedef int (*ADPT_SET_FREQUENCY)(IN Adapter self, IN unsigned int freq);
 
 /**
  * target复位类型
@@ -142,13 +142,13 @@ typedef int (*ADPT_SET_TRANSFER_MODE)(IN Adapter self, IN enum transferMode mode
 struct adapter {
   /* 属性 */
   enum adapterStatus currStatus;   // 当前状态
-  unsigned int currFrequent;       // 当前频率
+  unsigned int currFrequency;      // 当前频率
   enum transferMode currTransMode; // 当前传输方式
   struct list_head skills;         // 设备支持的能力集列表
 
   /* 服务 */
   ADPT_SET_STATUS SetStatus;              // 仿真器状态指示
-  ADPT_SET_FREQUENT SetFrequent;          // 设置仿真器的工作频率
+  ADPT_SET_FREQUENCY SetFrequency;        // 设置仿真器的工作频率
   ADPT_RESET Reset;                       // 仿真器复位
   ADPT_SET_TRANSFER_MODE SetTransferMode; // 设置传输类型:DAP还是JTAG
 };

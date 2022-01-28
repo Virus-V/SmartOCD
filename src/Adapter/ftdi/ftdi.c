@@ -198,7 +198,73 @@ static int ftdiHostStatus(IN Adapter self, IN enum adapterStatus status) {
 // 设置mpsse的频率
 static int ftdiMpsseFreq(IN Adapter self, IN unsigned int freq) {
   struct ftdi *ftdiObj = FTDI_OBJ_FORM_ADAPTER(self);
-  return ADPT_ERR_UNSUPPORT;
+  uint8_t wbuf[3];
+  int ret;
+  int base_clock, divisor;
+
+  if (ftdiObj->connected != TRUE) {
+    log_error("FTDI not connected yet.");
+    return ADPT_ERR_UNSUPPORT;
+  }
+
+  /* 使用Adaptive频率 */
+  if (freq == 0) {
+    wbuf[0] = EN_ADAPTIVE;
+    ret = ftdi_write_data(&ftdiObj->ctx, wbuf, 1);
+    if (ret != 1) {
+      log_error("FTDI send command error. error code:%d.", ret);
+      return ADPT_ERR_INTERNAL_ERROR;
+    }
+
+    INTERFACE_CONST_INIT(unsigned int, self->currFrequency, freq);
+
+    return ADPT_SUCCESS;
+  }
+
+  wbuf[0] = DIS_ADAPTIVE;
+  ret = ftdi_write_data(&ftdiObj->ctx, wbuf, 1);
+  if (ret != 1) {
+    log_error("FTDI send command error. error code:%d.", ret);
+    return ADPT_ERR_INTERNAL_ERROR;
+  }
+
+  if (freq > (60000000 / 2 / 65536)) {
+    base_clock = 60000000;
+    wbuf[0] = DIS_DIV_5;
+  } else {
+    base_clock = 12000000;
+    wbuf[0] = EN_DIV_5;
+  }
+  // 计算给定频率的divisor值
+  divisor = (base_clock / 2 + freq - 1) / freq - 1;
+
+  if (divisor < 0) {
+    log_error("Invalid FTDI Divisor.");
+    return ADPT_ERR_BAD_PARAMETER;
+  }
+
+  ret = ftdi_write_data(&ftdiObj->ctx, wbuf, 1);
+  if (ret != 1) {
+    log_error("FTDI send command error. error code:%d.", ret);
+    return ADPT_ERR_INTERNAL_ERROR;
+  }
+
+  /* 配置Divisor */
+  wbuf[0] = TCK_DIVISOR;
+  wbuf[1] = divisor & 0xff;
+  wbuf[2] = divisor >> 8;
+  ret = ftdi_write_data(&ftdiObj->ctx, wbuf, 3);
+  if (ret != 3) {
+    log_error("FTDI send command error. error code:%d.", ret);
+    return ADPT_ERR_INTERNAL_ERROR;
+  }
+
+  INTERFACE_CONST_INIT(unsigned int, self->currFrequency, freq);
+
+  freq = base_clock / 2 / (1 + divisor);
+  log_info("FTDI set frequency: %dHz.", freq);
+
+  return ADPT_SUCCESS;
 }
 
 // 复位FTDI
@@ -576,7 +642,7 @@ static int ftdiJtagCommit(IN JtagSkill self) {
       if (readBuff) free(readBuff);
       return ADPT_ERR_INTERNAL_ERROR;
     }
-    
+
     if (readBuffLen > 0) {
       assert(readBuff != NULL);
       // waiting latency milliseconds
@@ -590,7 +656,7 @@ static int ftdiJtagCommit(IN JtagSkill self) {
       }
     }
   } while(0);
-  
+
   // misc_PrintBulk(writeBuff, writeBuffLen, 32);
   // misc_PrintBulk(readBuff, readBuffLen, 32);
 
@@ -655,7 +721,7 @@ Adapter CreateFtdi(void) {
   obj->interface = -1;
   obj->latency = 5;
   obj->adapterAPI.SetStatus = ftdiHostStatus;
-  obj->adapterAPI.SetFrequent = ftdiMpsseFreq;
+  obj->adapterAPI.SetFrequency = ftdiMpsseFreq;
   obj->adapterAPI.Reset = ftdiReset;
   obj->adapterAPI.SetTransferMode = ftdiSetTransMode;
 

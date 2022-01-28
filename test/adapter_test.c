@@ -46,7 +46,7 @@ int main(){
 	cmdap->JtagPins(cmdap, 0, 0x0, &pinData, 3000);
 	log_info("JTAG Pins :0x%02X.", pinData);
 	// 设置频率
-	cmdap->SetFrequent(cmdap, 200000);	// 2MHz
+	cmdap->SetFrequency(cmdap, 200000);	// 2MHz
 	// 选择传输模式
 	cmdap->SetTransferMode(cmdap, ADPT_MODE_SWD);
 	cmdap->Reset(cmdap, ADPT_RESET_SYSTEM_RESET);	// 调试系统复位

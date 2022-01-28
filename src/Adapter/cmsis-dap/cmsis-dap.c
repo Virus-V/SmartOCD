@@ -805,7 +805,7 @@ static int dapSwjClock(Adapter self, unsigned int freq) {
     return ADPT_FAILED;
   }
 
-  INTERFACE_CONST_INIT(unsigned int, self->currFrequent, freq);
+  INTERFACE_CONST_INIT(unsigned int, self->currFrequency, freq);
 
   const char *unit;
   double freq_tmp = formatFreq(clockHz, &unit);
@@ -1932,7 +1932,7 @@ Adapter CreateCmsisDap(void) {
   obj->signature = SIGNATURE_32('C', 'D', 'A', 'P');
   // 设置接口参数
   obj->adaperAPI.SetStatus = dapHostStatus;
-  obj->adaperAPI.SetFrequent = dapSwjClock;
+  obj->adaperAPI.SetFrequency = dapSwjClock;
   obj->adaperAPI.Reset = dapReset;
   obj->adaperAPI.SetTransferMode = dapSetTransMode;
 

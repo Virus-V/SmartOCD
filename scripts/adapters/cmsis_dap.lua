@@ -24,8 +24,8 @@ cmObj:TransferConfig(5, 5, 5)
 -- SWD参数
 cmObj:SwdConfig(0)
 -- 设置传输频率
-cmObj:Frequent(20000000)	-- 500KHz
-print("CMSIS-DAP: Current frequent is " .. cmObj:Frequent() .. "Hz")
+cmObj:Frequency(20000000)	-- 500KHz
+print("CMSIS-DAP: Current frequent is " .. cmObj:Frequency() .. "Hz")
 -- 选择SWD传输模式
 local transMode = cmObj:TransferMode()
 if transMode == adapter.MODE_SWD then
