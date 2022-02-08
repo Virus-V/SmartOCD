@@ -56,24 +56,7 @@ end
 local abit = (dtmcs >> 4) & 0x3f
 local idle = (dtmcs >> 12) & 0x7
 
--- 读取DMI
---[[
--- 0x11 -> IR
-jtag:ToState(adapter.TAP_IR_SHIFT)
-jtag:ExchangeData(string.pack("I4", 0x11), 0x5)
-
--- read hartinfo register
-jtag:ToState(adapter.TAP_DR_SHIFT)
-jtag:ExchangeData(string.pack("I8", 0x12 << 34 | 0x1), abit + 34)
-jtag:ToState(adapter.TAP_IDLE)
-jtag:Idle(idle) -- wait a while
-jtag:ToState(adapter.TAP_DR_SHIFT)
-local raw_register = jtag:ExchangeData(string.pack("I8", 0), abit + 34)
-local register = string.unpack("I8", raw_register)
-print(string.format("hartinfo: 0x%08X", (register >> 2) & 0xFFFFFFFF))
-]]--
-
--- read dmstatus register
+-- read dm register
 function dm_read_register(reg)
   reg = reg & ((1 << abit) - 1)
 
@@ -82,7 +65,7 @@ function dm_read_register(reg)
   jtag:ExchangeData(string.pack("I4", 0x11), 0x5)
 
   jtag:ToState(adapter.TAP_DR_SHIFT)
-  jtag:ExchangeData(string.pack("I8", reg << 34 | 0x1), abit + 34)
+  jtag:ExchangeData(string.pack("I8", (reg << 34) | 0x1), abit + 34)
   jtag:ToState(adapter.TAP_IDLE)
   jtag:Idle(idle) -- wait a while
   jtag:ToState(adapter.TAP_DR_SHIFT)
@@ -91,17 +74,31 @@ function dm_read_register(reg)
   return (register >> 2) & 0xFFFFFFFF
 end
 
-print(string.format("hartinfo: 0x%08X", dm_read_register(0x12)))
-print(string.format("dmstatus: 0x%08X", dm_read_register(0x11)))
+-- write dm reigster
+function dm_write_register(reg, data)
+  reg = reg & ((1 << abit) - 1)
+  data = data & 0xFFFFFFFF
 
---[[
-jtag:ToState(adapter.TAP_DR_SHIFT)
-jtag:ExchangeData(string.pack("I8", 0x11 << 34 | 0x1), abit + 34)
-jtag:ToState(adapter.TAP_IDLE)
-jtag:Idle(idle) -- wait a while
-jtag:ToState(adapter.TAP_DR_SHIFT)
-local raw_register = jtag:ExchangeData(string.pack("I8", 0), abit + 34)
-local register = string.unpack("I8", raw_register)
-print(string.format("dmstatus: 0x%08X", (register >> 2) & 0xFFFFFFFF))
-]]--
+  -- 0x11 -> IR (Debug Module Interface Access)
+  jtag:ToState(adapter.TAP_IR_SHIFT)
+  jtag:ExchangeData(string.pack("I4", 0x11), 0x5)
+
+  jtag:ToState(adapter.TAP_DR_SHIFT)
+  jtag:ExchangeData(string.pack("I8", (reg << 34) | (data << 0x2) | 0x2), abit + 34)
+  jtag:ToState(adapter.TAP_IDLE)
+  jtag:Idle(idle) -- wait a while
+end
+
+print(string.format("dmstatus: 0x%08X", dm_read_register(0x11)))
+print(string.format("dmcontrol: 0x%08X", dm_read_register(0x10)))
+
+local hartinfo = dm_read_register(0x12)
+print(string.format("hartinfo: 0x%08X", hartinfo))
+print(string.format(" hartinfo.dataaddr: 0x%X", (hartinfo >> 0) & ((0x1 << 12) - 1)))
+print(string.format(" hartinfo.datasize: 0x%X", (hartinfo >> 12) & ((0x1 << 4) - 1)))
+print(string.format(" hartinfo.dataaccess: %d", (hartinfo >> 16) & ((0x1 << 1) - 1)))
+print(string.format(" hartinfo.nscratch: %d", (hartinfo >> 20) & ((0x1 << 4) - 1)))
+
+dm_write_register(0x10, 0x1)
+print(string.format("active dmcontrol: 0x%08X", dm_read_register(0x10)))
 
