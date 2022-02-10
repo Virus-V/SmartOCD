@@ -657,22 +657,25 @@ static int ftdiJtagCommit(IN JtagSkill self) {
     }
   } while(0);
 
-  // misc_PrintBulk(writeBuff, writeBuffLen, 32);
-  // misc_PrintBulk(readBuff, readBuffLen, 32);
+#if 0
+  misc_PrintBulk((char *)writeBuff, writeBuffLen, 32);
+  misc_PrintBulk((char *)readBuff, readBuffLen, 32);
+#endif
 
   // 第三次遍历：同步数据，并删除执行成功的指令
+  readCnt = 0;
   list_for_each_entry_safe(cmd, cmd_t, &ftdiObj->JtagInsQueue, list_entry) {
     // 跳过状态机改变指令
     if (cmd->type == JTAG_INS_STATUS_MOVE || cmd->type == JTAG_INS_IDLE_WAIT) {
       goto FREE_CMD;
     }
 
-    // 如果readbuffer为空，直接释放所有命令
+    // 如果readbuffer为空，直接释放命令
     if (readBuffLen == 0) {
       goto FREE_CMD;
     }
 
-    int bytesCnt = (cmd->instr.exchangeData.bitCount - 1) >> 3;
+    int bytesCnt = (cmd->instr.exchangeData.bitCount + 7) >> 3;
     int restBits = (cmd->instr.exchangeData.bitCount - 1) & 0x7;
     bytesCnt += restBits > 0 ? 1 : 0;
     memcpy(cmd->instr.exchangeData.data, readBuff + readCnt, bytesCnt);
