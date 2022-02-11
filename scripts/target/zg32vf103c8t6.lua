@@ -101,11 +101,19 @@ function halt_the_hart(mesg)
     print(string.format("in [%s], halt successful.", mesg))
     --print(string.format("dmstatus hart status running or halt: 0x%1X", (dmstatus >> 8) & 0xf))
   end
+  -- set dmcontrol register dmactive bit set 1
+  dm_write_register(0x10, 0x1)
+  local dmcontrol = dm_read_register(0x10)
+  print(string.format("dmcontrol: 0x%08X", dmcontrol))
+  -- clear cmderr
+  dm_write_register(0x16, 0x7 << 8)
+  local abstractcs = dm_read_register(0x16)
+  print(string.format("abstractcs: 0x%08X", abstractcs))
 end
 
 function run_the_hart(mesg)
-  -- halt the hart, dmcontrol register haltreq bit and dmactive bit set 1
-  dm_write_register(0x10, 0x1)
+  -- halt the hart, dmcontrol register resumereq bit and dmactive bit set 1
+  dm_write_register(0x10, 0x40000001)
   --jtag:Idle(idle) -- wait a while
   -- Determine whether the halt was successful
   local dmstatus = dm_read_register(0x11)
@@ -113,6 +121,14 @@ function run_the_hart(mesg)
     print(string.format("in [%s], running successful.", mesg))
     --print(string.format("dmstatus hart status running or halt: 0x%1X", (dmstatus >> 8) & 0xf))
   end
+  -- set dmcontrol register dmactive bit set 1
+  dm_write_register(0x10, 0x1)
+  local dmcontrol = dm_read_register(0x10)
+  print(string.format("dmcontrol: 0x%08X", dmcontrol))
+  -- clear cmderr
+  dm_write_register(0x16, 0x7 << 8)
+  local abstractcs = dm_read_register(0x16)
+  print(string.format("abstractcs: 0x%08X", abstractcs))
 end
 
 -- ************ status *************
@@ -261,15 +277,6 @@ print(string.format(" abstractcs.datacount: 0x%01X", (abstractcs & 0xf)))
 -- halt hart
 halt_the_hart("test")
 
-dm_write_register(0x10, 0x1)
-local dmcontrol = dm_read_register(0x10)
-print(string.format("dmcontrol: 0x%08X", dmcontrol))
-
--- clear cmderr
-dm_write_register(0x16, 0x7 << 8)
-local abstractcs = dm_read_register(0x16)
-print(string.format("abstractcs: 0x%08X", abstractcs))
-
 print("****** read/write riscv register ******")
 -- dcsr Debug Control and Status  0x7b0
 local re_data = abstract_command_access_register(0x7b0, 'r')
@@ -277,7 +284,6 @@ print(string.format("dcsr: 0x%08X", re_data))
 -- mstatus 0x300
 re_data = abstract_command_access_register(0x300, 'r')
 print(string.format("mstatus: 0x%08X", re_data))
-run_the_hart("test")
 
 print("****** read/write memory ******")
 local data = progbuf_read(0x20000000)
@@ -291,6 +297,7 @@ data = progbuf_read(0x20000000)
 print(string.format("change data: 0x%08X", data))
 
 
+run_the_hart("test")
 jtag:ToState(adapter.TAP_IDLE)
 jtag:Idle(idle) -- wait a while
 
