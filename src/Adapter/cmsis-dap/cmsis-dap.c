@@ -1505,6 +1505,7 @@ static int executeJtagCmd(JtagSkill self) {
   //	misc_PrintBulk(readBuff, readBuffLen, 32);
 
   // 第三次遍历：同步数据，并删除执行成功的指令
+  readCnt = 0;
   list_for_each_entry_safe(cmd, cmd_t, &cmdapObj->JtagInsQueue, list_entry) {
     // 跳过状态机改变指令
     if (cmd->type == JTAG_INS_STATUS_MOVE || cmd->type == JTAG_INS_IDLE_WAIT) {

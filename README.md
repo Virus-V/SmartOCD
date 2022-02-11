@@ -2,7 +2,7 @@
 
 ## 简介
 
-SmartOCD(Smart Off-Chip Debugger)是用于ARMv8架构的交互式片外调试工具。目的是使用它来更方便地调试Uboot，UEFI程序或操作系统内核。
+SmartOCD(Smart On-Chip Debugger)是用于ARMv8架构的交互式片外调试工具。目的是使用它来更方便地调试Uboot，UEFI程序或操作系统内核。
 
 它可以使用Lua脚本语言编程，通过DAP协议和MEM-AP与CoreSight组件进行交互，或者直接读写总线上挂载的设备（ROM、RAM或Peripherals）等。
 
