@@ -177,6 +177,64 @@ function abstract_command_access_register(regno, op, data)
   end
 end
 
+-- ************ program buffer *************
+function progbuf_read(addr)
+  --print(string.format("------ [progbuf_read] number of register to access : 0x%08X ------", addr))
+  -- checkout status
+  abstractcs_command_status()
+  -- lw s0, 0(s0) into progbuf0
+  dm_write_register(0x20, 0x42403)
+  -- ebreak into progbuf1
+  dm_write_register(0x21, 0x100073)
+  -- address 0x40009000
+  dm_write_register(0x04, addr)
+
+  -- Write s0, then execute program buffer
+  -- [aarsize=2 transfer=1] postexec=1 write=1 regno=0x1008 : command=0x00271008
+  local command = (0x2 << 20) | (0x1 << 18) | (0x1 << 17) | (0x1 << 16) | 0x1008
+  dm_write_register(0x17, command)
+  -- Determine whether the operation was successful
+  abstractcs_status("progbuf_read write s0")
+
+  -- read s0
+  -- [aarsize=2 transfer=1] regno = 0x1008 : command=0x00221008
+  command = (0x2 << 20) | (0x1 << 17) | 0x1008
+  dm_write_register(0x17, command)
+  -- Determine whether the operation was successful
+  abstractcs_status("progbuf_read read s0")
+
+  -- read data0, which store read data from addr
+  local memory_data = dm_read_register(0x04)
+  return memory_data
+end
+
+function progbuf_write(addr, data)
+  -- checkout status
+  abstractcs_command_status("progbuf_write")
+  -- sw s1, 0(s0) into progbuf0
+  dm_write_register(0x20, 0x00942023)
+  -- ebreak into progbuf1
+  dm_write_register(0x21, 0x00100073)
+
+  -- operate write-addr into data0 register
+  dm_write_register(0x04, addr)
+  -- write s0
+  -- [aarsize=2 transfer=1] write=1 regno=0x1008
+  local command = (0x2 << 20) | (0x1 << 17) | (0x1 << 16) | 0x1008
+  dm_write_register(0x17, command)
+  -- Determine whether the operation was successful
+  abstractcs_status("progbuf_write write s0")
+
+  -- operate value into data0 register
+  dm_write_register(0x04, data)
+  -- write s1, then execute program buffer
+  -- [aarsize=2 transfer=1] postexec=1 write=1 regno=0x1009
+  command = (0x2 << 20) | (0x1 << 18) | (0x1 << 17) | (0x1 << 16) | 0x1009
+  dm_write_register(0x17, command)
+  -- Determine whether the operation was successful
+  abstractcs_status("progbuf_write write s1")
+end
+
 print("***** DM register *****")
 print(string.format("dmstatus: 0x%08X", dm_read_register(0x11)))
 print(string.format("dmcontrol: 0x%08X", dm_read_register(0x10)))
@@ -221,8 +279,18 @@ re_data = abstract_command_access_register(0x300, 'r')
 print(string.format("mstatus: 0x%08X", re_data))
 run_the_hart("test")
 
--- test
--- address 0x40009000
---dm_write_register(0x04, 0xabcd1234)
---print(string.format("data0: 0x%08X", dm_read_register(0x04)))
+print("****** read/write memory ******")
+local data = progbuf_read(0x20000000)
+print(string.format("data: 0x%08X", data))
+
+progbuf_write(0x20000000, 0xabcd1234)
+jtag:ToState(adapter.TAP_IDLE)
+jtag:Idle(idle) -- wait a while
+
+data = progbuf_read(0x20000000)
+print(string.format("change data: 0x%08X", data))
+
+
+jtag:ToState(adapter.TAP_IDLE)
+jtag:Idle(idle) -- wait a while
 
