@@ -196,12 +196,23 @@ print(string.format("nextdm: 0x%08X", dm_read_register(0x1d)))
 -- judge abstract commonds are supported, read abstractcs register
 local abstractcs = dm_read_register(0x16)
 print(string.format("abstractcs: 0x%08X", abstractcs))
+--print(string.format(" abstractcs.progbufsize:%d", (abstractcs >> 24) & 0x7 ))
 print(string.format(" abstractcs.cmderr:%d", (abstractcs >> 8) & 0x7 ))
 print(string.format(" abstractcs.datacount: 0x%01X", (abstractcs & 0xf)))
 
-print("****** read/write riscv register ******")
 -- halt hart
 halt_the_hart("test")
+
+dm_write_register(0x10, 0x1)
+local dmcontrol = dm_read_register(0x10)
+print(string.format("dmcontrol: 0x%08X", dmcontrol))
+
+-- clear cmderr
+dm_write_register(0x16, 0x7 << 8)
+local abstractcs = dm_read_register(0x16)
+print(string.format("abstractcs: 0x%08X", abstractcs))
+
+print("****** read/write riscv register ******")
 -- dcsr Debug Control and Status  0x7b0
 local re_data = abstract_command_access_register(0x7b0, 'r')
 print(string.format("dcsr: 0x%08X", re_data))
