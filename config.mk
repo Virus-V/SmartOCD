@@ -1,9 +1,17 @@
 # 版本号
 VERSION := 0.2.0
+OS := $(shell uname -s)
 
 # 额外库文件
-#EXTRA_LIBS = usb-1.0 m dl ftdi1
+ifeq ($(OS),FreeBSD)
 EXTRA_LIBS = usb m dl ftdi1
+else ifeq ($(OS),Linux)
+EXTRA_LIBS = usb-1.0 m dl ftdi1
+else ifeq ($(OS),Darwin)
+$(error "Not support Darwin yet")
+else
+$(error "Not support ${OS} yet")
+endif
 
 # 定义当前版本和构建时间
 DEFINES += VERSION=\"$(VERSION)\" COMPILE_TIME=\"$(COMPILE_TIME)\"
