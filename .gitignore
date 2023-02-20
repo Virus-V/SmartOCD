@@ -65,4 +65,6 @@ test/*_test
 
 # log file
 *.log
-
+.clangd
+.cache
+compile_commands.json
