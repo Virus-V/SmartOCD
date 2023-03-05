@@ -1,0 +1,4 @@
+1、使用GN编译框架。
+2、完善单元测试
+3、使用BSD Queue.h 替换GPL协议的list.h
+4、Components注册机制使用Rank-Balenced Tree实现。
