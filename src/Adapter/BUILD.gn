@@ -1,0 +1,11 @@
+static_library("Adapter") {
+  sources = [
+    "adapter.c",
+    "cmsis-dap/cmsis-dap.c",
+    "ftdi/ftdi.c",
+  ]
+
+  include_dirs = [
+    "//src",
+  ]
+}

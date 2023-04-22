@@ -68,3 +68,4 @@ test/*_test
 .clangd
 .cache
 compile_commands.json
+out/

@@ -1,0 +1,41 @@
+template("build_ext_library") {
+  if (defined(invoker.version)) {
+    print(invoker.version)
+  }
+  action(target_name) {
+    inputs = []
+    if (defined(invoker.inputs)) {
+      inputs += invoker.inputs
+    }
+    deps = []
+    if (defined(invoker.deps)) {
+      deps += invoker.deps
+    }
+    args = []
+    if (defined(invoker.exec_path)) {
+      args += [ "--path=${invoker.exec_path}" ]
+    }
+    if (defined(invoker.enable)) {
+      args += [ "--enable=${invoker.enable}" ]
+    }
+    if (defined(invoker.prebuilts)) {
+      args += [ "--prebuilts=${invoker.prebuilts}" ]
+    }
+    if (defined(invoker.command)) {
+      args += [ "--command=${invoker.command}" ]
+    }
+
+    # external component build log
+    target_dir = rebase_path("${target_out_dir}/build.log")
+    args += [ "--target_dir=${target_dir}" ]
+
+    # external component error log if compile failed
+    out_dir = rebase_path("${root_out_dir}/error.log")
+    args += [ "--out_dir=${out_dir}" ]
+    script = "//build/build_ext_library.py"
+    outputs = [ "$target_out_dir/${target_name}_build_ext_components.txt" ]
+    if (defined(invoker.outputs)) {
+      outputs += invoker.outputs
+    }
+  }
+}

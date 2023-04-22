@@ -1,0 +1,28 @@
+static_library("Component") {
+  sources = [
+    "ADI/ADIv5.c",
+    "ADI/ADIv5.h",
+    "ADI/ADIv5_api.c",
+    "ADI/ADIv5_private.h",
+    "ADI/ADIv6.h",
+    "ADI/ADIv6_private.h",
+    "ARM/ARMv7.h",
+    "ARM/ARMv8.h",
+    "ARM/Cortex.h",
+    "RISC-V/dm.c",
+    "RISC-V/dm.h",
+    "RISC-V/riscv_api.c",
+    "adapter/adapter_api.c",
+    "adapter/adapter_api.h",
+    "adapter/adapter_api_dap.c",
+    "adapter/adapter_api_jtag.c",
+    "adapter/cmsis-dap_api.c",
+    "adapter/ftdi_api.c",
+    "component.c",
+    "component.h",
+  ]
+
+  include_dirs = [
+    "//src",
+  ]
+}

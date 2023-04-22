@@ -30,3 +30,4 @@ CFLAGS += $(addprefix -D,$(DEFINES))
 # 所有库
 LDFLAGS = $(addprefix -l,$(EXTRA_LIBS))
 LDFLAGS += -L/usr/local/lib
+LDFLAGS += -L$(ROOT_DIR)/src/Library/libuv

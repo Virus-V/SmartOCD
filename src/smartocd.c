@@ -422,7 +422,7 @@ static void printVersion() {
       " * SmartOCD v%s By: Virus.V <virusv@live.com>\n"
       " * Complile time: %s\n"
       " * Github: https://github.com/Virus-V/SmartOCD\n\n",
-      VERSION, COMPILE_TIME);
+      VERSION, __DATE__ "T" __TIME__);
 }
 
 /**

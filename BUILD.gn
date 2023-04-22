@@ -1,0 +1,26 @@
+executable("smartocd") {
+  deps = [
+    "//src/Adapter",
+    "//src/Library",
+    "//src/Component",
+  ]
+
+  sources = [
+    "src/smartocd.c",
+  ]
+
+  include_dirs = [
+    "//src",
+  ]
+
+  libs = [
+    "usb",
+    "m",
+    "dl",
+    "ftdi1",
+  ]
+
+  defines = [
+     "VERSION=\"0.2.1\"",
+  ]
+}

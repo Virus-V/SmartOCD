@@ -1,0 +1,5 @@
+# The location of the build configuration file.
+buildconfig = "//build/BUILDCONFIG.gn"
+
+# The executable used to execute scripts in action and exec_script.
+script_executable = "/usr/bin/env"
