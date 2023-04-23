@@ -11,6 +11,8 @@ executable("smartocd") {
 
   include_dirs = [
     "//src",
+    "//src/Library/libuv/include",
+    "//src/Library/lua/src",
   ]
 
   libs = [

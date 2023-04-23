@@ -8,16 +8,19 @@ group("Library") {
   ]
 
   public_configs = [
-    ":config_lua"
+    ":config_library"
   ]
 }
 
-config("config_lua") {
+config("config_library") {
   lib_dirs = [
     "//src/Library/lua/src",
+    "//src/Library/libuv/.libs",
   ]
   libs = [
-    "lua"
+    "lua",
+    "uv",
+    "pthread",
   ]
 }
 

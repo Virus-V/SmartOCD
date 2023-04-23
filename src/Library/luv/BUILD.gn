@@ -1,5 +1,6 @@
 static_library("luv") {
   defines = [
+    "luv_EXPORTS",
     "LUA_USE_DLOPEN",
     "_FILE_OFFSET_BITS=64",
     "_LARGEFILE_SOURCE",
@@ -14,35 +15,6 @@ static_library("luv") {
   ]
 
   sources = [
-    "async.c",
-    "check.c",
-    #"constants.c",
-    "dns.c",
-    "fs.c",
-    "fs_event.c",
-    #"fs_poll.c",
-    "handle.c",
-    "idle.c",
-    "lhandle.c",
-    "loop.c",
-    "lreq.c",
     "luv.c",
-    "metrics.c",
-    #"misc.c",
-    "pipe.c",
-    "poll.c",
-    "prepare.c",
-    "process.c",
-    "req.c",
-    "schema.c",
-    "signal.c",
-    "stream.c",
-    "tcp.c",
-    "thread.c",
-    "timer.c",
-    "tty.c",
-    "udp.c",
-    "util.c",
-    "work.c",
   ]
 }

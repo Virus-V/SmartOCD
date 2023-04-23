@@ -52,257 +52,260 @@
 
 static const luaL_Reg luv_functions[] = {
   // loop.c
-  {"loop_close", luv_loop_close},
-  {"run", luv_run},
-  {"loop_mode", luv_loop_mode},
-  {"loop_alive", luv_loop_alive},
-  {"stop", luv_stop},
-  {"backend_fd", luv_backend_fd},
-  {"backend_timeout", luv_backend_timeout},
-  {"now", luv_now},
-  {"update_time", luv_update_time},
-  {"walk", luv_walk},
+  {"LoopClose", luv_loop_close},
+  {"Run", luv_run},
+  {"LoopMode", luv_loop_mode},
+  {"LoopAlive", luv_loop_alive},
+  {"Stop", luv_stop},
+  {"BackendFd", luv_backend_fd},
+  {"BackendTimeout", luv_backend_timeout},
+  {"Now", luv_now},
+  {"UpdateTime", luv_update_time},
+  {"Walk", luv_walk},
 #if LUV_UV_VERSION_GEQ(1, 0, 2)
-  {"loop_configure", luv_loop_configure},
+  {"LoopConfigure", luv_loop_configure},
 #endif
 
   // req.c
-  {"cancel", luv_cancel},
+  {"Cancel", luv_cancel},
 #if LUV_UV_VERSION_GEQ(1, 19, 0)
-  {"req_get_type", luv_req_get_type},
+  {"ReqGetType", luv_req_get_type},
 #endif
 
   // handle.c
-  {"is_active", luv_is_active},
-  {"is_closing", luv_is_closing},
-  {"close", luv_close},
-  {"ref", luv_ref},
-  {"unref", luv_unref},
-  {"has_ref", luv_has_ref},
-  {"send_buffer_size", luv_send_buffer_size},
-  {"recv_buffer_size", luv_recv_buffer_size},
-  {"fileno", luv_fileno},
+  {"IsActive", luv_is_active},
+  {"IsClosing", luv_is_closing},
+  {"Close", luv_close},
+  {"Ref", luv_ref},
+  {"Unref", luv_unref},
+  {"HasRef", luv_has_ref},
+  {"SendBufferSize", luv_send_buffer_size},
+  {"RecvBufferSize", luv_recv_buffer_size},
+  {"FileNo", luv_fileno},
 #if LUV_UV_VERSION_GEQ(1, 19, 0)
-  {"handle_get_type", luv_handle_get_type},
+  {"HandleGetType", luv_handle_get_type},
 #endif
 
+
   // timer.c
-  {"new_timer", luv_new_timer},
-  {"timer_start", luv_timer_start},
-  {"timer_stop", luv_timer_stop},
-  {"timer_again", luv_timer_again},
-  {"timer_set_repeat", luv_timer_set_repeat},
-  {"timer_get_repeat", luv_timer_get_repeat},
+  {"NewTimer", luv_new_timer},
+  {"TimerStart", luv_timer_start},
+  {"TimerStop", luv_timer_stop},
+  {"TimerAgain", luv_timer_again},
+  {"TimerSetRepeat", luv_timer_set_repeat},
+  {"TimerGetRepeat", luv_timer_get_repeat},
 #if LUV_UV_VERSION_GEQ(1, 40, 0)
-  {"timer_get_due_in", luv_timer_get_due_in},
+  {"TimerGetDueIn", luv_timer_get_due_in},
 #endif
 
   // prepare.c
-  {"new_prepare", luv_new_prepare},
-  {"prepare_start", luv_prepare_start},
-  {"prepare_stop", luv_prepare_stop},
+  {"NewPrepare", luv_new_prepare},
+  {"PrepareStart", luv_prepare_start},
+  {"PrepareStop", luv_prepare_stop},
 
   // check.c
-  {"new_check", luv_new_check},
-  {"check_start", luv_check_start},
-  {"check_stop", luv_check_stop},
+  {"NewCheck", luv_new_check},
+  {"CheckStart", luv_check_start},
+  {"CheckStop", luv_check_stop},
 
   // idle.c
-  {"new_idle", luv_new_idle},
-  {"idle_start", luv_idle_start},
-  {"idle_stop", luv_idle_stop},
+  {"NewIdle", luv_new_idle},
+  {"IdleStart", luv_idle_start},
+  {"IdleStop", luv_idle_stop},
 
   // async.c
-  {"new_async", luv_new_async},
-  {"async_send", luv_async_send},
+  {"NewAsync", luv_new_async},
+  {"AsyncSend", luv_async_send},
 
   // poll.c
-  {"new_poll", luv_new_poll},
-  {"new_socket_poll", luv_new_socket_poll},
-  {"poll_start", luv_poll_start},
-  {"poll_stop", luv_poll_stop},
+  {"NewPoll", luv_new_poll},
+  {"NewSocketPoll", luv_new_socket_poll},
+  {"PollStart", luv_poll_start},
+  {"PollStop", luv_poll_stop},
 
   // signal.c
-  {"new_signal", luv_new_signal},
-  {"signal_start", luv_signal_start},
+  {"NewSignal", luv_new_signal},
+  {"SignalStart", luv_signal_start},
 #if LUV_UV_VERSION_GEQ(1, 12, 0)
-  {"signal_start_oneshot", luv_signal_start_oneshot},
+  {"SignalStartOneshot", luv_signal_start_oneshot},
 #endif
-  {"signal_stop", luv_signal_stop},
+  {"SignalStop", luv_signal_stop},
 
   // process.c
-  {"disable_stdio_inheritance", luv_disable_stdio_inheritance},
-  {"spawn", luv_spawn},
-  {"process_kill", luv_process_kill},
+  {"DisableStdioInheritance", luv_disable_stdio_inheritance},
+  {"Spawn", luv_spawn},
+  {"ProcessKill", luv_process_kill},
 #if LUV_UV_VERSION_GEQ(1, 19, 0)
-  {"process_get_pid", luv_process_get_pid},
+  {"ProcessGetPid", luv_process_get_pid},
 #endif
-  {"kill", luv_kill},
+  {"Kill", luv_kill},
 
   // stream.c
-  {"shutdown", luv_shutdown},
-  {"listen", luv_listen},
-  {"accept", luv_accept},
-  {"read_start", luv_read_start},
-  {"read_stop", luv_read_stop},
-  {"write", luv_write},
-  {"write2", luv_write2},
-  {"try_write", luv_try_write},
+  {"Shutdown", luv_shutdown},
+  {"Listen", luv_listen},
+  {"Accept", luv_accept},
+  {"ReadStart", luv_read_start},
+  {"ReadStop", luv_read_stop},
+  {"Write", luv_write},
+  {"Write2", luv_write2},
+  {"TryWrite", luv_try_write},
 #if LUV_UV_VERSION_GEQ(1, 42, 0)
-  {"try_write2", luv_try_write2},
+  {"TryWrite2", luv_try_write2},
 #endif
-  {"is_readable", luv_is_readable},
-  {"is_writable", luv_is_writable},
-  {"stream_set_blocking", luv_stream_set_blocking},
+  {"IsReadable", luv_is_readable},
+  {"IsWritable", luv_is_writable},
+  {"StreamSetBlocking", luv_stream_set_blocking},
 #if LUV_UV_VERSION_GEQ(1, 19, 0)
-  {"stream_get_write_queue_size", luv_stream_get_write_queue_size},
+  {"StreamGetWriteQueueSize", luv_stream_get_write_queue_size},
 #endif
 
   // tcp.c
-  {"new_tcp", luv_new_tcp},
-  {"tcp_open", luv_tcp_open},
-  {"tcp_nodelay", luv_tcp_nodelay},
-  {"tcp_keepalive", luv_tcp_keepalive},
-  {"tcp_simultaneous_accepts", luv_tcp_simultaneous_accepts},
-  {"tcp_bind", luv_tcp_bind},
-  {"tcp_getpeername", luv_tcp_getpeername},
-  {"tcp_getsockname", luv_tcp_getsockname},
-  {"tcp_connect", luv_tcp_connect},
-  {"tcp_write_queue_size", luv_write_queue_size},
+  {"NewTCP", luv_new_tcp},
+  {"TCPOpen", luv_tcp_open},
+  {"TCPNodelay", luv_tcp_nodelay},
+  {"TCPKeepalive", luv_tcp_keepalive},
+  {"TCPSimultaneousAccepts", luv_tcp_simultaneous_accepts},
+  {"TCPBind", luv_tcp_bind},
+  {"TCPGetpeername", luv_tcp_getpeername},
+  {"TCPGetsockname", luv_tcp_getsockname},
+  {"TCPConnect", luv_tcp_connect},
+  {"TCPWriteQueueSize", luv_write_queue_size},
 #if LUV_UV_VERSION_GEQ(1, 32, 0)
-  {"tcp_close_reset", luv_tcp_close_reset},
+  {"TCPCloseReset", luv_tcp_close_reset},
 #endif
 #if LUV_UV_VERSION_GEQ(1, 41, 0)
-  {"socketpair", luv_socketpair},
+  {"SocketPair", luv_socketpair},
 #endif
 
   // pipe.c
-  {"new_pipe", luv_new_pipe},
-  {"pipe_open", luv_pipe_open},
-  {"pipe_bind", luv_pipe_bind},
+  {"NewPipe", luv_new_pipe},
+  {"PipeOpen", luv_pipe_open},
+  {"PipeBind", luv_pipe_bind},
 #if LUV_UV_VERSION_GEQ(1, 16, 0)
-  {"pipe_chmod", luv_pipe_chmod},
+  {"PipeChmod", luv_pipe_chmod},
 #endif
-  {"pipe_connect", luv_pipe_connect},
-  {"pipe_getsockname", luv_pipe_getsockname},
+  {"PipeConnect", luv_pipe_connect},
+  {"PipeGetSockName", luv_pipe_getsockname},
 #if LUV_UV_VERSION_GEQ(1, 3, 0)
-  {"pipe_getpeername", luv_pipe_getpeername},
+  {"PipeGetPeerName", luv_pipe_getpeername},
 #endif
-  {"pipe_pending_instances", luv_pipe_pending_instances},
-  {"pipe_pending_count", luv_pipe_pending_count},
-  {"pipe_pending_type", luv_pipe_pending_type},
+  {"PipePendingInstances", luv_pipe_pending_instances},
+  {"PipePendingCount", luv_pipe_pending_count},
+  {"PipePendingType", luv_pipe_pending_type},
 #if LUV_UV_VERSION_GEQ(1, 41, 0)
-  {"pipe", luv_pipe},
+  {"Pipe", luv_pipe},
 #endif
 
   // tty.c
-  {"new_tty", luv_new_tty},
-  {"tty_set_mode", luv_tty_set_mode},
-  {"tty_reset_mode", luv_tty_reset_mode},
-  {"tty_get_winsize", luv_tty_get_winsize},
+  {"NewTTY", luv_new_tty},
+  {"TTYSetMode", luv_tty_set_mode},
+  {"TTYResetMode", luv_tty_reset_mode},
+  {"TTYGetWinSize", luv_tty_get_winsize},
 #if LUV_UV_VERSION_GEQ(1, 33, 0)
-  {"tty_set_vterm_state", luv_tty_set_vterm_state},
-  {"tty_get_vterm_state", luv_tty_get_vterm_state},
+  {"TTYSetVtermState", luv_tty_set_vterm_state},
+  {"TTYGetVtermState", luv_tty_get_vterm_state},
 #endif
 
   // udp.c
-  {"new_udp", luv_new_udp},
-  {"udp_get_send_queue_size", luv_udp_get_send_queue_size},
-  {"udp_get_send_queue_count", luv_udp_get_send_queue_count},
-  {"udp_open", luv_udp_open},
-  {"udp_bind", luv_udp_bind},
-  {"udp_getsockname", luv_udp_getsockname},
-  {"udp_set_membership", luv_udp_set_membership},
+  {"NewUdp", luv_new_udp},
+  {"UDPGetSendQueueSize", luv_udp_get_send_queue_size},
+  {"UDPGetSendQueueCount", luv_udp_get_send_queue_count},
+  {"UDPOpen", luv_udp_open},
+  {"UDPBind", luv_udp_bind},
+  {"UDPGetSockName", luv_udp_getsockname},
+  {"UDPSetMembership", luv_udp_set_membership},
 #if LUV_UV_VERSION_GEQ(1, 32, 0)
-  {"udp_set_source_membership", luv_udp_set_source_membership},
+  {"UDPSetSourceMembership", luv_udp_set_source_membership},
 #endif
-  {"udp_set_multicast_loop", luv_udp_set_multicast_loop},
-  {"udp_set_multicast_ttl", luv_udp_set_multicast_ttl},
-  {"udp_set_multicast_interface", luv_udp_set_multicast_interface},
-  {"udp_set_broadcast", luv_udp_set_broadcast},
-  {"udp_set_ttl", luv_udp_set_ttl},
-  {"udp_send", luv_udp_send},
-  {"udp_try_send", luv_udp_try_send},
-  {"udp_recv_start", luv_udp_recv_start},
-  {"udp_recv_stop", luv_udp_recv_stop},
+  {"UDPSetMulticastLoop", luv_udp_set_multicast_loop},
+  {"UDPSetMulticastTTL", luv_udp_set_multicast_ttl},
+  {"UDPSetMulticastInterface", luv_udp_set_multicast_interface},
+  {"UDPSetBroadcast", luv_udp_set_broadcast},
+  {"UDPSetTTL", luv_udp_set_ttl},
+  {"UDPSend", luv_udp_send},
+  {"UDPTrySend", luv_udp_try_send},
+  {"UDPRecvStart", luv_udp_recv_start},
+  {"UDPRecvStop", luv_udp_recv_stop},
 #if LUV_UV_VERSION_GEQ(1, 27, 0)
-  {"udp_connect", luv_udp_connect},
-  {"udp_getpeername", luv_udp_getpeername},
+  {"UDPConnect", luv_udp_connect},
+  {"UDPGetPeerName", luv_udp_getpeername},
 #endif
 
+#if 0
   // fs_event.c
-  {"new_fs_event", luv_new_fs_event},
-  {"fs_event_start", luv_fs_event_start},
-  {"fs_event_stop", luv_fs_event_stop},
-  {"fs_event_getpath", luv_fs_event_getpath},
+  {"NewFSEvent", luv_new_fs_event},
+  {"FSEventStart", luv_fs_event_start},
+  {"FSEventStop", luv_fs_event_stop},
+  {"FSEventGetPath", luv_fs_event_getpath},
 
   // fs_poll.c
-  {"new_fs_poll", luv_new_fs_poll},
-  {"fs_poll_start", luv_fs_poll_start},
-  {"fs_poll_stop", luv_fs_poll_stop},
-  {"fs_poll_getpath", luv_fs_poll_getpath},
+  {"NewFSPoll", luv_new_fs_poll},
+  {"FSPollStart", luv_fs_poll_start},
+  {"FSPollStop", luv_fs_poll_stop},
+  {"FSPollGetPath", luv_fs_poll_getpath},
 
   // fs.c
-  {"fs_close", luv_fs_close},
-  {"fs_open", luv_fs_open},
-  {"fs_read", luv_fs_read},
-  {"fs_unlink", luv_fs_unlink},
-  {"fs_write", luv_fs_write},
-  {"fs_mkdir", luv_fs_mkdir},
-  {"fs_mkdtemp", luv_fs_mkdtemp},
+  {"FSClose", luv_fs_close},
+  {"FSOpen", luv_fs_open},
+  {"FSRead", luv_fs_read},
+  {"FSUnlink", luv_fs_unlink},
+  {"FSWrite", luv_fs_write},
+  {"FSMkdir", luv_fs_mkdir},
+  {"FSMkdtemp", luv_fs_mkdtemp},
 #if LUV_UV_VERSION_GEQ(1, 34, 0)
-  {"fs_mkstemp", luv_fs_mkstemp},
+  {"FSMkstemp", luv_fs_mkstemp},
 #endif
-  {"fs_rmdir", luv_fs_rmdir},
-  {"fs_scandir", luv_fs_scandir},
-  {"fs_scandir_next", luv_fs_scandir_next},
-  {"fs_stat", luv_fs_stat},
-  {"fs_fstat", luv_fs_fstat},
-  {"fs_lstat", luv_fs_lstat},
-  {"fs_rename", luv_fs_rename},
-  {"fs_fsync", luv_fs_fsync},
-  {"fs_fdatasync", luv_fs_fdatasync},
-  {"fs_ftruncate", luv_fs_ftruncate},
-  {"fs_sendfile", luv_fs_sendfile},
-  {"fs_access", luv_fs_access},
-  {"fs_chmod", luv_fs_chmod},
-  {"fs_fchmod", luv_fs_fchmod},
-  {"fs_utime", luv_fs_utime},
-  {"fs_futime", luv_fs_futime},
+  {"FSRmDir", luv_fs_rmdir},
+  {"FSScanDir", luv_fs_scandir},
+  {"FSScanDirNext", luv_fs_scandir_next},
+  {"FSStat", luv_fs_stat},
+  {"FSFstat", luv_fs_fstat},
+  {"FSLstat", luv_fs_lstat},
+  {"DSReName", luv_fs_rename},
+  {"FSFsync", luv_fs_fsync},
+  {"FSFdataSync", luv_fs_fdatasync},
+  {"FSFtruncate", luv_fs_ftruncate},
+  {"FSSendFile", luv_fs_sendfile},
+  {"FSAccess", luv_fs_access},
+  {"FSChMod", luv_fs_chmod},
+  {"FSFchMod", luv_fs_fchmod},
+  {"FSUtime", luv_fs_utime},
+  {"FSFutime", luv_fs_futime},
 #if LUV_UV_VERSION_GEQ(1, 36, 0)
   {"fs_lutime", luv_fs_lutime},
 #endif
-  {"fs_link", luv_fs_link},
-  {"fs_symlink", luv_fs_symlink},
-  {"fs_readlink", luv_fs_readlink},
+  {"FSLink", luv_fs_link},
+  {"FSSymLink", luv_fs_symlink},
+  {"FSReadLink", luv_fs_readlink},
 #if LUV_UV_VERSION_GEQ(1, 8, 0)
-  {"fs_realpath", luv_fs_realpath},
+  {"FSRealPath", luv_fs_realpath},
 #endif
-  {"fs_chown", luv_fs_chown},
-  {"fs_fchown", luv_fs_fchown},
+  {"FSChown", luv_fs_chown},
+  {"FSFchown", luv_fs_fchown},
 #if LUV_UV_VERSION_GEQ(1, 21, 0)
-  {"fs_lchown", luv_fs_lchown},
+  {"FSLchown", luv_fs_lchown},
 #endif
 #if LUV_UV_VERSION_GEQ(1, 14, 0)
-  {"fs_copyfile", luv_fs_copyfile },
+  {"FSCopyFile", luv_fs_copyfile },
 #endif
 #if LUV_UV_VERSION_GEQ(1, 28, 0)
-  {"fs_opendir", luv_fs_opendir},
-  {"fs_readdir", luv_fs_readdir},
-  {"fs_closedir", luv_fs_closedir},
+  {"FSOpenDir", luv_fs_opendir},
+  {"FSReadDir", luv_fs_readdir},
+  {"FSCloseDir", luv_fs_closedir},
 #endif
 #if LUV_UV_VERSION_GEQ(1, 31, 0)
-  {"fs_statfs", luv_fs_statfs},
+  {"FSStatFS", luv_fs_statfs},
+#endif
 #endif
 
   // dns.c
-  {"getaddrinfo", luv_getaddrinfo},
-  {"getnameinfo", luv_getnameinfo},
+  {"GetAddrInfo", luv_getaddrinfo},
+  {"GetNameInfo", luv_getnameinfo},
 
   // misc.c
-  {"chdir", luv_chdir},
+  {"ChDir", luv_chdir},
 #if LUV_UV_VERSION_GEQ(1, 9, 0)
-  {"os_homedir", luv_os_homedir},
+  {"OSHomeDir", luv_os_homedir},
   {"os_tmpdir", luv_os_tmpdir},
   {"os_get_passwd", luv_os_get_passwd},
 #endif
@@ -369,19 +372,19 @@ static const luaL_Reg luv_functions[] = {
   {"os_environ", luv_os_environ},
 #endif
 #if LUV_UV_VERSION_GEQ(1, 33, 0)
-  {"random", luv_random},
+  {"Random", luv_random},
 #endif
-  {"sleep", luv_sleep},
+  {"Sleep", luv_sleep},
 
   // thread.c
-  {"new_thread", luv_new_thread},
-  {"thread_equal", luv_thread_equal},
-  {"thread_self", luv_thread_self},
-  {"thread_join", luv_thread_join},
+  {"NewThread", luv_new_thread},
+  {"ThreadEqual", luv_thread_equal},
+  {"ThreadSelf", luv_thread_self},
+  {"ThreadJoin", luv_thread_join},
 
   // work.c
-  {"new_work", luv_new_work},
-  {"queue_work", luv_queue_work},
+  {"NewWork", luv_new_work},
+  {"QueueWork", luv_queue_work},
 
   // util.c
 #if LUV_UV_VERSION_GEQ(1, 10, 0)
