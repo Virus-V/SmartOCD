@@ -49,7 +49,13 @@ static lua_State *globalL = NULL;
 static FILE *logFd = NULL;
 
 static const struct option long_option[] = {
-    {"logfile", required_argument, NULL, 'l'}, {"help", no_argument, NULL, 'h'}, {"file", required_argument, NULL, 'f'}, {"debuglevel", required_argument, NULL, 'd'}, {"exit", no_argument, NULL, 'e'}, {NULL, 0, NULL, 0}};
+    {"logfile", required_argument, NULL, 'l'},
+    {"help", no_argument, NULL, 'h'},
+    {"file", required_argument, NULL, 'f'},
+    {"debuglevel", required_argument, NULL, 'd'},
+    {"exit", no_argument, NULL, 'e'},
+    {NULL, 0, NULL, 0}
+};
 
 // 打印帮助信息
 static void printHelp(char *progName) {

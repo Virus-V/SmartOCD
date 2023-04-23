@@ -4,6 +4,7 @@ group("Library") {
   deps = [
     ":library",
     ":build_lua",
+    "luv",
   ]
 
   public_configs = [
@@ -11,11 +12,9 @@ group("Library") {
   ]
 }
 
-lua_src_root = "//src/Library/lua/src"
-
 config("config_lua") {
   lib_dirs = [
-    lua_src_root,
+    "//src/Library/lua/src",
   ]
   libs = [
     "lua"
@@ -40,69 +39,10 @@ static_library("library") {
 
 build_ext_library("build_lua") {
   exec_path = rebase_path("//src/Library/lua", root_build_dir)
-  command = "make guess ALL=a"
+  command = "make guess ALL=a -j 4"
+}
 
-  inputs = [
-    "${lua_src_root}/lapi.c",
-    "${lua_src_root}/lapi.h",
-    "${lua_src_root}/lauxlib.c",
-    "${lua_src_root}/lauxlib.h",
-    "${lua_src_root}/lbaselib.c",
-    "${lua_src_root}/lcode.c",
-    "${lua_src_root}/lcode.h",
-    "${lua_src_root}/lcorolib.c",
-    "${lua_src_root}/lctype.c",
-    "${lua_src_root}/lctype.h",
-    "${lua_src_root}/ldblib.c",
-    "${lua_src_root}/ldebug.c",
-    "${lua_src_root}/ldebug.h",
-    "${lua_src_root}/ldo.c",
-    "${lua_src_root}/ldo.h",
-    "${lua_src_root}/ldump.c",
-    "${lua_src_root}/lfunc.c",
-    "${lua_src_root}/lfunc.h",
-    "${lua_src_root}/lgc.c",
-    "${lua_src_root}/lgc.h",
-    "${lua_src_root}/linit.c",
-    "${lua_src_root}/liolib.c",
-    "${lua_src_root}/ljumptab.h",
-    "${lua_src_root}/llex.c",
-    "${lua_src_root}/llex.h",
-    "${lua_src_root}/llimits.h",
-    "${lua_src_root}/lmathlib.c",
-    "${lua_src_root}/lmem.c",
-    "${lua_src_root}/lmem.h",
-    "${lua_src_root}/loadlib.c",
-    "${lua_src_root}/lobject.c",
-    "${lua_src_root}/lobject.h",
-    "${lua_src_root}/lopcodes.c",
-    "${lua_src_root}/lopcodes.h",
-    "${lua_src_root}/lopnames.h",
-    "${lua_src_root}/loslib.c",
-    "${lua_src_root}/lparser.c",
-    "${lua_src_root}/lparser.h",
-    "${lua_src_root}/lprefix.h",
-    "${lua_src_root}/lstate.c",
-    "${lua_src_root}/lstate.h",
-    "${lua_src_root}/lstring.c",
-    "${lua_src_root}/lstring.h",
-    "${lua_src_root}/lstrlib.c",
-    "${lua_src_root}/ltable.c",
-    "${lua_src_root}/ltable.h",
-    "${lua_src_root}/ltablib.c",
-    "${lua_src_root}/ltm.c",
-    "${lua_src_root}/ltm.h",
-    "${lua_src_root}/lua.c",
-    "${lua_src_root}/lua.h",
-    "${lua_src_root}/luac.c",
-    "${lua_src_root}/luaconf.h",
-    "${lua_src_root}/lualib.h",
-    "${lua_src_root}/lundump.c",
-    "${lua_src_root}/lundump.h",
-    "${lua_src_root}/lutf8lib.c",
-    "${lua_src_root}/lvm.c",
-    "${lua_src_root}/lvm.h",
-    "${lua_src_root}/lzio.c",
-    "${lua_src_root}/lzio.h",
-  ]
+build_ext_library("build_libuv") {
+  exec_path = rebase_path("//src/Library/libuv", root_build_dir)
+  command = "sh ./autogen.sh && ./configure --enable-shared=no && make -j 4"
 }
