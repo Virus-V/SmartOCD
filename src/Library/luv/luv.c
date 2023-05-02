@@ -161,6 +161,7 @@ static const luaL_Reg luv_functions[] = {
 
   // tcp.c
   {"NewTCP", luv_new_tcp},
+#if 0
   {"TCPOpen", luv_tcp_open},
   {"TCPNodelay", luv_tcp_nodelay},
   {"TCPKeepalive", luv_tcp_keepalive},
@@ -173,6 +174,8 @@ static const luaL_Reg luv_functions[] = {
 #if LUV_UV_VERSION_GEQ(1, 32, 0)
   {"TCPCloseReset", luv_tcp_close_reset},
 #endif
+#endif
+
 #if LUV_UV_VERSION_GEQ(1, 41, 0)
   {"SocketPair", luv_socketpair},
 #endif
@@ -506,17 +509,17 @@ static const luaL_Reg luv_process_methods[] = {
 };
 
 static const luaL_Reg luv_tcp_methods[] = {
-  {"open", luv_tcp_open},
-  {"nodelay", luv_tcp_nodelay},
-  {"keepalive", luv_tcp_keepalive},
-  {"simultaneous_accepts", luv_tcp_simultaneous_accepts},
-  {"bind", luv_tcp_bind},
-  {"getpeername", luv_tcp_getpeername},
-  {"getsockname", luv_tcp_getsockname},
-  {"connect", luv_tcp_connect},
-  {"write_queue_size", luv_write_queue_size},
+  {"Open", luv_tcp_open},
+  {"Nodelay", luv_tcp_nodelay},
+  {"KeepAlive", luv_tcp_keepalive},
+  {"SimultaneousAccepts", luv_tcp_simultaneous_accepts},
+  {"Bind", luv_tcp_bind},
+  {"GetPeerName", luv_tcp_getpeername},
+  {"GetSockName", luv_tcp_getsockname},
+  {"Connect", luv_tcp_connect},
+  {"WriteQueueSize", luv_write_queue_size},
 #if LUV_UV_VERSION_GEQ(1, 32, 0)
-  {"close_reset", luv_tcp_close_reset},
+  {"CloseReset", luv_tcp_close_reset},
 #endif
   {NULL, NULL}
 };

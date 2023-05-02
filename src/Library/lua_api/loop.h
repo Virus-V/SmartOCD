@@ -27,49 +27,9 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * Copyright 2023 Virus.V <virusv@live.com>
- */
+*/
 
-#ifndef SRC_COMPONENT_COMPONENT_H_
-#define SRC_COMPONENT_COMPONENT_H_
-
-#include "smartocd.h"
-
-#include "Library/lua/src/lauxlib.h"
-#include "Library/lua/src/lua.h"
-#include "Library/lua/src/lualib.h"
-#include "Library/misc/list.h"
-//
-typedef int (*ComponentInitFunc)(lua_State *L, void *opaque);
-
-struct componentEntry {
-  const char *name;
-  ComponentInitFunc init;
-  void *opaque;
-  unsigned int priority;
-  struct list_head entry;
-};
-
-enum componentPriority {
-  COM_ADAPTER = 0x0,
-  COM_LOOP,
-};
-
-void component_regist(struct componentEntry *c);
-void component_init(lua_State *L);
-
-/*
- * 注册组件
- * name：组件名
- * init：组件初始化函数
- * opaque：函数参数
- * com：组件类型
- * pri：组件初始化优先级
- */
-#define COMPONENT_INIT(name, init, opaque, com, pri)                                                       \
-  static struct componentEntry _component_item_##name = {                                                  \
-      #name, init, opaque, (com << 16) + (pri), {&_component_item_##name.entry, &_component_item_##name.entry}}; \
-  void __attribute__((used, constructor)) _component_item_##name##_register(void) {                        \
-    component_regist(&_component_item_##name);                                                             \
-  }
+#ifndef SRC_API_LOOP_H_
+#define SRC_API_LOOP_H_
 
 #endif

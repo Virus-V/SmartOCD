@@ -401,4 +401,4 @@ static int RegisterApi_ADIv5(lua_State *L, void *opaque) {
   return 0;
 }
 
-COMPONENT_INIT(ADIv5, RegisterApi_ADIv5, NULL, 1 << 16, 0);
+COMPONENT_INIT(ADIv5, RegisterApi_ADIv5, NULL, COM_ADAPTER, 0);

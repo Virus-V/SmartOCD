@@ -32,6 +32,8 @@
 #ifndef SRC_API_API_H_
 #define SRC_API_API_H_
 
+#include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "Library/lua/src/lauxlib.h"

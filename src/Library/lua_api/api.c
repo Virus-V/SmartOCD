@@ -29,12 +29,14 @@
  * Copyright 2023 Virus.V <virusv@live.com>
  */
 
-#include "api.h"
 #include <string.h>
 #include <pthread.h>
 
-#include "Library/log/log.h"
+#include "api.h"
 #include "smartocd.h"
+
+#include "Component/component.h"
+#include "Library/log/log.h"
 
 /**
  * 往栈顶的table中注册常量
@@ -146,3 +148,4 @@ void core_UnlockVM(lua_State *L) {
   pthread_mutex_unlock(&vmlock);
 }
 
+//COMPONENT_INIT(FTDI, RegisterApi_Ftdi, NULL, COM_ADAPTER, 2);

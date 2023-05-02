@@ -4,7 +4,7 @@ group("Library") {
   deps = [
     ":library",
     ":build_lua",
-    "luv",
+    #"luv",
   ]
 
   public_configs = [
@@ -30,13 +30,15 @@ static_library("library") {
     "misc/misc.c",
     "log/log.c",
     "jtag/jtag.c",
+    "linenoise/linenoise.c",
     "lua_api/api.c",
-    "linenoise/linenoise.c"
+    "lua_api/loop.c",
   ]
 
   include_dirs = [
     "//src",
     "//src/Library",
+    "//src/Library/lua/src",
   ]
 }
 

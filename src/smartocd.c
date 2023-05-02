@@ -45,8 +45,6 @@
 #include "Library/lua/src/lua.h"
 #include "Library/lua/src/lualib.h"
 
-#include "Library/luv/luv.h"
-
 static lua_State *globalL = NULL;
 static FILE *logFd = NULL;
 
@@ -359,10 +357,6 @@ static int smartocd_init(lua_State *L) {
 
   // 打开标准库
   luaL_openlibs(L);
-
-  // 初始化Libuv binding
-  luaL_requiref(L, "luv", luaopen_luv, 0);
-  lua_pop(L, 1);
 
   // 设置全局变量，SmartOCD版本信息
   if (setGlobal(L) != LUA_OK) {

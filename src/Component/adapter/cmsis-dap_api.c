@@ -204,8 +204,10 @@ static int luaApi_cmsis_dap_gc(lua_State *L) {
 }
 
 // 模块静态函数
-static const luaL_Reg lib_cmdap_f[] = {{"Create", luaApi_cmsis_dap_new}, // 创建CMSIS-DAP对象
-                                       {NULL, NULL}};
+static const luaL_Reg lib_cmdap_f[] = {
+  {"Create", luaApi_cmsis_dap_new}, // 创建CMSIS-DAP对象
+  {NULL, NULL}
+};
 
 // 模块的面向对象方法
 static const luaL_Reg lib_cmdap_oo[] = {
