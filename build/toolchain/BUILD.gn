@@ -40,7 +40,7 @@ toolchain("gcc") {
       rspfile_content = "{{inputs}} {{solibs}} {{libs}}"
     } else {
       os_specific_option = "-Wl,-soname=$soname"
-      rspfile_content = "-Wl,--whole-archive {{inputs}} {{solibs}} {{libs}} -Wl,--no-whole-archive "
+      rspfile_content = "-Wl,--whole-archive {{inputs}} {{solibs}} {{libs}} -Wl,--no-whole-archive"
     }
 
     command = "g++ -shared {{ldflags}} -o $sofile $os_specific_option @$rspfile"
@@ -68,7 +68,7 @@ toolchain("gcc") {
     if (is_mac) {
       command = "g++ {{ldflags}} -o $outfile @$rspfile {{solibs}} {{libs}}"
     } else {
-      command = "g++ {{ldflags}} -o $outfile -Wl,--start-group @$rspfile {{solibs}} {{libs}} -Wl,--end-group"
+      command = "g++ {{ldflags}} -o $outfile -Wl,--whole-archive @$rspfile {{solibs}} {{libs}} -Wl,--no-whole-archive"
     }
     description = "LINK $outfile"
     default_output_dir = "{{root_out_dir}}"

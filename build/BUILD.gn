@@ -6,8 +6,11 @@ config("compiler_defaults") {
   cflags = [
     "-g",
     "-Os",
-    "-fPIC",
     "-pthread",
+  ]
+
+  defines = [
+    "LOG_USE_COLOR"
   ]
 }
 
