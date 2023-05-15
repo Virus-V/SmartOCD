@@ -60,7 +60,9 @@ struct handle_stream {
   union {
     int read_cb;
     int connect_cb;
-  } ref;
+  } ref_cb;
+
+  int ref_self;
 };
 
 /* 获得当前Lua状态机绑定的loop上下文 */

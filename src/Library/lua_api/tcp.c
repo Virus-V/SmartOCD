@@ -49,8 +49,6 @@
 
 struct handle_tcp {
   struct handle_stream s;
-  lua_State* L;
-
   int close_reset_cb_ref;
 };
 
@@ -116,6 +114,12 @@ static int luaApi_stream_tcp_create(lua_State* L) {
   lua_settop(L, 1);
   handle = (struct handle_tcp *)lua_newuserdata(L, sizeof(struct handle_tcp));
   memset(handle, 0, sizeof(struct handle_tcp));
+  handle->s.L = L;
+
+  /* 记录自身的索引，在回调函数中使用 */
+  lua_pushvalue(L, -1);
+  handle->s.ref_self = luaL_ref(L, LUA_REGISTRYINDEX);
+  log_debug("handle->s.ref_self = %d", handle->s.ref_self);
 
   if (lua_isnoneornil(L, 1)) {
     log_trace("Create TCP[%p].", handle);
@@ -292,7 +296,8 @@ static int luaApi_stream_tcp_connect(lua_State* L) {
 static void close_reset_cb(uv_handle_t* handle) {
   assert(handle != NULL);
   struct handle_tcp * data = (struct handle_tcp *)handle;
-  lua_State* L = data->L;
+  lua_State* L = data->s.L;
+  assert(L != NULL);
 
   if (data->close_reset_cb_ref == LUA_NOREF){
     goto _exit;
@@ -304,13 +309,15 @@ static void close_reset_cb(uv_handle_t* handle) {
 _exit:
   /* unref callback */
   luaL_unref(L, LUA_REGISTRYINDEX, data->close_reset_cb_ref);
+  /* unref stream self */
+  luaL_unref(L, LUA_REGISTRYINDEX, data->s.ref_self);
 }
 
 static int luaApi_stream_tcp_close_reset(lua_State* L) {
   int ret, ref;
   struct handle_tcp *handle = luaApi_check_tcp(L, 1);
 
-  /* 处理connect callback */
+  /* 处理callback */
   if (lua_isnoneornil(L, 2)) {
     ref = LUA_NOREF;
   } else {

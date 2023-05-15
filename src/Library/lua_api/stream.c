@@ -68,8 +68,8 @@ static struct handle_stream * luaApi_check_stream(lua_State* L, int index) {
 }
 
 /* 连接事件回调 */
-static void connection_cb(uv_stream_t* stream, int status) {
-  struct handle_stream * handle = (struct handle_stream *)stream;
+static void connection_cb(uv_stream_t *server, int status) {
+  struct handle_stream * handle = (struct handle_stream *)server;
   lua_State* L = handle->L;
   int nargs;
 
@@ -77,12 +77,20 @@ static void connection_cb(uv_stream_t* stream, int status) {
     lua_pushstring(L, uv_err_name(status));
     nargs = 1;
   } else {
-    //lua_pushnil(L);
     nargs = 0;
   }
 
-  log_debug("connect cb ref: %d", handle->ref.connect_cb);
-  LuaApi_do_callback(L, handle->ref.connect_cb, nargs);
+  /* 压入stream userdata自身 */
+  lua_rawgeti(L, LUA_REGISTRYINDEX, handle->ref_self);
+  assert(lua_isuserdata(L, -1) && lua_touserdata(L, -1) == handle);
+
+  /* 将栈顶的函数调整到函数参数前 */
+  if (nargs) {
+    lua_insert(L, -1 - nargs);
+  }
+
+  log_debug("connect cb ref: %d", handle->ref_cb.connect_cb);
+  LuaApi_do_callback(L, handle->ref_cb.connect_cb, nargs + 1);
 }
 
 static int luaApi_stream_listen(lua_State* L) {
@@ -95,8 +103,8 @@ static int luaApi_stream_listen(lua_State* L) {
   handle->L = L;
 
   lua_pushvalue(L, 3);
-  handle->ref.connect_cb = luaL_ref(L, LUA_REGISTRYINDEX);
-  log_debug("connect cb ref: %d", handle->ref.connect_cb);
+  handle->ref_cb.connect_cb = luaL_ref(L, LUA_REGISTRYINDEX);
+  log_debug("connect cb ref: %d", handle->ref_cb.connect_cb);
 
   ret = uv_listen(&handle->stream.base, backlog, connection_cb);
 
@@ -154,7 +162,7 @@ static void read_cb(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   }
 
   log_trace("read, call cb.");
-  LuaApi_do_callback(L, handle->ref.read_cb, nargs);
+  LuaApi_do_callback(L, handle->ref_cb.read_cb, nargs);
 }
 
 static int luaApi_stream_read_start(lua_State* L) {
@@ -164,9 +172,9 @@ static int luaApi_stream_read_start(lua_State* L) {
   luaL_argcheck(L, LuaApi_check_callable(L, 2), 2, "Must be an callable object");
 
   /* 记录read 回调函数 */
-  luaL_unref(L, LUA_REGISTRYINDEX, handle->ref.read_cb);
+  luaL_unref(L, LUA_REGISTRYINDEX, handle->ref_cb.read_cb);
   lua_pushvalue(L, 2);
-  handle->ref.read_cb = luaL_ref(L, LUA_REGISTRYINDEX);
+  handle->ref_cb.read_cb = luaL_ref(L, LUA_REGISTRYINDEX);
   handle->L = L;
 
   ret = uv_read_start(&handle->stream.base, alloc_cb, read_cb);
@@ -264,12 +272,13 @@ static void shutdown_cb(uv_shutdown_t* req, int status) {
   lua_State* L = reqs->L;
   int nargs;
 
+  assert(L != NULL);
+
   log_debug("shutdown cb called!!");
   if (status < 0) {
     lua_pushstring(L, uv_err_name(status));
     nargs = 1;
   } else {
-    lua_pushnil(L);
     nargs = 0;
   }
 
