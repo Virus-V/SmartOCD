@@ -67,10 +67,30 @@ struct loop * LuaApi_loop_get_context(lua_State* L) {
   return loop;
 }
 
+static void walk_cb(uv_handle_t *handle, void *arg)
+{
+  (void)arg;
+  if (!uv_is_closing(handle)) {
+    uv_close(handle, NULL);
+  }
+}
+
 /* 关闭loop */
-static int loop_close(lua_State* L) {
-#warning "TODO"
-  assert(0);
+static int luaApi_loop_close(lua_State* L) {
+  struct loop * loop;
+  lua_pushlightuserdata(L, (void *)loop_key);
+  lua_rawget(L, LUA_REGISTRYINDEX);
+
+  if (!lua_isnil(L, -1)) {
+    loop = (struct loop *)lua_touserdata(L, -1);
+    // Call uv_close on every active handle
+    uv_walk(&loop->loop, walk_cb, NULL);
+    // Run the event loop until all handles are successfully closed
+    while (uv_loop_close(&loop->loop)) {
+      uv_run(&loop->loop, UV_RUN_DEFAULT);
+    }
+  }
+  return 0;
 }
 
 // These are the same order as uv_run_mode which also starts at 0
@@ -134,6 +154,7 @@ static int luaApi_loop_configure(lua_State* L) {
 static const luaL_Reg lib_loop_f[] = {
   {"Run", luaApi_loop_run},
   {"Configure", luaApi_loop_configure},
+  {"Close", luaApi_loop_close},
   {NULL, NULL}
 };
 

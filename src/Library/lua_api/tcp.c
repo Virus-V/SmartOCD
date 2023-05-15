@@ -48,7 +48,7 @@
 #include "smartocd.h"
 
 struct handle_tcp {
-  uv_tcp_t tcp;
+  struct handle_stream s;
   lua_State* L;
 
   int close_reset_cb_ref;
@@ -62,8 +62,7 @@ struct request_connect {
 };
 
 static struct handle_tcp * luaApi_check_tcp(lua_State* L, int index) {
-  struct handle_tcp *handle = (struct handle_tcp *)LuaApi_must_object_type(L, 1, TCP_STREAM_LUA_OBJECT_TYPE, "Must tcp stream object");
-  return handle;
+  return (struct handle_tcp *)LuaApi_must_object_type(L, index, TCP_STREAM_LUA_OBJECT_TYPE, "Must tcp stream object");
 }
 
 /* Address families map */
@@ -116,10 +115,11 @@ static int luaApi_stream_tcp_create(lua_State* L) {
 
   lua_settop(L, 1);
   handle = (struct handle_tcp *)lua_newuserdata(L, sizeof(struct handle_tcp));
+  memset(handle, 0, sizeof(struct handle_tcp));
 
   if (lua_isnoneornil(L, 1)) {
     log_trace("Create TCP[%p].", handle);
-    ret = uv_tcp_init(&loop->loop, &handle->tcp);
+    ret = uv_tcp_init(&loop->loop, &handle->s.stream.tcp);
   } else {
     unsigned int flags = AF_UNSPEC;
     if (lua_isnumber(L, 1)) {
@@ -131,11 +131,11 @@ static int luaApi_stream_tcp_create(lua_State* L) {
     }
 
     log_trace("Create TCP[%p] with flags %d.", handle, flags);
-    ret = uv_tcp_init_ex(&loop->loop, &handle->tcp, flags);
+    ret = uv_tcp_init_ex(&loop->loop, &handle->s.stream.tcp, flags);
   }
 
   if (ret < 0) {
-    return luaL_error(L, "%s: %s", uv_err_name(ret), uv_strerror(ret));
+    return luaL_error(L, "uv_tcp_init: %s: %s", uv_err_name(ret), uv_strerror(ret));
   }
 
   /*为userdata 绑定相应的metatable类型 */
@@ -148,9 +148,9 @@ static int luaApi_stream_tcp_open(lua_State* L) {
   uv_os_sock_t sock = luaL_checkinteger(L, 2);
 
   log_trace("TCP[%p] open with sock %d.", handle, sock);
-  int ret = uv_tcp_open(&handle->tcp, sock);
+  int ret = uv_tcp_open(&handle->s.stream.tcp, sock);
   if (ret < 0) {
-    return luaL_error(L, "%s: %s", uv_err_name(ret), uv_strerror(ret));
+    return luaL_error(L, "uv_tcp_open: %s: %s", uv_err_name(ret), uv_strerror(ret));
   }
   return 0;
 }
@@ -160,10 +160,10 @@ static int luaApi_stream_tcp_nodelay(lua_State* L) {
   int ret, enable;
   luaL_checktype(L, 2, LUA_TBOOLEAN);
   enable = lua_toboolean(L, 2);
-  ret = uv_tcp_nodelay(&handle->tcp, enable);
+  ret = uv_tcp_nodelay(&handle->s.stream.tcp, enable);
 
   if (ret < 0) {
-    return luaL_error(L, "%s: %s", uv_err_name(ret), uv_strerror(ret));
+    return luaL_error(L, "uv_tcp_nodelay: %s: %s", uv_err_name(ret), uv_strerror(ret));
   }
   return 0;
 
@@ -178,9 +178,9 @@ static int luaApi_stream_tcp_keepalive(lua_State* L) {
   if (enable) {
     delay = luaL_checkinteger(L, 3);
   }
-  ret = uv_tcp_keepalive(&handle->tcp, enable, delay);
+  ret = uv_tcp_keepalive(&handle->s.stream.tcp, enable, delay);
   if (ret < 0) {
-    return luaL_error(L, "%s: %s", uv_err_name(ret), uv_strerror(ret));
+    return luaL_error(L, "uv_tcp_keepalive: %s: %s", uv_err_name(ret), uv_strerror(ret));
   }
   return 0;
 }
@@ -190,9 +190,9 @@ static int luaApi_stream_tcp_simultaneous_accepts(lua_State* L) {
   int ret, enable;
   luaL_checktype(L, 2, LUA_TBOOLEAN);
   enable = lua_toboolean(L, 2);
-  ret = uv_tcp_simultaneous_accepts(&handle->tcp, enable);
+  ret = uv_tcp_simultaneous_accepts(&handle->s.stream.tcp, enable);
   if (ret < 0) {
-    return luaL_error(L, "%s: %s", uv_err_name(ret), uv_strerror(ret));
+    return luaL_error(L, "uv_tcp_simultaneous_accepts: %s: %s", uv_err_name(ret), uv_strerror(ret));
   }
   return 0;
 }
@@ -217,9 +217,9 @@ static int luaApi_stream_tcp_bind(lua_State* L) {
     lua_pop(L, 1);
   }
 
-  ret = uv_tcp_bind(&handle->tcp, (struct sockaddr*)&addr, flags);
+  ret = uv_tcp_bind(&handle->s.stream.tcp, (struct sockaddr*)&addr, flags);
   if (ret < 0) {
-    return luaL_error(L, "%s: %s", uv_err_name(ret), uv_strerror(ret));
+    return luaL_error(L, "uv_tcp_bind: %s: %s", uv_err_name(ret), uv_strerror(ret));
   }
   return 0;
 }
@@ -274,12 +274,17 @@ static int luaApi_stream_tcp_connect(lua_State* L) {
     ref = luaL_ref(L, LUA_REGISTRYINDEX);
   }
 
-  reqc = (struct request_connect *)lua_newuserdata(L, sizeof(struct request_connect));
+  reqc = (struct request_connect *)malloc(sizeof(struct request_connect));
+  if (reqc == NULL) {
+    return luaL_error(L, "Create connect request failed!");
+  }
+
+  memset(reqc, 0, sizeof(struct request_connect));
   reqc->L = L;
 
-  ret = uv_tcp_connect(&reqc->req, &handle->tcp, (struct sockaddr*)&addr, connection_cb);
+  ret = uv_tcp_connect(&reqc->req, &handle->s.stream.tcp, (struct sockaddr*)&addr, connection_cb);
   if (ret < 0) {
-    return luaL_error(L, "%s: %s", uv_err_name(ret), uv_strerror(ret));
+    return luaL_error(L, "uv_tcp_connect: %s: %s", uv_err_name(ret), uv_strerror(ret));
   }
   return 0;
 }
@@ -315,7 +320,7 @@ static int luaApi_stream_tcp_close_reset(lua_State* L) {
   }
   handle->close_reset_cb_ref = ref;
 
-  ret = uv_tcp_close_reset(&handle->tcp, close_reset_cb);
+  ret = uv_tcp_close_reset(&handle->s.stream.tcp, close_reset_cb);
 
   if (ret < 0) {
     return luaL_error(L, "uv_tcp_close_reset: %s: %s", uv_err_name(ret), uv_strerror(ret));

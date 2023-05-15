@@ -63,6 +63,10 @@ struct request_shutdown {
   int shutdown_cb_ref;
 };
 
+static struct handle_stream * luaApi_check_stream(lua_State* L, int index) {
+  return (struct handle_stream *)LuaApi_must_object_type(L, index, STREAM_LUA_OBJECT_TYPE, "Must stream object");
+}
+
 /* 连接事件回调 */
 static void connection_cb(uv_stream_t* stream, int status) {
   struct handle_stream * handle = (struct handle_stream *)stream;
@@ -82,7 +86,7 @@ static void connection_cb(uv_stream_t* stream, int status) {
 }
 
 static int luaApi_stream_listen(lua_State* L) {
-  struct handle_stream * handle = (struct handle_stream *)LuaApi_must_object_type(L, 1, STREAM_LUA_OBJECT_TYPE, "Must stream object");
+  struct handle_stream *handle = luaApi_check_stream(L, 1);
   int backlog = luaL_checkinteger(L, 2);
   int ret;
 
@@ -94,10 +98,10 @@ static int luaApi_stream_listen(lua_State* L) {
   handle->ref.connect_cb = luaL_ref(L, LUA_REGISTRYINDEX);
   log_debug("connect cb ref: %d", handle->ref.connect_cb);
 
-  ret = uv_listen(&handle->stream, backlog, connection_cb);
+  ret = uv_listen(&handle->stream.base, backlog, connection_cb);
 
   if (ret < 0) {
-    return luaL_error(L, "%s: %s", uv_err_name(ret), uv_strerror(ret));
+    return luaL_error(L, "uv_listen: %s: %s", uv_err_name(ret), uv_strerror(ret));
   }
 
   lua_pushboolean(L, ret);
@@ -105,13 +109,13 @@ static int luaApi_stream_listen(lua_State* L) {
 }
 
 static int luaApi_stream_accept(lua_State* L) {
-  struct handle_stream * server = (struct handle_stream *)LuaApi_must_object_type(L, 1, STREAM_LUA_OBJECT_TYPE, "Must stream object");
-  struct handle_stream * client = (struct handle_stream *)LuaApi_must_object_type(L, 2, STREAM_LUA_OBJECT_TYPE, "Must stream object");
+  struct handle_stream *server = luaApi_check_stream(L, 1);
+  struct handle_stream *client = luaApi_check_stream(L, 2);
 
-  int ret = uv_accept(&server->stream, &client->stream);
+  int ret = uv_accept(&server->stream.base, &client->stream.base);
 
   if (ret < 0) {
-    return luaL_error(L, "%s: %s", uv_err_name(ret), uv_strerror(ret));
+    return luaL_error(L, "uv_accept: %s: %s", uv_err_name(ret), uv_strerror(ret));
   }
 
   log_trace("accept %d", ret);
@@ -155,7 +159,7 @@ static void read_cb(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 
 static int luaApi_stream_read_start(lua_State* L) {
   int ret;
-  struct handle_stream * handle = (struct handle_stream *)LuaApi_must_object_type(L, 1, STREAM_LUA_OBJECT_TYPE, "Must stream object");
+  struct handle_stream *handle = luaApi_check_stream(L, 1);
 
   luaL_argcheck(L, LuaApi_check_callable(L, 2), 2, "Must be an callable object");
 
@@ -165,20 +169,20 @@ static int luaApi_stream_read_start(lua_State* L) {
   handle->ref.read_cb = luaL_ref(L, LUA_REGISTRYINDEX);
   handle->L = L;
 
-  ret = uv_read_start(&handle->stream, alloc_cb, read_cb);
+  ret = uv_read_start(&handle->stream.base, alloc_cb, read_cb);
   if (ret < 0) {
-    return luaL_error(L, "%s: %s", uv_err_name(ret), uv_strerror(ret));
+    return luaL_error(L, "uv_read_start: %s: %s", uv_err_name(ret), uv_strerror(ret));
   }
 
   return 0;
 }
 
 static int luaApi_stream_read_stop(lua_State* L) {
-  struct handle_stream * handle = (struct handle_stream *)LuaApi_must_object_type(L, 1, STREAM_LUA_OBJECT_TYPE, "Must stream object");
-  int ret = uv_read_stop(&handle->stream);
+  struct handle_stream *handle = luaApi_check_stream(L, 1);
+  int ret = uv_read_stop(&handle->stream.base);
 
   if (ret < 0) {
-    return luaL_error(L, "%s: %s", uv_err_name(ret), uv_strerror(ret));
+    return luaL_error(L, "uv_read_stop: %s: %s", uv_err_name(ret), uv_strerror(ret));
   }
 
   return 0;
@@ -209,11 +213,11 @@ _exit:
   luaL_unref(L, LUA_REGISTRYINDEX, reqw->write_done_cb_ref);
   luaL_unref(L, LUA_REGISTRYINDEX, reqw->data_ref);
 
-  free(req);
+  free(reqw);
 }
 
 static int luaApi_stream_write(lua_State* L) {
-  struct handle_stream * handle = (struct handle_stream *)LuaApi_must_object_type(L, 1, STREAM_LUA_OBJECT_TYPE, "Must stream object");
+  struct handle_stream *handle = luaApi_check_stream(L, 1);
   struct request_write * reqw;
   int ret, ref;
 
@@ -231,7 +235,12 @@ static int luaApi_stream_write(lua_State* L) {
     ref = luaL_ref(L, LUA_REGISTRYINDEX);
   }
 
-  reqw = (struct request_write *)lua_newuserdata(L, sizeof(struct request_write));
+  reqw = (struct request_write *)malloc(sizeof(struct request_write));
+  if (reqw == NULL) {
+    return luaL_error(L, "Create write request failed!");
+  }
+
+  memset(reqw, 0, sizeof(struct request_write));
   reqw->L = L;
   reqw->write_done_cb_ref = ref;
 
@@ -240,12 +249,12 @@ static int luaApi_stream_write(lua_State* L) {
   lua_pushvalue(L, 2);
   reqw->data_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
-  ret = uv_write(&reqw->req, &handle->stream, buf, 1, write_done_cb);
+  ret = uv_write(&reqw->req, &handle->stream.base, buf, 1, write_done_cb);
 
   free(buf);
 
   if (ret < 0) {
-    return luaL_error(L, "%s: %s", uv_err_name(ret), uv_strerror(ret));
+    return luaL_error(L, "uv_write: %s: %s", uv_err_name(ret), uv_strerror(ret));
   }
   return 0;
 }
@@ -278,7 +287,7 @@ _exit:
 }
 
 static int luaApi_stream_shutdown(lua_State* L) {
-  struct handle_stream *handle = (struct handle_stream *)LuaApi_must_object_type(L, 1, STREAM_LUA_OBJECT_TYPE, "Must stream object");
+  struct handle_stream *handle = luaApi_check_stream(L, 1);
   struct request_shutdown *reqs;
   int ret, ref;
 
@@ -292,14 +301,19 @@ static int luaApi_stream_shutdown(lua_State* L) {
     ref = luaL_ref(L, LUA_REGISTRYINDEX);
   }
 
-  reqs = (struct request_shutdown *)lua_newuserdata(L, sizeof(struct request_shutdown));
+  reqs = (struct request_shutdown *)malloc(sizeof(struct request_shutdown));
+  if (reqs == NULL) {
+    return luaL_error(L, "Create shutdown request failed!");
+  }
+
+  memset(reqs, 0, sizeof(struct request_shutdown));
   reqs->L = L;
   reqs->shutdown_cb_ref = ref;
 
-  ret = uv_shutdown(&reqs->req, &handle->stream, shutdown_cb);
+  ret = uv_shutdown(&reqs->req, &handle->stream.base, shutdown_cb);
 
   if (ret < 0) {
-    return luaL_error(L, "%s: %s", uv_err_name(ret), uv_strerror(ret));
+    return luaL_error(L, "uv_shutdown: %s: %s", uv_err_name(ret), uv_strerror(ret));
   }
 
   return 0;

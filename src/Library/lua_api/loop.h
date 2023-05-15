@@ -45,10 +45,19 @@ struct loop {
 
 /* libuv Stream 对象 */
 struct handle_stream {
-  uv_stream_t stream;
+  /* uv_stream_t is an abstract type, libuv provides 3
+   * stream implementations in the form of uv_tcp_t,
+   * uv_pipe_t and uv_tty_t.
+   */
+  union {
+    uv_stream_t base;
+    uv_tcp_t tcp;
+    uv_pipe_t pipe;
+    uv_tty_t tty;
+  } stream;
 
   lua_State* L;
-  struct {
+  union {
     int read_cb;
     int connect_cb;
   } ref;
