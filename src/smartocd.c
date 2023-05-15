@@ -336,7 +336,7 @@ static int setLogfile(const char *fileName) {
     log_error("Unable to create log file.");
     return 1;
   }
-  log_set_fp(logFd);
+  //log_set_fp(logFd);
   return 0;
 }
 
@@ -352,7 +352,7 @@ static int smartocd_init(lua_State *L) {
   // 取回参数个数和参数数据
   int argc = (int)lua_tointeger(L, -2);
   char **argv = lua_touserdata(L, -1);
-  int opt, logLevel = LOG_WARN;
+  int opt, logLevel = 0;
   int exitFlag = 0; // 执行脚本后结束运行
 
   // 打开标准库
@@ -365,7 +365,7 @@ static int smartocd_init(lua_State *L) {
   }
 
   // 默认日志等级
-  log_set_level(logLevel);
+  //log_set_level(logLevel);
   // 注册SmartOCD API接口
   component_init(L);
 
@@ -378,7 +378,7 @@ static int smartocd_init(lua_State *L) {
       break;
     case 'd': // 日志输出等级
       logLevel = atoi(optarg);
-      log_set_level(logLevel);
+      //log_set_level(logLevel);
       break;
     case 'e': // 执行脚本后不进入交互模式，直接退出
       exitFlag = 1;
@@ -437,7 +437,7 @@ static void printVersion() {
  */
 int main(int argc, char **argv) {
   int status, result;
-  int opt, logLevel = LOG_INFO;
+  int opt, logLevel;
 
   // 打印logo和版本
   printVersion();

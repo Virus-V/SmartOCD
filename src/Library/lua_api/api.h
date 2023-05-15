@@ -45,9 +45,6 @@ typedef struct {
   int value;
 } luaApi_regConst;
 
-// strnicmp
-#define STR_EQUAL(s, os) (strncasecmp((s), os, sizeof(os)) == 0)
-
 /**
  * 初始化Lua接口
  */
@@ -55,5 +52,9 @@ void LuaApiInit(lua_State *L);
 void LuaApi_reg_constant(lua_State *L, const luaApi_regConst *c);
 void LuaApi_create_new_type(lua_State *L, const char *tname, lua_CFunction gc, const luaL_Reg *oo, const char *tparent);
 void *LuaApi_check_object_type(lua_State *L, int ud, const char *type);
+void *LuaApi_must_object_type(lua_State *L, int ud, const char *type, const char *err_msg);
+int LuaApi_check_callable(lua_State* L, int index);
+
+int LuaApi_do_callback(lua_State* L, int ref, int nargs);
 
 #endif /* SRC_API_API_H_ */

@@ -32,4 +32,29 @@
 #ifndef SRC_API_LOOP_H_
 #define SRC_API_LOOP_H_
 
+#include "lua.h"
+#include "uv.h"
+
+#define STREAM_LUA_OBJECT_TYPE "stream"
+#define TCP_STREAM_LUA_OBJECT_TYPE "stream.tcp"
+
+/* Loop 对象，事件驱动 */
+struct loop {
+  uv_loop_t loop; /* main loop */
+};
+
+/* libuv Stream 对象 */
+struct handle_stream {
+  uv_stream_t stream;
+
+  lua_State* L;
+  struct {
+    int read_cb;
+    int connect_cb;
+  } ref;
+};
+
+/* 获得当前Lua状态机绑定的loop上下文 */
+struct loop * LuaApi_loop_get_context(lua_State* L);
+
 #endif

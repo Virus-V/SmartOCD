@@ -33,12 +33,15 @@ static_library("library") {
     "linenoise/linenoise.c",
     "lua_api/api.c",
     "lua_api/loop.c",
+    "lua_api/stream.c",
+    "lua_api/tcp.c",
   ]
 
   include_dirs = [
     "//src",
     "//src/Library",
     "//src/Library/lua/src",
+    "//src/Library/libuv/include",
   ]
 }
 

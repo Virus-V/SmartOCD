@@ -40,27 +40,13 @@
 
 #include "Component/component.h"
 #include "Library/lua_api/loop.h"
+#include "Library/lua_api/api.h"
 #include "Library/log/log.h"
 #include "smartocd.h"
 
 static const char * const loop_key = "smartocd.loop";
 
-/* Loop 对象，事件驱动 */
-struct loop {
-  uv_loop_t*   loop;        /* main loop */
-  lua_State*   L;           /* main thread,ensure coroutines works */
-#if 0
-  luv_CFpcall  cb_pcall;    /* luv event callback function in protected mode */
-  luv_CFpcall  thrd_pcall;  /* luv thread function in protected mode*/
-  luv_CFcpcall thrd_cpcall; /* luv thread c function in protected mode*/
-#endif
-
-  int          mode;        /* the mode used to run the loop (-1 if not running) */
-  //void* extra;              /* extra data */
-};
-
-/* 获得当前Lua状态机绑定的loop上下文 */
-struct loop * loop_get_context(lua_State* L) {
+struct loop * LuaApi_loop_get_context(lua_State* L) {
   struct loop * loop;
 
   lua_pushlightuserdata(L, (void *)loop_key);
@@ -70,6 +56,8 @@ struct loop * loop_get_context(lua_State* L) {
     lua_pushlightuserdata(L, (void *)loop_key);
     loop = (struct loop *)lua_newuserdata(L, sizeof(struct loop));
     memset(loop, 0, sizeof(struct loop));
+    uv_loop_init(&loop->loop);
+
     lua_rawset(L, LUA_REGISTRYINDEX);
   } else {
     loop = (struct loop *)lua_touserdata(L, -1);
@@ -81,15 +69,8 @@ struct loop * loop_get_context(lua_State* L) {
 
 /* 关闭loop */
 static int loop_close(lua_State* L) {
-#if 0
-  int ret = uv_loop_close(luv_loop(L));
-  if (ret < 0) return luv_error(L, ret);
-  luv_set_loop(L, NULL);
-  lua_pushinteger(L, ret);
-  return 1;
-#else
+#warning "TODO"
   assert(0);
-#endif
 }
 
 // These are the same order as uv_run_mode which also starts at 0
@@ -100,10 +81,8 @@ static const char *const loop_runmodes[] = {
 /* 运行Loop */
 static int luaApi_loop_run(lua_State* L) {
   int mode = luaL_checkoption(L, 1, "default", loop_runmodes);
-  struct loop *loop = loop_get_context(L);
-  loop->mode = mode;
-  int ret = uv_run(loop->loop, (uv_run_mode)mode);
-  loop->mode = -1;
+  struct loop *loop = LuaApi_loop_get_context(L);
+  int ret = uv_run(&loop->loop, (uv_run_mode)mode);
 
   if (ret < 0) {
     return luaL_error(L, "%s: %s", uv_err_name(ret), uv_strerror(ret));
@@ -119,7 +98,7 @@ static const char *const loop_configure_options[] = {
 };
 
 static int luaApi_loop_configure(lua_State* L) {
-  struct loop* loop = loop_get_context(L);
+  struct loop* loop = LuaApi_loop_get_context(L);
   uv_loop_option option = 0;
   int ret = 0;
 
@@ -140,9 +119,9 @@ static int luaApi_loop_configure(lua_State* L) {
 
     luaL_checknumber(L, 2);
     signal = lua_tonumber(L, 2);;
-    ret = uv_loop_configure(loop->loop, UV_LOOP_BLOCK_SIGNAL, signal);
+    ret = uv_loop_configure(&loop->loop, UV_LOOP_BLOCK_SIGNAL, signal);
   } else {
-    ret = uv_loop_configure(loop->loop, option);
+    ret = uv_loop_configure(&loop->loop, option);
   }
   if (ret < 0) {
     return luaL_error(L, "%s: %s", uv_err_name(ret), uv_strerror(ret));
