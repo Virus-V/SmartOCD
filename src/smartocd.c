@@ -280,31 +280,10 @@ static void l_print(lua_State *L) {
   }
 }
 
-/**
- * 注册全局函数
- */
-// delay毫秒
-static int global_fun_sleep(lua_State *L) {
-  lua_Number delay = luaL_checknumber(L, 1); // ms
-  // 转换成微秒
-  delay *= 1000;
-  lua_Integer delay_us = 0;
-  if (!lua_numbertointeger(delay, &delay_us)) {
-    return luaL_error(L, "Unable to convert milliseconds to microseconds, data is not legal?");
-  }
-  if (delay_us == 0) {
-    return 0;
-  }
-  usleep(delay_us);
-  return 0;
-}
-
 // 设置一些全局变量
 static int setGlobal(lua_State *L) {
   lua_pushfstring(L, "%s", VERSION);
   lua_setglobal(L, "_SMARTOCD_VERSION"); // 版本信息
-  lua_pushcfunction(L, global_fun_sleep);
-  lua_setglobal(L, "sleep"); // 延时函数
   return LUA_OK;
 }
 
@@ -340,6 +319,24 @@ static int setLogfile(const char *fileName) {
   return 0;
 }
 
+static int registPackagePath(lua_State *L) {
+  // 获取package.path
+  lua_getglobal(L, "package");
+  lua_getfield(L, -1, "path");
+
+  // 将新路径添加到package.path中
+  lua_pushstring(L, "scripts/?.lua;");
+  lua_insert(L, -2);
+  lua_concat(L, 2);
+
+  // 将修改后的值设置回package.path中
+  lua_setfield(L, -2, "path");
+
+  // 清理栈
+  lua_pop(L, 2);
+  return 0;
+}
+
 /**
  * SmartOCD环境初始化
  * 预加载文件 -f --file
@@ -363,6 +360,9 @@ static int smartocd_init(lua_State *L) {
     lua_pushboolean(L, 0);
     return 1;
   }
+
+  // 设置搜索路径
+  registPackagePath(L);
 
   // 默认日志等级
   //log_set_level(logLevel);

@@ -119,7 +119,6 @@ static int luaApi_stream_tcp_create(lua_State* L) {
   /* 记录自身的索引，在回调函数中使用 */
   lua_pushvalue(L, -1);
   handle->s.ref_self = luaL_ref(L, LUA_REGISTRYINDEX);
-  log_debug("handle->s.ref_self = %d", handle->s.ref_self);
 
   if (lua_isnoneornil(L, 1)) {
     log_trace("Create TCP[%p].", handle);

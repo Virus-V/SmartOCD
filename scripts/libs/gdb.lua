@@ -185,56 +185,112 @@ function utils.prettyPrint(...)
 end
 
 local noAckMode = false
+-- 创建命令重传队列
+respRetryList = dqueue.new()
 
 -- General query command
-local function handleGeneralQuery(command)
+local function handleGeneralQuery(client, command)
   local cmdStart,cmdEnd = string.find(command, 'qSupported', 1, true)
   if cmdStart == 1 then
     local cmdBody = string.sub(command, cmdEnd + 2)
     print(cmdBody)
     local featureTable = mysplit(cmdBody, ';')
     utils.prettyPrint(featureTable)
-    return string.format("PacketSize=%x;QStartNoAckMode+;qXfer:features:read+;type=SmartOCD", 512)
+    replyGdbCommand(client, string.format("PacketSize=%x;QStartNoAckMode+;qXfer:features:read+;type=SmartOCD", 512))
+    return
   end
 
   cmdStart,cmdEnd = string.find(command, 'QStartNoAckMode', 1, true)
   if cmdStart == 1 then
+    replyGdbCommand(client, 'OK')
     noAckMode = true
-    return "OK"
+    print("gdb server enter noAckMode")
+    return
   end
 
-  return "E01"
-end
-
-local function handleCommandv(command)
-  if string.find(command, 'vMustReplyEmpty', 1, true) == 1 then
-    return ""
+  cmdStart,cmdEnd = string.find(command, 'qXfer:features:read', 1, true)
+  if cmdStart == 1 then
+    local cmdBody = string.sub(command, cmdEnd + 2)
+    print(cmdBody)
+    local targetInfo = mysplit(cmdBody, ',')
+    local offset = mysplit(targetInfo[1], ':')[2]
+    utils.prettyPrint(targetInfo, offset)
+    -- TODO:
+    local targetXml = io.open('scripts/arch/riscv.xml', 'rb')
+    targetXml:seek("set", tonumber(offset, 16))
+    local targetXmlData = targetXml:read(tonumber(targetInfo[2],16))
+    if (string.len(targetXmlData) == tonumber(targetInfo[2],16)) then
+      replyGdbCommand(client, 'm'..targetXmlData)
+    else
+      replyGdbCommand(client, 'l'..targetXmlData)
+    end
+    targetXml:close()
+    return
   end
-  return "E01"
+
+  -- trace state
+  cmdStart,cmdEnd = string.find(command, 'qTStatus', 1, true)
+  if cmdStart == 1 then
+    replyGdbCommand(client, 'T0;tnotrun:0')
+    return
+  end
+
+  cmdStart,cmdEnd = string.find(command, 'qAttached', 1, true)
+  if cmdStart == 1 then
+    replyGdbCommand(client, '1')
+    return
+  end
+
+  cmdStart,cmdEnd = string.find(command, 'qC', 1, true)
+  if cmdStart == 1 then
+    replyGdbCommand(client, 'QC0')
+    return
+  end
+
+  assert(cmdStart == nil and cmdEnd == nil)
+  replyGdbCommand(client, '')
 end
 
-local function handleGdbCommand(command)
+local function handleCommandv(client, command)
+  local cmdStart,cmdEnd = string.find(command, 'vMustReplyEmpty', 1, true)
+  if cmdStart == 1 then
+    replyGdbCommand(client, '')
+    return
+  end
+
+  assert(cmdStart == nil and cmdEnd == nil)
+  replyGdbCommand(client, '')
+end
+
+local function handleCommandH(client, command)
+  -- Hg0 接下来的g命令是针对哪个thread操作，这里不做处理
+  replyGdbCommand(client, 'OK')
+end
+
+-- 处理GDB命令
+local function handleGdbCommand(client, command)
   local prefix = string.sub(command, 1, 1)
 
   if prefix == 'q' or prefix == 'Q' then
-    return handleGeneralQuery(command)
+    handleGeneralQuery(client, command)
+  elseif prefix == 'v' then
+    handleCommandv(client, command)
+  elseif prefix == 'H' then
+    handleCommandH(client, command)
+  elseif prefix == '?' then
+    replyGdbCommand(client, 'S02')
+  else
+    replyGdbCommand(client, 'E01')
   end
-
-  if prefix == 'v' then
-    return handleCommandv(command)
-  end
-  return 'E01'
 end
 
--- 创建命令重传队列
-local respRetryList = dqueue.new()
-
 local commandBuffer = ""
--- 处理GDB命令
+-- 处理GDB Remote Protocol
 local function receiveGdbCommand(client)
   local cmdStart = 0
   local cmdEnd = 0
 
+  -- print(string.format("cmdBuffer: %s", commandBuffer))
   -- 处理命令是否正确接收
   while not noAckMode do
     local respStatus = string.sub(commandBuffer, 1, 1)
@@ -279,27 +335,35 @@ local function receiveGdbCommand(client)
 
   -- 校验数据
   local checksum = 0
-  for i=1,string.len(cmdBody),1 do
-    checksum = checksum + string.byte(cmdBody, i)
-  end
-  checksum = checksum & 0xff
+  if not noAckMode then
+    for i=1,string.len(cmdBody),1 do
+      checksum = checksum + string.byte(cmdBody, i)
+    end
+    checksum = checksum & 0xff
 
-  if tonumber(cmdCheckSum, 16) ~= checksum then
-    print(string.format("Command %s checksum failed. calculated checksum: %x", currentCommand, checksum))
-    client:Write("-")
-    return
-  else
-    client:Write('+')
+    if tonumber(cmdCheckSum, 16) ~= checksum then
+      print(string.format("Command %s checksum failed. calculated checksum: %x", currentCommand, checksum))
+      client:Write("-")
+      return
+    else
+      client:Write('+')
+    end
   end
 
   -- 处理命令
-  local respBody = handleGdbCommand(cmdBody)
+  handleGdbCommand(client, cmdBody)
+end
+
+function replyGdbCommand(client, respBody)
+  print(string.format("resp: %s", respBody))
   -- 计算checksum
   checksum = 0
-  for i=1,string.len(respBody),1 do
-    checksum = checksum + string.byte(respBody, i)
+  if not noAckMode then
+    for i=1,string.len(respBody),1 do
+      checksum = checksum + string.byte(respBody, i)
+    end
+    checksum = checksum & 0xff
   end
-  checksum = checksum & 0xff
 
   local respCommand = string.format("$%s#%02X", respBody, checksum)
 
