@@ -27,8 +27,8 @@ local vid_pids = {
 }
 
 -- 连接FTDI仿真器，channel 1
-ftdiObj:Connect(vid_pids, nil, 1)
--- 设置频率为500KHz
-ftdiObj:Frequency(500000)
+ftdiObj:Connect(vid_pids, nil, 2)
+-- 设置频率为2000KHz
+ftdiObj:Frequency(2000000)
 print("FTDI: Current frequent is " .. ftdiObj:Frequency() .. "Hz")
 return ftdiObj

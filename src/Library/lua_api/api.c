@@ -217,6 +217,7 @@ int LuaApi_cfpcall(lua_State* L, int nargs) {
     return luaL_error(L, "Try call a not callable object.");
   }
 
+  /* FIXME: 去掉无用的traceback函数 */
   /* 压栈错误处理函数 */
   lua_pushcfunction(L, luaApi_traceback);
 
@@ -231,33 +232,13 @@ int LuaApi_cfpcall(lua_State* L, int nargs) {
   errfunc -= nargs + 1;
 
   lua_call(L, nargs, LUA_MULTRET);
-#if 0
-  ret = lua_pcall(L, nargs, LUA_MULTRET, errfunc);
-  log_trace("lua_pcall ret: %d", ret);
-  switch (ret) {
-  case LUA_OK:
-    break;
-
-  case LUA_ERRMEM:
-    log_fatal("System Error: %s\n", lua_tostring(L, -1));
-    abort();
-    break;
-
-  case LUA_ERRRUN:
-  case LUA_ERRERR:
-  default:
-    lua_pop(L, 1);
-    ret = -ret;
-    break;
-  }
-#endif
 
   /* 平衡栈 */
   lua_remove(L, errfunc);
 
   if (ret == LUA_OK) {
     nresult = lua_gettop(L) - stack_size;
-    log_info("Lua function call success, nresult = %d", nresult);
+    log_trace("Lua function call success, nresult = %d", nresult);
     return nresult;
   }
 

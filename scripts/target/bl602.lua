@@ -18,9 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 Adapter = require("Adapter")
 
-package.path = "scripts/?.lua;"..package.path
-
-adapterObj = require("adapters/ft2232")
+adapterObj = require("adapters.ft2232")
 
 jtag = adapterObj:GetSkill(Adapter.SKILL_JTAG)
 -- JTAG 原生方式读取IDCODE
@@ -89,6 +87,9 @@ function dm_write_register(reg, data)
   jtag:Idle(idle) -- wait a while
 end
 
+
+
+
 print(string.format("dmstatus: 0x%08X", dm_read_register(0x11)))
 print(string.format("dmcontrol: 0x%08X", dm_read_register(0x10)))
 
@@ -101,4 +102,3 @@ print(string.format(" hartinfo.nscratch: %d", (hartinfo >> 20) & ((0x1 << 4) - 1
 
 dm_write_register(0x10, 0x1)
 print(string.format("active dmcontrol: 0x%08X", dm_read_register(0x10)))
-

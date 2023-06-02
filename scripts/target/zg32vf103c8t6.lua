@@ -18,8 +18,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 Adapter = require("Adapter")
 
-package.path = "scripts/?.lua;"..package.path
-
 adapterObj = require("adapters/ft2232")
 
 jtag = adapterObj:GetSkill(Adapter.SKILL_JTAG)

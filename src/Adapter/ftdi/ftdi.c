@@ -659,7 +659,7 @@ static int ftdiJtagCommit(IN JtagSkill self) {
     if (readBuffLen > 0) {
       assert(readBuff != NULL);
       // waiting latency milliseconds
-      msleep(ftdiObj->latency);
+      // msleep(ftdiObj->latency);
       ret = ftdi_read_data(&ftdiObj->ctx, readBuff, readBuffLen);
       if (ret != readBuffLen) {
         log_error("FTDI read response failed. error code:%d.", ret);
@@ -735,7 +735,7 @@ Adapter CreateFtdi(void) {
   // 设置接口参数
   obj->signature = SIGNATURE_32('F', 'T', 'D', 'I');
   obj->interface = -1;
-  obj->latency = 5;
+  obj->latency = 1;
   obj->adapterAPI.SetStatus = ftdiHostStatus;
   obj->adapterAPI.SetFrequency = ftdiMpsseFreq;
   obj->adapterAPI.Reset = ftdiReset;

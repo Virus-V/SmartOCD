@@ -36,7 +36,7 @@
 
 #include "log.h"
 
-int g_log_level = LOG_TRACE;
+int g_log_level = LOG_INFO;
 int g_log_fd = STDERR_FILENO;
 
 void log_print_time(int fd) {

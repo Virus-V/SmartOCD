@@ -30,172 +30,35 @@
 
 local loop = require('Loop')
 local tcp = require('Loop.tcp')
-local dqueue = require('scripts.libs.dqueue')
+local dqueue = require('libs.dqueue')
+local utils = require('libs.utils')
 
-function mysplit (inputstr, sep)
-  if sep == nil then
-    sep = "%s"
-  end
-
-  local t={}
-  for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
-    table.insert(t, str)
-  end
-
-  return t
-end
-
-local utils = {}
-local usecolors = true
-
-local colors = {
-  black   = "0;30",
-  red     = "0;31",
-  green   = "0;32",
-  yellow  = "0;33",
-  blue    = "0;34",
-  magenta = "0;35",
-  cyan    = "0;36",
-  white   = "0;37",
-  B        = "1;",
-  Bblack   = "1;30",
-  Bred     = "1;31",
-  Bgreen   = "1;32",
-  Byellow  = "1;33",
-  Bblue    = "1;34",
-  Bmagenta = "1;35",
-  Bcyan    = "1;36",
-  Bwhite   = "1;37"
-}
-
-function utils.color(color_name)
-  if usecolors then
-    return "\27[" .. (colors[color_name] or "0") .. "m"
-  else
-    return ""
-  end
-end
-
-function utils.colorize(color_name, string, reset_name)
-  return utils.color(color_name) .. tostring(string) .. utils.color(reset_name)
-end
-
-local backslash, null, newline, carriage, tab, quote, quote2, obracket, cbracket
-
-function utils.loadColors(n)
-  if n ~= nil then usecolors = n end
-  backslash = utils.colorize("Bgreen", "\\\\", "green")
-  null      = utils.colorize("Bgreen", "\\0", "green")
-  newline   = utils.colorize("Bgreen", "\\n", "green")
-  carriage  = utils.colorize("Bgreen", "\\r", "green")
-  tab       = utils.colorize("Bgreen", "\\t", "green")
-  quote     = utils.colorize("Bgreen", '"', "green")
-  quote2    = utils.colorize("Bgreen", '"')
-  obracket  = utils.colorize("B", '[')
-  cbracket  = utils.colorize("B", ']')
-end
-
-utils.loadColors()
-
-function utils.dump(o, depth)
-  local t = type(o)
-  if t == 'string' then
-    return quote .. o:gsub("\\", backslash):gsub("%z", null):gsub("\n", newline):gsub("\r", carriage):gsub("\t", tab) .. quote2
-  end
-  if t == 'nil' then
-    return utils.colorize("Bblack", "nil")
-  end
-  if t == 'boolean' then
-    return utils.colorize("yellow", tostring(o))
-  end
-  if t == 'number' then
-    return utils.colorize("blue", tostring(o))
-  end
-  if t == 'userdata' then
-    return utils.colorize("magenta", tostring(o))
-  end
-  if t == 'thread' then
-    return utils.colorize("Bred", tostring(o))
-  end
-  if t == 'function' then
-    return utils.colorize("cyan", tostring(o))
-  end
-  if t == 'cdata' then
-    return utils.colorize("Bmagenta", tostring(o))
-  end
-  if t == 'table' then
-    if type(depth) == 'nil' then
-      depth = 0
-    end
-    if depth > 1 then
-      return utils.colorize("yellow", tostring(o))
-    end
-    local indent = ("  "):rep(depth)
-
-    -- Check to see if this is an array
-    local is_array = true
-    local i = 1
-    for k,v in pairs(o) do
-      if not (k == i) then
-        is_array = false
-      end
-      i = i + 1
-    end
-
-    local first = true
-    local lines = {}
-    i = 1
-    local estimated = 0
-    for k,v in (is_array and ipairs or pairs)(o) do
-      local s
-      if is_array then
-        s = ""
-      else
-        if type(k) == "string" and k:find("^[%a_][%a%d_]*$") then
-          s = k .. ' = '
-        else
-          s = '[' .. utils.dump(k, 100) .. '] = '
-        end
-      end
-      s = s .. utils.dump(v, depth + 1)
-      lines[i] = s
-      estimated = estimated + #s
-      i = i + 1
-    end
-    if estimated > 200 then
-      return "{\n  " .. indent .. table.concat(lines, ",\n  " .. indent) .. "\n" .. indent .. "}"
-    else
-      return "{ " .. table.concat(lines, ", ") .. " }"
-    end
-  end
-  -- This doesn't happen right?
-  return tostring(o)
-end
-
--- A nice global data dumper
-function utils.prettyPrint(...)
-  local n = select('#', ...)
-  local arguments = { ... }
-
-  for i = 1, n do
-    arguments[i] = utils.dump(arguments[i])
-  end
-
-  print(table.concat(arguments, "\t") .. '\n')
+-- 转义特殊字符
+function gdbRspEscape(input)
+  local output = string.gsub(input, '}', '}]') -- escape '}'(0x7d) to '}]'(0x7d 0x5d)
+  output = string.gsub(output, '#', '}\x03') -- escape '#' (0x23) to '}\x03' (0x7d 0x03)
+  output = string.gsub(output, '$', '}\x04') -- escape '$' (0x23) to '}\x04' (0x7d 0x04)
+  -- output = string.gsub(output, '*', '}\x0a') -- escape '$' (0x2a) to '}\x0a' (0x7d 0x0a)
+  return output
 end
 
 local noAckMode = false
 -- 创建命令重传队列
 respRetryList = dqueue.new()
 
+local function processReg(reg)
+  return string.format("%02X%02X%02X%02X", reg & 0xff, (reg >> 8) & 0xff, (reg >> 16) & 0xff, (reg >> 24) & 0xff)
+end
+
 -- General query command
 local function handleGeneralQuery(client, command)
   local cmdStart,cmdEnd = string.find(command, 'qSupported', 1, true)
   if cmdStart == 1 then
     local cmdBody = string.sub(command, cmdEnd + 2)
-    print(cmdBody)
-    local featureTable = mysplit(cmdBody, ';')
-    utils.prettyPrint(featureTable)
+    -- print(cmdBody)
+    local featureTable = utils.split(cmdBody, ';')
+    -- utils.prettyPrint(featureTable)
+    --replyGdbCommand(client, string.format("PacketSize=%x;QStartNoAckMode+;qXfer:features:read+;qXfer:memory-map:read+;type=SmartOCD", 512))
     replyGdbCommand(client, string.format("PacketSize=%x;QStartNoAckMode+;qXfer:features:read+;type=SmartOCD", 512))
     return
   end
@@ -211,12 +74,12 @@ local function handleGeneralQuery(client, command)
   cmdStart,cmdEnd = string.find(command, 'qXfer:features:read', 1, true)
   if cmdStart == 1 then
     local cmdBody = string.sub(command, cmdEnd + 2)
-    print(cmdBody)
-    local targetInfo = mysplit(cmdBody, ',')
-    local offset = mysplit(targetInfo[1], ':')[2]
-    utils.prettyPrint(targetInfo, offset)
-    -- TODO:
-    local targetXml = io.open('scripts/arch/riscv.xml', 'rb')
+    -- print(cmdBody)
+    local targetInfo = utils.split(cmdBody, ',')
+    local offset = utils.split(targetInfo[1], ':')[2]
+    -- utils.prettyPrint(targetInfo, offset)
+
+    local targetXml = io.open('scripts/arch/riscv/target.xml', 'rb')
     targetXml:seek("set", tonumber(offset, 16))
     local targetXmlData = targetXml:read(tonumber(targetInfo[2],16))
     if (string.len(targetXmlData) == tonumber(targetInfo[2],16)) then
@@ -258,8 +121,71 @@ local function handleCommandv(client, command)
     return
   end
 
+  cmdStart,cmdEnd = string.find(command, 'vCont?', 1, true)
+  if cmdStart == 1 then
+    replyGdbCommand(client, 'vCont;c;s')
+    return
+  end
+
+  -- Cont;
+  cmdStart,cmdEnd = string.find(command, 'vCont:', 1, true)
+  if cmdStart == 1 then
+
+    replyGdbCommand(client, 'T05')
+    return
+  end
+
   assert(cmdStart == nil and cmdEnd == nil)
   replyGdbCommand(client, '')
+end
+
+-- 处理读写内存操作
+local function handleCommandMemory(client, command, prefix)
+  local cmdBody = string.sub(command, 2)
+  local addressInfo = utils.split(cmdBody, ',')
+  -- utils.prettyPrint(addressInfo)
+  addressInfo[1] = tonumber(addressInfo[1], 16)
+  addressInfo[2] = tonumber(addressInfo[2], 16) + addressInfo[1]
+  local resp = ''
+
+  repeat
+    local align = addressInfo[1] & 0x3
+    local left = addressInfo[2] - addressInfo[1]
+    -- utils.prettyPrint(align, left)
+
+    local read_len
+    if align == 0 then
+      read_len = 4
+    elseif align == 1 or align == 3 then
+      read_len = 1
+    else
+      read_len = 2
+    end
+
+    while read_len > left do
+       read_len = read_len >> 1
+    end
+    assert(read_len, "Invalid read_len")
+
+    -- print(string.format("address:%x, length: %d, next_addr:%x", addressInfo[1], read_len, addressInfo[1] + read_len))
+
+    if read_len == 4 then
+      local data = dmObj:AccessMemory(addressInfo[1], 4)
+      resp = resp .. string.format("%02X%02X%02X%02X", data & 0xFF, (data >> 8) & 0xFF, (data >> 16) & 0xFF, (data >> 24) & 0xFF)
+      addressInfo[1] = addressInfo[1] + 4
+    elseif read_len == 1 then
+      local data = dmObj:AccessMemory(addressInfo[1], 1)
+      resp = resp .. string.format("%02X", data & 0xFF)
+      addressInfo[1] = addressInfo[1] + 1
+    elseif read_len == 2 then
+      local data = dmObj:AccessMemory(addressInfo[1], 2)
+      resp = resp .. string.format("%02X%02X", data & 0xFF, (data >> 8) & 0xFF)
+      addressInfo[1] = addressInfo[1] + 2
+    end
+  until addressInfo[1] >= addressInfo[2]
+
+  --print(string.format("resp: %s", resp))
+  replyGdbCommand(client, resp)
 end
 
 local function handleCommandH(client, command)
@@ -270,6 +196,7 @@ end
 -- 处理GDB命令
 local function handleGdbCommand(client, command)
   local prefix = string.sub(command, 1, 1)
+  --print(string.format("handle command:%s", command))
 
   if prefix == 'q' or prefix == 'Q' then
     handleGeneralQuery(client, command)
@@ -278,13 +205,31 @@ local function handleGdbCommand(client, command)
   elseif prefix == 'H' then
     handleCommandH(client, command)
   elseif prefix == '?' then
+    dmObj:Halt()
     replyGdbCommand(client, 'S02')
+  elseif prefix == 'g' then
+    local allReg = ''
+    for i=0,31,1 do
+      allReg = allReg .. processReg(dmObj:AccessGPR(i))
+    end
+    -- read dpc to get current pc
+    allReg = allReg .. processReg(dmObj:AccessCSR(0x7b1))
+    replyGdbCommand(client, allReg)
+  elseif prefix == 'm' or prefix == 'M' then
+    handleCommandMemory(client, command, prefix)
+  elseif prefix == 'p' then
+    local cmdBody = string.sub(command, 2)
+    cmdBody = tonumber(cmdBody, 16)
+    assert(cmdBody > 65, "Bugy GDB?")
+    replyGdbCommand(client, processReg(dmObj:AccessCSR(cmdBody - 65)))
   else
-    replyGdbCommand(client, 'E01')
+    print(string.format("unknow command:%s", command))
+    replyGdbCommand(client, '')
   end
 end
 
 local commandBuffer = ""
+
 -- 处理GDB Remote Protocol
 local function receiveGdbCommand(client)
   local cmdStart = 0
@@ -331,7 +276,7 @@ local function receiveGdbCommand(client)
   -- verfiy command checksum
   local cmdBody =  string.sub(currentCommand, 2, -4)
   local cmdCheckSum = string.sub(currentCommand, -2)
-  print(string.format("cmdBody:%s, cmdCheckSum:%s", cmdBody, cmdCheckSum))
+  -- print(string.format("cmdBody:%s, cmdCheckSum:%s", cmdBody, cmdCheckSum))
 
   -- 校验数据
   local checksum = 0
@@ -355,7 +300,7 @@ local function receiveGdbCommand(client)
 end
 
 function replyGdbCommand(client, respBody)
-  print(string.format("resp: %s", respBody))
+  -- print(string.format("resp: %s", respBody))
   -- 计算checksum
   checksum = 0
   if not noAckMode then
@@ -375,7 +320,7 @@ function replyGdbCommand(client, respBody)
   client:Write(respCommand)
 end
 
-local function onConnect(server, err)
+local onConnect = function(server, err)
   assert(not err, err)
   local c = tcp.Create()
   server:Accept(c)
@@ -400,9 +345,7 @@ local function onConnect(server, err)
     end
 
   end)
-
 end
-
 function GdbCreate(addr, port, handler)
   local s = tcp.Create()
 
@@ -413,7 +356,41 @@ function GdbCreate(addr, port, handler)
   }
 end
 
+-- ==================================================================================================================================================================
+
+local dmi = require('arch.riscv.dmi_jtag')
+local dm = require('arch.riscv.dm')
+
+local adapterObj = require("adapters.ft2232")
+
+-- 注册FT2232 Adapter对象
+local dmiObj = dmi.Create(adapterObj)
+-- 创建dm对象
+dmObj = dm.Create(dmiObj)
+--[[
+print(string.format("0x%X", dmObj:AccessMemory(0x42030000, 4)))
+print(string.format("0x%X", dmObj:AccessMemory(0x42030004, 4)))
+dmObj:AccessMemory(0x42030000, 4, 0x12345678)
+dmObj:AccessMemory(0x42030004, 4, 0xABCDEF01)
+print(string.format("0x%X", dmObj:AccessMemory(0x42030000, 4)))
+print(string.format("0x%X", dmObj:AccessMemory(0x42030004, 4)))
+
+utils.profiler(function ()
+  dmiObj:WriteReg(0x10, (0xfffff << 6) | 0x1)
+end, 50000)
+]]
+
+local createGdbServer = function(adapter, addr, port)
+  local r = {adapter = adapter}
+
+  return setmetatable(r, {__index = methods})
+end
+
 GdbCreate("0.0.0.0", 1337)
 
 loop.Run('default')
 loop.Close()
+
+return {
+  Create = createGdbServer
+}
