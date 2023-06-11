@@ -37,6 +37,7 @@
 
 #define STREAM_LUA_OBJECT_TYPE "stream"
 #define TCP_STREAM_LUA_OBJECT_TYPE "stream.tcp"
+#define TIMER_LUA_OBJECT_TYPE "timer"
 
 /* Loop 对象，事件驱动 */
 struct loop {
