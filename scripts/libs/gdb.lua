@@ -30,11 +30,12 @@
 
 local loop = require('Loop')
 local tcp = require('Loop.tcp')
+local timer = require('Loop.timer')
 local dqueue = require('libs.dqueue')
 local utils = require('libs.utils')
 
 -- 转义特殊字符
-function gdbRspEscape(input)
+local function gdbRspEscape(input)
   local output = string.gsub(input, '}', '}]') -- escape '}'(0x7d) to '}]'(0x7d 0x5d)
   output = string.gsub(output, '#', '}\x03') -- escape '#' (0x23) to '}\x03' (0x7d 0x03)
   output = string.gsub(output, '$', '}\x04') -- escape '$' (0x23) to '}\x04' (0x7d 0x04)
@@ -43,10 +44,17 @@ function gdbRspEscape(input)
 end
 
 local noAckMode = false
--- 创建命令重传队列
-respRetryList = dqueue.new()
+-- Target处于运行模式，GDB需要响应用户输入的Ctrl-C
+local waitingUserSig = false
 
-local function processReg(reg)
+-- 创建命令重传队列
+local respRetryList = dqueue.new()
+
+local function reg2hexle(reg)
+  return string.format("%02X%02X%02X%02X", reg & 0xff, (reg >> 8) & 0xff, (reg >> 16) & 0xff, (reg >> 24) & 0xff)
+end
+
+local function hexle2reg(reg)
   return string.format("%02X%02X%02X%02X", reg & 0xff, (reg >> 8) & 0xff, (reg >> 16) & 0xff, (reg >> 24) & 0xff)
 end
 
@@ -57,15 +65,16 @@ local function handleGeneralQuery(client, command)
     local cmdBody = string.sub(command, cmdEnd + 2)
     -- print(cmdBody)
     local featureTable = utils.split(cmdBody, ';')
-    -- utils.prettyPrint(featureTable)
-    --replyGdbCommand(client, string.format("PacketSize=%x;QStartNoAckMode+;qXfer:features:read+;qXfer:memory-map:read+;type=SmartOCD", 512))
-    replyGdbCommand(client, string.format("PacketSize=%x;QStartNoAckMode+;qXfer:features:read+;type=SmartOCD", 512))
+    utils.prettyPrint(featureTable)
+    -- TODO: 增加memory map的定义
+    --ReplyGdbCommand(client, string.format("PacketSize=%x;QStartNoAckMode+;qXfer:features:read+;qXfer:memory-map:read+;type=SmartOCD", 512))
+    ReplyGdbCommand(client, string.format("PacketSize=%x;QStartNoAckMode+;vContSupported+;qXfer:features:read+;type=SmartOCD", 512))
     return
   end
 
   cmdStart,cmdEnd = string.find(command, 'QStartNoAckMode', 1, true)
   if cmdStart == 1 then
-    replyGdbCommand(client, 'OK')
+    ReplyGdbCommand(client, 'OK')
     noAckMode = true
     print("gdb server enter noAckMode")
     return
@@ -80,12 +89,13 @@ local function handleGeneralQuery(client, command)
     -- utils.prettyPrint(targetInfo, offset)
 
     local targetXml = io.open('scripts/arch/riscv/target.xml', 'rb')
+    assert(targetXml ~= nil)
     targetXml:seek("set", tonumber(offset, 16))
     local targetXmlData = targetXml:read(tonumber(targetInfo[2],16))
     if (string.len(targetXmlData) == tonumber(targetInfo[2],16)) then
-      replyGdbCommand(client, 'm'..targetXmlData)
+      ReplyGdbCommand(client, 'm'..targetXmlData)
     else
-      replyGdbCommand(client, 'l'..targetXmlData)
+      ReplyGdbCommand(client, 'l'..targetXmlData)
     end
     targetXml:close()
     return
@@ -94,36 +104,36 @@ local function handleGeneralQuery(client, command)
   -- trace state
   cmdStart,cmdEnd = string.find(command, 'qTStatus', 1, true)
   if cmdStart == 1 then
-    replyGdbCommand(client, 'T0;tnotrun:0')
+    ReplyGdbCommand(client, 'T0;tnotrun:0')
     return
   end
 
   cmdStart,cmdEnd = string.find(command, 'qAttached', 1, true)
   if cmdStart == 1 then
-    replyGdbCommand(client, '1')
+    ReplyGdbCommand(client, '1')
     return
   end
 
   cmdStart,cmdEnd = string.find(command, 'qC', 1, true)
   if cmdStart == 1 then
-    replyGdbCommand(client, 'QC0')
+    ReplyGdbCommand(client, 'QC0')
     return
   end
 
   assert(cmdStart == nil and cmdEnd == nil)
-  replyGdbCommand(client, '')
+  ReplyGdbCommand(client, '')
 end
 
 local function handleCommandv(client, command)
   local cmdStart,cmdEnd = string.find(command, 'vMustReplyEmpty', 1, true)
   if cmdStart == 1 then
-    replyGdbCommand(client, '')
+    ReplyGdbCommand(client, '')
     return
   end
 
   cmdStart,cmdEnd = string.find(command, 'vCont?', 1, true)
   if cmdStart == 1 then
-    replyGdbCommand(client, 'vCont;c;s')
+    ReplyGdbCommand(client, 'vCont;c;s')
     return
   end
 
@@ -131,27 +141,30 @@ local function handleCommandv(client, command)
   cmdStart,cmdEnd = string.find(command, 'vCont:', 1, true)
   if cmdStart == 1 then
 
-    replyGdbCommand(client, 'T05')
+    ReplyGdbCommand(client, 'T05')
     return
   end
 
   assert(cmdStart == nil and cmdEnd == nil)
-  replyGdbCommand(client, '')
+  ReplyGdbCommand(client, '')
 end
 
--- 处理读写内存操作
-local function handleCommandMemory(client, command, prefix)
+-- 处理读内存操作
+local function handleCommandMemoryRead(client, command)
   local cmdBody = string.sub(command, 2)
   local addressInfo = utils.split(cmdBody, ',')
-  -- utils.prettyPrint(addressInfo)
+  utils.prettyPrint("read", addressInfo)
   addressInfo[1] = tonumber(addressInfo[1], 16)
   addressInfo[2] = tonumber(addressInfo[2], 16) + addressInfo[1]
   local resp = ''
 
+  -- 备份s0、s1寄存器
+  local s0 = dmObj:AccessGPR(8)
+  local s1 = dmObj:AccessGPR(9)
+
   repeat
     local align = addressInfo[1] & 0x3
     local left = addressInfo[2] - addressInfo[1]
-    -- utils.prettyPrint(align, left)
 
     local read_len
     if align == 0 then
@@ -162,6 +175,7 @@ local function handleCommandMemory(client, command, prefix)
       read_len = 2
     end
 
+    -- 确定合适的访问宽度
     while read_len > left do
        read_len = read_len >> 1
     end
@@ -184,14 +198,95 @@ local function handleCommandMemory(client, command, prefix)
     end
   until addressInfo[1] >= addressInfo[2]
 
-  --print(string.format("resp: %s", resp))
-  replyGdbCommand(client, resp)
+  -- 恢复s0、s1寄存器
+  dmObj:AccessGPR(8, s0)
+  dmObj:AccessGPR(9, s1)
+
+  ReplyGdbCommand(client, resp)
+end
+
+local function handleCommandMemoryWrite(client, command)
+  local cmdBody = string.sub(command, 2)
+  local writeInfo = utils.split(cmdBody, ':')
+  local addressInfo = utils.split(writeInfo[1], ',')
+  utils.prettyPrint("write", writeInfo, addressInfo)
+  addressInfo[1] = tonumber(addressInfo[1], 16)
+  addressInfo[2] = tonumber(addressInfo[2], 16) + addressInfo[1]
+
+  -- 备份s0、s1寄存器
+  local s0 = dmObj:AccessGPR(8)
+  local s1 = dmObj:AccessGPR(9)
+
+  repeat
+    local align = addressInfo[1] & 0x3
+    local left = addressInfo[2] - addressInfo[1]
+    -- utils.prettyPrint(align, left)
+
+    local read_len
+    if align == 0 then
+      read_len = 4
+    elseif align == 1 or align == 3 then
+      read_len = 1
+    else
+      read_len = 2
+    end
+
+    -- 确定合适的访问宽度
+    while read_len > left do
+       read_len = read_len >> 1
+    end
+    assert(read_len, "Invalid read_len")
+
+    -- print(string.format("address:%x, length: %d, next_addr:%x", addressInfo[1], read_len, addressInfo[1] + read_len))
+
+    if read_len == 4 then
+      local data = string.sub(writeInfo[2], 1, 8)
+      local b = tonumber(data, 16)
+      assert(data ~= nil)
+      b = (b >> 24) | ((b >> 8) & 0xff00) | ((b & 0xff00) << 8) | (b << 24)
+      b = b & 0xffffffff;
+
+      dmObj:AccessMemory(addressInfo[1], 4, b)
+
+      addressInfo[1] = addressInfo[1] + 4
+      writeInfo[2] = string.sub(writeInfo[2], 9)
+    elseif read_len == 1 then
+      local data = string.sub(writeInfo[2], 1, 2)
+      local b = tonumber(data, 16)
+      assert(b ~= nil)
+      b = b & 0xff
+
+      dmObj:AccessMemory(addressInfo[1], 1, b)
+
+      addressInfo[1] = addressInfo[1] + 1
+      writeInfo[2] = string.sub(writeInfo[2], 3)
+    elseif read_len == 2 then
+      local data = string.sub(writeInfo[2], 1, 4)
+      local b = tonumber(data, 16)
+      assert(b ~= nil)
+      b = ((b >> 8) & 0xff) | ((b & 0xff) << 8)
+      b = b & 0xffff
+
+      dmObj:AccessMemory(addressInfo[1], 2, b)
+
+      addressInfo[1] = addressInfo[1] + 2
+      writeInfo[2] = string.sub(writeInfo[2], 5)
+    end
+  until addressInfo[1] >= addressInfo[2]
+
+  -- 恢复s0、s1寄存器
+  dmObj:AccessGPR(8, s0)
+  dmObj:AccessGPR(9, s1)
+
+  ReplyGdbCommand(client, 'OK')
 end
 
 local function handleCommandH(client, command)
   -- Hg0 接下来的g命令是针对哪个thread操作，这里不做处理
-  replyGdbCommand(client, 'OK')
+  ReplyGdbCommand(client, 'OK')
 end
+
+local poll_timer = timer.Create()
 
 -- 处理GDB命令
 local function handleGdbCommand(client, command)
@@ -206,25 +301,62 @@ local function handleGdbCommand(client, command)
     handleCommandH(client, command)
   elseif prefix == '?' then
     dmObj:Halt()
-    replyGdbCommand(client, 'S02')
+
+    poll_timer:Start(0, 10, function ()
+      local is_halted = dmObj:IsHalt()
+      if is_halted then
+        poll_timer:Stop()
+        ReplyGdbCommand(client, 'S02')
+      end
+    end)
   elseif prefix == 'g' then
     local allReg = ''
     for i=0,31,1 do
-      allReg = allReg .. processReg(dmObj:AccessGPR(i))
+      allReg = allReg .. reg2hexle(dmObj:AccessGPR(i))
     end
+
+    local s0 = dmObj:AccessGPR(8)
     -- read dpc to get current pc
-    allReg = allReg .. processReg(dmObj:AccessCSR(0x7b1))
-    replyGdbCommand(client, allReg)
-  elseif prefix == 'm' or prefix == 'M' then
-    handleCommandMemory(client, command, prefix)
+    allReg = allReg .. reg2hexle(dmObj:AccessCSR(0x7b1))
+    dmObj:AccessGPR(8, s0)
+
+    ReplyGdbCommand(client, allReg)
+  elseif prefix == 'm' then
+    handleCommandMemoryRead(client, command)
+  elseif prefix == 'M' then
+    handleCommandMemoryWrite(client, command)
   elseif prefix == 'p' then
-    local cmdBody = string.sub(command, 2)
-    cmdBody = tonumber(cmdBody, 16)
-    assert(cmdBody > 65, "Bugy GDB?")
-    replyGdbCommand(client, processReg(dmObj:AccessCSR(cmdBody - 65)))
+    local cmdBody = tonumber(string.sub(command, 2), 16)
+    assert(cmdBody >= 0, 'Invalid register index')
+
+    local s0 = dmObj:AccessGPR(8)
+    local s1 = dmObj:AccessGPR(9)
+    if cmdBody <= 31 then -- Read GPR
+      ReplyGdbCommand(client, reg2hexle(dmObj:AccessGPR(cmdBody)))
+    elseif cmdBody == 32 then -- Read PC
+      ReplyGdbCommand(client, reg2hexle(dmObj:AccessCSR(0x7b1)))
+    elseif cmdBody <= 64 then -- Read fp
+      ReplyGdbCommand(client, '')
+    else
+      ReplyGdbCommand(client, reg2hexle(dmObj:AccessCSR(cmdBody - 65)))
+    end
+    dmObj:AccessGPR(8, s0)
+    dmObj:AccessGPR(9, s1)
+  elseif prefix == 'c' then
+    dmObj:Run()
+    ReplyGdbCommand(client, 'OK')
+
+    waitingUserSig = true
+    poll_timer:Start(0, 10, function ()
+      local is_halted = dmObj:IsHalt()
+      if is_halted then
+        poll_timer:Stop()
+        ReplyGdbCommand(client, 'S02')
+      end
+    end)
   else
     print(string.format("unknow command:%s", command))
-    replyGdbCommand(client, '')
+    ReplyGdbCommand(client, '')
   end
 end
 
@@ -232,77 +364,95 @@ local commandBuffer = ""
 
 -- 处理GDB Remote Protocol
 local function receiveGdbCommand(client)
-  local cmdStart = 0
-  local cmdEnd = 0
+  local cmdBody = ''
 
-  -- print(string.format("cmdBuffer: %s", commandBuffer))
-  -- 处理命令是否正确接收
-  while not noAckMode do
-    local respStatus = string.sub(commandBuffer, 1, 1)
-    if respStatus == '+' then
-      -- 命令被正确接收，无需重试
-      local retryCmd = respRetryList:pop_left()
-    elseif respStatus == '-' then
-      -- 命令接收失败，需要重传
-      print(string.format("retry:%s ", retryCmd))
-      client:Write(retryCmd)
-      respRetryList:push_right(retryCmd)
-    else
-      break
+  while commandBuffer ~= "" do -- 一直处理，直到commandbuffer为空
+
+    print(string.format("cmdBuffer: %s", commandBuffer))
+
+    -- 处理命令是否正确接收
+    while not noAckMode do
+      local respStatus = string.sub(commandBuffer, 1, 1)
+      if respStatus == '+' then
+        -- 命令被正确接收，无需重试，移除该命令
+        respRetryList:pop_left()
+      elseif respStatus == '-' then
+        local retryCmd = respRetryList:pop_left()
+        -- 命令接收失败，需要重传
+        print(string.format("retry:%s ", retryCmd))
+        client:Write(retryCmd)
+        respRetryList:push_right(retryCmd)
+      else
+        break
+      end
+
+      -- 第一个字符处理完了，干掉
+      -- 再来一遍
+      commandBuffer = string.sub(commandBuffer, 2)
     end
 
-    -- 第一个字符处理完了，干掉
-    -- 再来一遍
-    commandBuffer = string.sub(commandBuffer, 2)
-  end
+    -- 需要等待信号
+    if waitingUserSig and string.byte(commandBuffer, 1) == 0x03 then
+      waitingUserSig = false
+      cmdBody = '?'
+      commandBuffer = string.sub(commandBuffer, 2)
+    else -- 解析正常GDB命令
+      local cmdStart = 0
+      local cmdEnd = 0
 
-  cmdStart = string.find(commandBuffer, '$', 1, true)
-  if cmdStart == nil then
-    return
-  end
+      cmdStart = string.find(commandBuffer, '$', 1, true)
+      if cmdStart == nil then
+        return
+      end
 
-  cmdEnd = string.find(commandBuffer, '#', 1, true)
-  if cmdEnd == nil then
-    return
-  end
+      cmdEnd = string.find(commandBuffer, '#', 1, true)
+      if cmdEnd == nil then
+        return
+      end
 
-  if string.len(commandBuffer) < cmdEnd + 2 then -- 命令后面跟两个字节checksum
-    return
-  end
+      if string.len(commandBuffer) < cmdEnd + 2 then -- 命令后面跟两个字节checksum
+        return
+      end
 
-  local currentCommand = string.sub(commandBuffer, cmdStart, cmdEnd + 2)
-  commandBuffer = string.sub(commandBuffer, cmdEnd + 3)
+      if cmdStart ~= 1 then
+        print("Warn: Garbage characters appear before the command:" .. commandBuffer)
+      end
 
-  -- verfiy command checksum
-  local cmdBody =  string.sub(currentCommand, 2, -4)
-  local cmdCheckSum = string.sub(currentCommand, -2)
-  -- print(string.format("cmdBody:%s, cmdCheckSum:%s", cmdBody, cmdCheckSum))
+      local currentCommand = string.sub(commandBuffer, cmdStart, cmdEnd + 2)
+      commandBuffer = string.sub(commandBuffer, cmdEnd + 3)
 
-  -- 校验数据
-  local checksum = 0
-  if not noAckMode then
-    for i=1,string.len(cmdBody),1 do
-      checksum = checksum + string.byte(cmdBody, i)
+      -- verfiy command checksum
+      cmdBody =  string.sub(currentCommand, 2, -4)
+      local cmdCheckSum = string.sub(currentCommand, -2)
+      -- print(string.format("cmdBody:%s, cmdCheckSum:%s", cmdBody, cmdCheckSum))
+
+      -- 校验数据
+      local checksum = 0
+      if not noAckMode then
+        for i=1,string.len(cmdBody),1 do
+          checksum = checksum + string.byte(cmdBody, i)
+        end
+        checksum = checksum & 0xff
+
+        if tonumber(cmdCheckSum, 16) ~= checksum then
+          print(string.format("Command %s checksum failed. calculated checksum: %x", currentCommand, checksum))
+          client:Write("-")
+          return
+        else
+          client:Write('+')
+        end
+      end
     end
-    checksum = checksum & 0xff
 
-    if tonumber(cmdCheckSum, 16) ~= checksum then
-      print(string.format("Command %s checksum failed. calculated checksum: %x", currentCommand, checksum))
-      client:Write("-")
-      return
-    else
-      client:Write('+')
-    end
+    -- 处理命令
+    handleGdbCommand(client, cmdBody)
   end
-
-  -- 处理命令
-  handleGdbCommand(client, cmdBody)
 end
 
-function replyGdbCommand(client, respBody)
-  -- print(string.format("resp: %s", respBody))
+function ReplyGdbCommand(client, respBody)
+  print(string.format("resp: %s", respBody))
   -- 计算checksum
-  checksum = 0
+  local checksum = 0
   if not noAckMode then
     for i=1,string.len(respBody),1 do
       checksum = checksum + string.byte(respBody, i)
@@ -346,14 +496,12 @@ local onConnect = function(server, err)
 
   end)
 end
+
 function GdbCreate(addr, port, handler)
   local s = tcp.Create()
 
   s:Bind(addr, port)
   s:Listen(128, onConnect)
-  return {
-    server = server
-  }
 end
 
 -- ==================================================================================================================================================================

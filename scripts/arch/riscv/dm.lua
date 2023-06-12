@@ -136,7 +136,9 @@ function _M.CheckStatus(self)
   end
 end
 
--- 读写通用寄存器，需要探测是否支持hart在runing状态下访问
+-- 读写通用寄存器
+-- TODO:需要探测是否支持hart在runing状态下访问
+-- 注意，寄存器id 不需要+0x1000
 function _M.AccessGPR(self, regno, data)
   local reg = (regno & 0xfff) + 0x1000
   if data == nil then -- read
@@ -159,9 +161,10 @@ end
 -- reference: “Zicsr”, Control and Status Register (CSR) Instructions, Version 2.0
 -- reference: RISC-V Privileged Instruction Set Listings
 -- reference: Control and Status Registers (CSRs)
+-- 注意：该操作会修改s0寄存器，调用者应保证数据一致性
 function _M.AccessCSR(self, regno, data)
   local reg = regno & 0xfff
-  -- TODO: 使用CPU寄存器前，需要先备份寄存器的原始数据
+
   if data == nil then -- read csr
     -- CSRRS s0, csr, x0 into progbuf0.
     self.dmi:WriteReg(0x20, 0x2473 | (reg << 20))
@@ -189,7 +192,8 @@ function _M.AccessCSR(self, regno, data)
   end
 end
 
--- 访问内存
+-- 通过ProgBuf访问内存，支持byte、halfword、word宽度访问
+-- 注意：该操作会修改s0和s1寄存器，调用者应保证数据一致性
 function _M.AccessMemory(self, address, length, data)
   assert(length, 'Missing access length')
   local length_encode = 0;
@@ -219,9 +223,7 @@ function _M.AccessMemory(self, address, length, data)
     -- [aarsize=2 postexec=1 write=1 regno=0x1008 : command=0x00271008
     self.dmi:WriteReg(0x17, (0x2 << 20) | (0x1 << 18) | (0x1 << 17) | (0x1 << 16) | 0x1008)
     self:CheckStatus()
-    -- XXX: Need wait??
-    -- read s0
-    -- [aarsize=2 transfer=1 regno = 0x1008] : command=0x00221008
+    -- [aarsize=2 transfer=1 regno = 0x1008]
     self.dmi:WriteReg(0x17, (0x2 << 20) | (0x1 << 17) | 0x1008)
     self:CheckStatus()
     -- read data0, which store read data from addr
@@ -273,36 +275,18 @@ function _M.Halt(self)
 
   -- deassert haltreq
   self.dmi:WriteReg(0x10, 0x1)
-
-  local dmcontrol = self.dmi:ReadReg(0x10)
-  print(string.format("dmcontrol: 0x%08X", dmcontrol))
-
-  -- clear cmderr
-  self.dmi:WriteReg(0x16, 0x7 << 8)
-  local abstractcs = self.dmi:ReadReg(0x16)
-  print(string.format("abstractcs: 0x%08X", abstractcs))
-
-  return
 end
 
 -- run cpu
 function _M.Run(self)
   self.dmi:WriteReg(0x10, 0x40000001)
-  local dmstatus = self.dmi:ReadReg(0x11)
 
+  local dmstatus = self.dmi:ReadReg(0x11)
   if(((dmstatus >> 8) & 0xf) == 0xC) then
     print(string.format("run successful, dmstatus: 0x%08X", dmstatus))
   end
 
-  -- set dmcontrol register dmactive bit set 1
   self.dmi:WriteReg(0x10, 0x1)
-  local dmcontrol = self.dmi:ReadReg(0x10)
-  print(string.format("dmcontrol: 0x%08X", dmcontrol))
-  -- clear cmderr
-  self.dmi:WriteReg(0x16, 0x7 << 8)
-  local abstractcs = self.dmi:ReadReg(0x16)
-  print(string.format("abstractcs: 0x%08X", abstractcs))
-  return
 end
 
 function _M.Reset(self)
@@ -315,16 +299,19 @@ function _M.Reset(self)
     print(string.format("reset successful, dmstatus: 0x%08X", dmstatus))
   end
 
-  -- set dmcontrol register dmactive bit set 1
   self.dmi:WriteReg(0x10, 0x1)
-
-  local dmcontrol = self.dmi:ReadReg(0x10)
-  print(string.format("dmcontrol: 0x%08X", dmcontrol))
-  -- clear cmderr
-  self.dmi:WriteReg(0x16, 0x7 << 8)
-  local abstractcs = self.dmi:ReadReg(0x16)
-  print(string.format("abstractcs: 0x%08X", abstractcs))
 end
 
+function _M.IsHalt(self)
+  -- Determine whether the halt was successful
+  local dmstatus = self.dmi:ReadReg(0x11)
+
+  print(string.format("is halt? dmstatus: 0x%08X", dmstatus))
+  if(((dmstatus >> 8) & 0xf) == 0x3) then
+    return true
+  end
+
+  return false
+end
 
 return _M

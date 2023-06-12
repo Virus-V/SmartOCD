@@ -35,6 +35,7 @@ static_library("library") {
     "lua_api/loop.c",
     "lua_api/stream.c",
     "lua_api/tcp.c",
+    "lua_api/timer.c",
   ]
 
   include_dirs = [
