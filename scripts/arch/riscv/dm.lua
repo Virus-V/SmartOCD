@@ -45,6 +45,7 @@ function _M.Create(dmi)
     feature = {},
     last_operate = {}
   }
+  obj = setmetatable(obj, mt)
 
   :: reinit ::
 
@@ -104,16 +105,24 @@ function _M.Create(dmi)
     end
   end
 
-  -- TODO Halt CPU
-  utils.prettyPrint(obj.feature)
+  -- Halt CPU
+  obj:Halt()
+  local s0 = obj:AccessGPR(8)
 
+  local dcsr = obj:AccessCSR(0x7b0)
+  obj:AccessCSR(0x7b0, dcsr | 0xB000) -- set ebreak enter debug mode
+
+  obj:AccessGPR(8, s0)
+  obj:Run()
+
+  utils.prettyPrint(obj.feature)
   local abstractcs = dmi:ReadReg(0x16)
   print(string.format("abstractcs: 0x%08X, cmderr: %d", abstractcs, (abstractcs >> 8) & 0x7))
   assert(((abstractcs >> 8) & 0x7) == 0, "cmderr")
 
   --dmi:WriteReg()
 
-  return setmetatable(obj, mt)
+  return obj
 end
 
 function _M.CheckStatus(self)
@@ -306,7 +315,6 @@ function _M.IsHalt(self)
   -- Determine whether the halt was successful
   local dmstatus = self.dmi:ReadReg(0x11)
 
-  print(string.format("is halt? dmstatus: 0x%08X", dmstatus))
   if(((dmstatus >> 8) & 0xf) == 0x3) then
     return true
   end
